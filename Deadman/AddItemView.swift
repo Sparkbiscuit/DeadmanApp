@@ -23,8 +23,8 @@ struct AddItemView: View {
                 
                 Button("Add Item") {
                     let newItem = Item(title: title, deadline: deadline)
-                    modelContext.insert(newItem) // Insert the new item into the Core Data context
-                    try? modelContext.save() // Save the context
+                    modelContext.insert(newItem)
+                    try? modelContext.save()
                     dismiss()
                 }
             }

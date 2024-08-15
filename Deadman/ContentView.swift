@@ -12,7 +12,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var items: [Item]
     
-    @State private var selectedItem: Item?
+    @State private var selectedItem: Item
     @State private var isPresentingAddItemView = false
 
     var body: some View {
@@ -34,7 +34,7 @@ struct ContentView: View {
             }
             .navigationTitle("Items")
             .toolbar {
-                ToolbarItem(placement: .automatic) { // Use .automatic for cross-platform support
+                ToolbarItem(placement: .automatic) { 
                     Button(action: {
                         isPresentingAddItemView = true
                     }) {
@@ -44,7 +44,7 @@ struct ContentView: View {
             }
         } detail: {
             if let item = selectedItem {
-                EditItemView(item: item)
+                EditItemView(item: $selectedItem)
             } else {
                 Text("Select an item")
             }

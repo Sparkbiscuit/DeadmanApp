@@ -14,7 +14,6 @@ class Item: Identifiable {
     @Attribute var timestamp: Date
     @Attribute var deadline: Date
     
-    // Computed property without any property wrappers
     var progress: Double {
         let totalTime = deadline.timeIntervalSince(timestamp)
         let elapsedTime = Date().timeIntervalSince(timestamp)
