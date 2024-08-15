@@ -2,7 +2,7 @@
 //  DeadmanApp.swift
 //  Deadman
 //
-//  Created by Nick Christoforakis on 8/14/24.
+//  Created by Nicholas Christoforakis on 8/14/24.
 //
 
 import SwiftUI
