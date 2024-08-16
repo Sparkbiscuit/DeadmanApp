@@ -9,14 +9,16 @@
 /* Begin PBXBuildFile section */
 		021ED3012C6D3EF700D079F0 /* DeadmanApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3002C6D3EF700D079F0 /* DeadmanApp.swift */; };
 		021ED3032C6D3EF700D079F0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3022C6D3EF700D079F0 /* ContentView.swift */; };
-		021ED3052C6D3EF700D079F0 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3042C6D3EF700D079F0 /* Item.swift */; };
 		021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 021ED3062C6D3EF800D079F0 /* Assets.xcassets */; };
 		021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 021ED30A2C6D3EF800D079F0 /* Preview Assets.xcassets */; };
 		021ED3152C6D3EF800D079F0 /* DeadmanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3142C6D3EF800D079F0 /* DeadmanTests.swift */; };
 		021ED31F2C6D3EF800D079F0 /* DeadmanUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED31E2C6D3EF800D079F0 /* DeadmanUITests.swift */; };
 		021ED3212C6D3EF800D079F0 /* DeadmanUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3202C6D3EF800D079F0 /* DeadmanUITestsLaunchTests.swift */; };
-		021ED32E2C6D956600D079F0 /* AddItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED32D2C6D956600D079F0 /* AddItemView.swift */; };
-		021ED3302C6D958800D079F0 /* EditItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED32F2C6D958800D079F0 /* EditItemView.swift */; };
+		021ED3342C6EACF200D079F0 /* TaskViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3332C6EACF200D079F0 /* TaskViewModel.swift */; };
+		021ED3372C6EAE0F00D079F0 /* DeadmanModel.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3352C6EAE0F00D079F0 /* DeadmanModel.xcdatamodeld */; };
+		021ED3392C6EB10B00D079F0 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3382C6EB10B00D079F0 /* TaskRow.swift */; };
+		021ED33B2C6FAB1600D079F0 /* NewTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED33A2C6FAB1600D079F0 /* NewTaskView.swift */; };
+		021ED33D2C6FAC2800D079F0 /* EditTaskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED33C2C6FAC2800D079F0 /* EditTaskView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,7 +42,6 @@
 		021ED2FD2C6D3EF700D079F0 /* Deadman.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Deadman.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		021ED3002C6D3EF700D079F0 /* DeadmanApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadmanApp.swift; sourceTree = "<group>"; };
 		021ED3022C6D3EF700D079F0 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		021ED3042C6D3EF700D079F0 /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
 		021ED3062C6D3EF800D079F0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		021ED3082C6D3EF800D079F0 /* Deadman.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Deadman.entitlements; sourceTree = "<group>"; };
 		021ED30A2C6D3EF800D079F0 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -49,8 +50,11 @@
 		021ED31A2C6D3EF800D079F0 /* DeadmanUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DeadmanUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		021ED31E2C6D3EF800D079F0 /* DeadmanUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadmanUITests.swift; sourceTree = "<group>"; };
 		021ED3202C6D3EF800D079F0 /* DeadmanUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadmanUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		021ED32D2C6D956600D079F0 /* AddItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddItemView.swift; sourceTree = "<group>"; };
-		021ED32F2C6D958800D079F0 /* EditItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditItemView.swift; sourceTree = "<group>"; };
+		021ED3332C6EACF200D079F0 /* TaskViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskViewModel.swift; sourceTree = "<group>"; };
+		021ED3362C6EAE0F00D079F0 /* DeadmanModel.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = DeadmanModel.xcdatamodel; sourceTree = "<group>"; };
+		021ED3382C6EB10B00D079F0 /* TaskRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRow.swift; sourceTree = "<group>"; };
+		021ED33A2C6FAB1600D079F0 /* NewTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewTaskView.swift; sourceTree = "<group>"; };
+		021ED33C2C6FAC2800D079F0 /* EditTaskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,10 +106,12 @@
 			isa = PBXGroup;
 			children = (
 				021ED3002C6D3EF700D079F0 /* DeadmanApp.swift */,
+				021ED3352C6EAE0F00D079F0 /* DeadmanModel.xcdatamodeld */,
 				021ED3022C6D3EF700D079F0 /* ContentView.swift */,
-				021ED3042C6D3EF700D079F0 /* Item.swift */,
-				021ED32D2C6D956600D079F0 /* AddItemView.swift */,
-				021ED32F2C6D958800D079F0 /* EditItemView.swift */,
+				021ED33C2C6FAC2800D079F0 /* EditTaskView.swift */,
+				021ED33A2C6FAB1600D079F0 /* NewTaskView.swift */,
+				021ED3382C6EB10B00D079F0 /* TaskRow.swift */,
+				021ED3332C6EACF200D079F0 /* TaskViewModel.swift */,
 				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
 				021ED3082C6D3EF800D079F0 /* Deadman.entitlements */,
 				021ED3092C6D3EF800D079F0 /* Preview Content */,
@@ -268,11 +274,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				021ED3392C6EB10B00D079F0 /* TaskRow.swift in Sources */,
+				021ED3372C6EAE0F00D079F0 /* DeadmanModel.xcdatamodeld in Sources */,
+				021ED33B2C6FAB1600D079F0 /* NewTaskView.swift in Sources */,
+				021ED33D2C6FAC2800D079F0 /* EditTaskView.swift in Sources */,
 				021ED3032C6D3EF700D079F0 /* ContentView.swift in Sources */,
-				021ED3052C6D3EF700D079F0 /* Item.swift in Sources */,
-				021ED3302C6D958800D079F0 /* EditItemView.swift in Sources */,
+				021ED3342C6EACF200D079F0 /* TaskViewModel.swift in Sources */,
 				021ED3012C6D3EF700D079F0 /* DeadmanApp.swift in Sources */,
-				021ED32E2C6D956600D079F0 /* AddItemView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -629,6 +637,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+		021ED3352C6EAE0F00D079F0 /* DeadmanModel.xcdatamodeld */ = {
+			isa = XCVersionGroup;
+			children = (
+				021ED3362C6EAE0F00D079F0 /* DeadmanModel.xcdatamodel */,
+			);
+			currentVersion = 021ED3362C6EAE0F00D079F0 /* DeadmanModel.xcdatamodel */;
+			name = DeadmanModel.xcdatamodeld;
+			path = /Users/nichris/Documents/Deadman/Deadman/DeadmanModel.xcdatamodeld;
+			sourceTree = "<group>";
+			versionGroupType = wrapper.xcdatamodel;
+		};
+/* End XCVersionGroup section */
 	};
 	rootObject = 021ED2F52C6D3EF700D079F0 /* Project object */;
 }

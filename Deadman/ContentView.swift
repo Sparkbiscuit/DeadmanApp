@@ -6,59 +6,76 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Environment(\.managedObjectContext) private var viewContext
+    @StateObject var viewModel: TaskViewModel
+    @State private var showingNewTaskView = false
     
-    @State private var selectedItem: Item
-    @State private var isPresentingAddItemView = false
+    init() {
+        _viewModel = StateObject(wrappedValue: TaskViewModel(context: PersistenceController.shared.container.viewContext))
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedItem) {
-                ForEach(items) { item in
-                    NavigationLink(value: item) {
-                        VStack(alignment: .leading) {
-                            Text(item.title)
-                            Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                            ProgressView(value: item.progress)
-                                .progressViewStyle(LinearProgressViewStyle())
+        NavigationView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Title and Logo
+                HStack {
+                    Text("Deadman")
+                        .font(.largeTitle)
+                        .bold()
+                    Spacer()
+                    Image(systemName: "square.fill")
+                        .resizable()
+                        .frame(width: 40, height: 40)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+                
+                // Current Date
+                Text(todayFormatted())
+                    .font(.headline)
+                    .padding(.horizontal)
+                
+                // Task List
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(viewModel.tasks) { task in
+                            NavigationLink(destination: EditTaskView(viewModel: viewModel, task: task)) {
+                                TaskRow(task: task)
+                                    .padding(.horizontal)
+                            }
                         }
                     }
                 }
-                .onDelete(perform: deleteItems)
-            }
-            .navigationTitle("Items")
-            .toolbar {
-                ToolbarItem(placement: .automatic) { 
-                    Button(action: {
-                        isPresentingAddItemView = true
-                    }) {
-                        Image(systemName: "plus")
+                
+                Spacer()
+                
+                // New Task Button
+                Button(action: {
+                    showingNewTaskView = true
+                }) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.red)
+                        Text("New Task")
+                            .font(.headline)
+                            .foregroundColor(.red)
                     }
                 }
+                .padding()
             }
-        } detail: {
-            if let item = selectedItem {
-                EditItemView(item: $selectedItem)
-            } else {
-                Text("Select an item")
+            .padding(.top)
+            .sheet(isPresented: $showingNewTaskView) {
+                NewTaskView(viewModel: viewModel)
             }
-        }
-        .sheet(isPresented: $isPresentingAddItemView) {
-            AddItemView()
         }
     }
-
-    private func deleteItems(offsets: IndexSet) {
-        for offset in offsets {
-            let item = items[offset]
-            modelContext.delete(item)
-        }
-        try? modelContext.save()
+    
+    func todayFormatted() -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        return formatter.string(from: Date())
     }
 }
