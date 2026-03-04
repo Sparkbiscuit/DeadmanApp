@@ -1,0 +1,198 @@
+import SwiftUI
+import SwiftData
+
+struct TaskListView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \DeadmanTask.deadline) private var tasks: [DeadmanTask]
+    @State private var showingCapture = false
+    @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
+
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        headerSection
+                        statsBar
+                        taskSections
+                    }
+                    .padding(.bottom, 100)
+                }
+                .background(Color(.systemGroupedBackground))
+
+                captureButton
+            }
+            .sheet(isPresented: $showingCapture) {
+                CaptureSheetView()
+            }
+        }
+    }
+
+    // MARK: - Header
+
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(greeting)
+                .font(AppFont.caption())
+                .foregroundStyle(Color.deadmanSubtle)
+            Text("Your Tasks")
+                .font(AppFont.title(32))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 { return "Good morning" }
+        else if hour < 17 { return "Good afternoon" }
+        else { return "Good evening" }
+    }
+
+    // MARK: - Stats Bar
+
+    private var statsBar: some View {
+        let incomplete = tasks.filter { !$0.isComplete }
+        let unscheduled = incomplete.filter { !$0.isFullyScheduled }
+        let todayBlocks = todayBlockCount
+
+        return HStack(spacing: 12) {
+            StatPill(
+                value: "\(incomplete.count)",
+                label: "active",
+                color: .primary
+            )
+            StatPill(
+                value: "\(todayBlocks)",
+                label: "today",
+                color: .schoolColor
+            )
+            if !unscheduled.isEmpty {
+                StatPill(
+                    value: "\(unscheduled.count)",
+                    label: "unblocked",
+                    color: .deadmanRed
+                )
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+
+    private var todayBlockCount: Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+
+        return tasks.flatMap { $0.scheduledBlocks }
+            .filter { !$0.isComplete && $0.startTime >= today && $0.startTime < tomorrow }
+            .count
+    }
+
+    // MARK: - Task Sections (grouped by context)
+
+    private var taskSections: some View {
+        let incomplete = tasks.filter { !$0.isComplete }
+        let sorted = incomplete.sorted { lhs, rhs in
+            let lhsNext = lhs.nextBlock?.startTime ?? Date.distantFuture
+            let rhsNext = rhs.nextBlock?.startTime ?? Date.distantFuture
+            return lhsNext < rhsNext
+        }
+
+        return ForEach(TaskContext.allCases) { context in
+            let contextTasks = sorted.filter { $0.context == context }
+            if !contextTasks.isEmpty {
+                contextSection(context: context, tasks: contextTasks)
+            }
+        }
+    }
+
+    private func contextSection(context: TaskContext, tasks: [DeadmanTask]) -> some View {
+        let isExpanded = expandedContexts.contains(context)
+
+        return VStack(spacing: 0) {
+            // Section header
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    if isExpanded {
+                        expandedContexts.remove(context)
+                    } else {
+                        expandedContexts.insert(context)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: context.icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(context.color)
+                    Text(context.rawValue)
+                        .font(AppFont.heading(16))
+                        .foregroundStyle(.primary)
+                    Text("\(tasks.count)")
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(Color.deadmanSubtle)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.deadmanSubtle)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(spacing: 10) {
+                    ForEach(tasks) { task in
+                        TaskRowView(task: task)
+                            .padding(.horizontal, 20)
+                    }
+                }
+                .padding(.bottom, 16)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    // MARK: - Capture FAB
+
+    private var captureButton: some View {
+        Button {
+            showingCapture = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 60, height: 60)
+                .background(Color.deadmanRed, in: Circle())
+                .shadow(color: Color.deadmanRed.opacity(0.4), radius: 12, y: 6)
+        }
+        .padding(.trailing, 24)
+        .padding(.bottom, 24)
+    }
+}
+
+// MARK: - Stat Pill
+
+private struct StatPill: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(value)
+                .font(AppFont.heading(16))
+                .foregroundStyle(color)
+            Text(label)
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.deadmanSubtle)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+    }
+}
