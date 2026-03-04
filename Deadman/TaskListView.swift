@@ -18,7 +18,11 @@ struct TaskListView: View {
                     }
                     .padding(.bottom, 100)
                 }
-                .background(Color(.systemGroupedBackground))
+                #if os(iOS)
+                .background(Color(uiColor: .systemGroupedBackground))
+                #else
+                .background(Color(nsColor: .controlBackgroundColor))
+                #endif
 
                 captureButton
             }
@@ -193,6 +197,10 @@ private struct StatPill: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+        #if os(iOS)
+        .background(Color(uiColor: .tertiarySystemGroupedBackground), in: Capsule())
+        #else
+        .background(Color(nsColor: .tertiaryLabelColor).opacity(0.1), in: Capsule())
+        #endif
     }
 }

@@ -24,7 +24,9 @@ struct SettingsView: View {
                 aboutSection
             }
             .navigationTitle("Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            #endif
         }
     }
 
