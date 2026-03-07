@@ -157,26 +157,31 @@ struct SchedulerService {
         let calendar = Calendar.current
         var slots: [Interval] = []
 
+        // Defensive: ensure wake/sleep hours are valid
+        let wakeH = (0...23).contains(settings.wakeHour) ? settings.wakeHour : 8
+        let wakeM = (0...59).contains(settings.wakeMinute) ? settings.wakeMinute : 0
+        let sleepH = (0...23).contains(settings.sleepHour) ? settings.sleepHour : 23
+        let sleepM = (0...59).contains(settings.sleepMinute) ? settings.sleepMinute : 0
+
         // Generate day-by-day awake windows
         var currentDay = calendar.startOfDay(for: from)
         let lastDay = calendar.startOfDay(for: to)
 
         while currentDay <= lastDay {
-            let wakeStart = calendar.date(
-                bySettingHour: settings.wakeHour,
-                minute: settings.wakeMinute,
-                second: 0,
-                of: currentDay
-            )!
-            let sleepEnd = calendar.date(
-                bySettingHour: settings.sleepHour,
-                minute: settings.sleepMinute,
-                second: 0,
-                of: currentDay
-            )!
+            var wakeComps = calendar.dateComponents([.year, .month, .day], from: currentDay)
+            wakeComps.hour = wakeH
+            wakeComps.minute = wakeM
+            wakeComps.second = 0
+            let wakeStart = calendar.date(from: wakeComps)!
 
-            if allowOvernight {
-                // Use full day
+            var sleepComps = calendar.dateComponents([.year, .month, .day], from: currentDay)
+            sleepComps.hour = sleepH
+            sleepComps.minute = sleepM
+            sleepComps.second = 0
+            let sleepEnd = calendar.date(from: sleepComps)!
+
+            if allowOvernight || wakeStart >= sleepEnd {
+                // Use full day (also fallback if wake/sleep are misconfigured)
                 let dayStart = max(currentDay, from)
                 let dayEnd = min(calendar.date(byAdding: .day, value: 1, to: currentDay)!, to)
                 if dayStart < dayEnd {

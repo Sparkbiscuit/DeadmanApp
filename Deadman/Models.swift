@@ -39,16 +39,16 @@ enum RecurrenceRule: String, Codable, CaseIterable, Identifiable {
 
 @Model
 final class DeadmanTask {
-    var id: UUID
-    var title: String
-    var context: TaskContext
-    var deadline: Date
-    var effortMinutes: Int
-    var isComplete: Bool
+    var id: UUID = UUID()
+    var title: String = ""
+    var context: TaskContext = .personal
+    var deadline: Date = Date()
+    var effortMinutes: Int = 60
+    var isComplete: Bool = false
     var completedAt: Date?
     var selfReportedProgress: Double = 0.0
-    var userModified: Bool
-    var source: TaskSource
+    var userModified: Bool = false
+    var source: TaskSource = .manual
     var canvasAssignmentId: String?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
@@ -124,12 +124,12 @@ final class DeadmanTask {
 
 @Model
 final class ScheduledBlock {
-    var id: UUID
+    var id: UUID = UUID()
     var task: DeadmanTask?
-    var startTime: Date
-    var durationMinutes: Int
-    var isComplete: Bool
-    var isLocked: Bool
+    var startTime: Date = Date()
+    var durationMinutes: Int = 30
+    var isComplete: Bool = false
+    var isLocked: Bool = false
     var appleCalendarEventId: String?
 
     init(
@@ -155,11 +155,11 @@ final class ScheduledBlock {
 
 @Model
 final class WorkSession {
-    var id: UUID
+    var id: UUID = UUID()
     var task: DeadmanTask?
-    var startedAt: Date
+    var startedAt: Date = Date()
     var endedAt: Date?
-    var progressAfter: Double
+    var progressAfter: Double = 0.0
 
     init(task: DeadmanTask) {
         self.id = UUID()
@@ -183,11 +183,11 @@ final class WorkSession {
 
 @Model
 final class BlockedTime {
-    var id: UUID
-    var title: String
-    var startTime: Date
-    var durationMinutes: Int
-    var recurrence: RecurrenceRule
+    var id: UUID = UUID()
+    var title: String = ""
+    var startTime: Date = Date()
+    var durationMinutes: Int = 60
+    var recurrence: RecurrenceRule = .none
     var recurrenceEndDate: Date?
     var appleCalendarEventId: String?
 
@@ -256,16 +256,16 @@ final class BlockedTime {
 
 @Model
 final class UserSettings {
-    var id: UUID
-    var wakeHour: Int
-    var wakeMinute: Int
-    var sleepHour: Int
-    var sleepMinute: Int
-    var minBlockMinutes: Int
-    var maxBlockMinutes: Int
-    var deadlineBufferMinutes: Int
+    var id: UUID = UUID()
+    var wakeHour: Int = 8
+    var wakeMinute: Int = 0
+    var sleepHour: Int = 23
+    var sleepMinute: Int = 0
+    var minBlockMinutes: Int = 30
+    var maxBlockMinutes: Int = 90
+    var deadlineBufferMinutes: Int = 120
     var canvasBaseURL: String?
-    var exportToAppleCalendar: Bool
+    var exportToAppleCalendar: Bool = false
     var importAppleCalendar: Bool = false
 
     init() {
