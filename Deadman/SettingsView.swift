@@ -14,10 +14,13 @@ struct SettingsView: View {
         return new
     }
 
+    @State private var showBlockedTimes = false
+
     var body: some View {
         NavigationStack {
             List {
                 scheduleSection
+                blockedTimesSection
                 blockSizeSection
                 bufferSection
                 calendarSection
@@ -27,6 +30,9 @@ struct SettingsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
+            .sheet(isPresented: $showBlockedTimes) {
+                BlockedTimeView()
+            }
         }
     }
 
@@ -94,6 +100,30 @@ struct SettingsView: View {
             Spacer()
             DatePicker("", selection: date, displayedComponents: .hourAndMinute)
                 .labelsHidden()
+        }
+    }
+
+    // MARK: - Blocked Times Section
+
+    private var blockedTimesSection: some View {
+        Section {
+            Button {
+                showBlockedTimes = true
+            } label: {
+                HStack {
+                    Label("Blocked Times", systemImage: "clock.badge.xmark")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.deadmanSubtle)
+                }
+            }
+            .buttonStyle(.plain)
+        } header: {
+            Text("Calendar Blocking")
+        } footer: {
+            Text("Add recurring events (classes, meetings) or import from Apple Calendar. Tasks won't be scheduled during blocked times.")
         }
     }
 

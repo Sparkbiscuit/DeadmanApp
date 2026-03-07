@@ -4,7 +4,8 @@ import SwiftData
 struct TaskRowView: View {
     @Environment(\.modelContext) private var modelContext
     let task: DeadmanTask
-    @State private var showActions = false
+    @Binding var taskToComplete: DeadmanTask?
+    @State private var showWorkSession = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -59,9 +60,9 @@ struct TaskRowView: View {
                 }
             }
 
-            // Bottom row: effort progress
-            HStack(spacing: 8) {
-                // Progress bar
+            // Time tracking row
+            HStack(spacing: 6) {
+                // Self-reported progress bar
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -69,40 +70,72 @@ struct TaskRowView: View {
                             .frame(height: 4)
                         Capsule()
                             .fill(task.context.color)
-                            .frame(width: geo.size.width * progress, height: 4)
+                            .frame(width: geo.size.width * CGFloat(task.selfReportedProgress), height: 4)
                     }
                 }
                 .frame(height: 4)
 
-                Text(CountdownFormatter.effortString(minutes: task.completedMinutes) +
-                     " / " +
-                     CountdownFormatter.effortString(minutes: task.effortMinutes))
+                Text("\(Int(task.selfReportedProgress * 100))%")
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(task.context.color)
+                    .frame(width: 32, alignment: .trailing)
                     .layoutPriority(1)
+            }
+
+            // Bottom row: time spent + actions
+            HStack(spacing: 0) {
+                // Time spent vs estimate
+                timeSpentLabel
+
+                Spacer()
+
+                // Work session button
+                Button {
+                    showWorkSession = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: hasActiveSession ? "stop.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 14))
+                        Text(hasActiveSession ? "Working..." : "Start")
+                            .font(AppFont.caption(12))
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(hasActiveSession ? Color.deadmanRed : task.context.color)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(hasActiveSession ? Color.deadmanRed.opacity(0.12) : task.context.color.opacity(0.12))
+                    )
+                }
+                .buttonStyle(.plain)
+
+                // Complete task button
+                Button {
+                    completeTask()
+                } label: {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(Color.deadmanSubtle)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 10)
             }
         }
         .cardStyle()
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                withAnimation { modelContext.delete(task) }
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                withAnimation { task.isComplete = true }
-            } label: {
-                Label("Complete", systemImage: "checkmark.circle.fill")
-            }
-            .tint(.green)
+        .sheet(isPresented: $showWorkSession) {
+            WorkSessionView(task: task)
         }
         .contextMenu {
             Button {
-                task.isComplete = true
+                completeTask()
             } label: {
                 Label("Mark Complete", systemImage: "checkmark.circle")
+            }
+            Button {
+                showWorkSession = true
+            } label: {
+                Label("Start Working", systemImage: "play.circle")
             }
             Button {
                 rescheduleTask()
@@ -117,9 +150,44 @@ struct TaskRowView: View {
         }
     }
 
-    private var progress: CGFloat {
-        guard task.effortMinutes > 0 else { return 0 }
-        return CGFloat(task.completedMinutes) / CGFloat(task.effortMinutes)
+    // MARK: - Time Spent Label
+
+    private var timeSpentLabel: some View {
+        let spent = task.totalTimeSpentMinutes
+        let estimate = task.effortMinutes
+
+        return HStack(spacing: 4) {
+            if spent > 0 {
+                Image(systemName: "timer")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.deadmanSubtle)
+                Text(CountdownFormatter.effortString(minutes: spent))
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(task.isOverBudget ? .orange : .primary)
+                Text("/")
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(Color.deadmanSubtle)
+                Text(CountdownFormatter.effortString(minutes: estimate))
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(Color.deadmanSubtle)
+                if task.isOverBudget {
+                    Text("over")
+                        .font(AppFont.caption(10))
+                        .foregroundStyle(.orange)
+                }
+            } else {
+                Image(systemName: "timer")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.deadmanSubtle)
+                Text("0m / \(CountdownFormatter.effortString(minutes: estimate))")
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(Color.deadmanSubtle)
+            }
+        }
+    }
+
+    private var hasActiveSession: Bool {
+        task.workSessions.contains { $0.isActive }
     }
 
     private var deadlineColor: Color {
@@ -130,17 +198,30 @@ struct TaskRowView: View {
         return .secondary
     }
 
+    private func completeTask() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            task.isComplete = true
+            task.completedAt = Date()
+            task.selfReportedProgress = 1.0
+        }
+        // Trigger celebration
+        taskToComplete = task
+    }
+
     private func rescheduleTask() {
-        // Fetch settings and all blocks to reschedule
         let descriptor = FetchDescriptor<UserSettings>()
         guard let settings = try? modelContext.fetch(descriptor).first else { return }
 
         let blockDescriptor = FetchDescriptor<ScheduledBlock>()
         let allBlocks = (try? modelContext.fetch(blockDescriptor)) ?? []
 
+        let blockedDescriptor = FetchDescriptor<BlockedTime>()
+        let blockedTimes = (try? modelContext.fetch(blockedDescriptor)) ?? []
+
         _ = SchedulerService.reschedule(
             task: task,
             allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
             settings: settings,
             context: modelContext
         )

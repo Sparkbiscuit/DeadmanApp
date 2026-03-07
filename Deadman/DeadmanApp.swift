@@ -10,6 +10,8 @@ struct DeadmanApp: App {
         .modelContainer(for: [
             DeadmanTask.self,
             ScheduledBlock.self,
+            WorkSession.self,
+            BlockedTime.self,
             UserSettings.self
         ])
     }

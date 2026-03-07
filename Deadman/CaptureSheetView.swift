@@ -234,6 +234,9 @@ struct CaptureSheetView: View {
         let blockDescriptor = FetchDescriptor<ScheduledBlock>()
         let allBlocks = (try? modelContext.fetch(blockDescriptor)) ?? []
 
+        let blockedDescriptor = FetchDescriptor<BlockedTime>()
+        let blockedTimes = (try? modelContext.fetch(blockedDescriptor)) ?? []
+
         let task = DeadmanTask(
             title: title,
             context: context,
@@ -245,6 +248,7 @@ struct CaptureSheetView: View {
         let result = SchedulerService.schedule(
             task: task,
             allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
             settings: settings
         )
 

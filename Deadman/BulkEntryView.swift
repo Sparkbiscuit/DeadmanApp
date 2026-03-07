@@ -148,6 +148,9 @@ struct BulkEntryView: View {
         blockDescriptor.sortBy = [SortDescriptor(\ScheduledBlock.startTime)]
         var allBlocks = (try? modelContext.fetch(blockDescriptor)) ?? []
 
+        let blockedDescriptor = FetchDescriptor<BlockedTime>()
+        let blockedTimes = (try? modelContext.fetch(blockedDescriptor)) ?? []
+
         var successCount = 0
         var warningCount = 0
 
@@ -164,6 +167,7 @@ struct BulkEntryView: View {
             let result = SchedulerService.schedule(
                 task: task,
                 allBlocks: allBlocks,
+                blockedTimes: blockedTimes,
                 settings: settings
             )
 

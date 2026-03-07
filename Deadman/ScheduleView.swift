@@ -1,9 +1,31 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Timeline Item (unified type for display)
+
+private enum TimelineItem: Identifiable {
+    case taskBlock(ScheduledBlock)
+    case blocked(id: UUID, title: String, start: Date, end: Date)
+
+    var id: UUID {
+        switch self {
+        case .taskBlock(let block): return block.id
+        case .blocked(let id, _, _, _): return id
+        }
+    }
+
+    var startTime: Date {
+        switch self {
+        case .taskBlock(let block): return block.startTime
+        case .blocked(_, _, let start, _): return start
+        }
+    }
+}
+
 struct ScheduleView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ScheduledBlock.startTime) private var allBlocks: [ScheduledBlock]
+    @Query(sort: \BlockedTime.startTime) private var allBlockedTimes: [BlockedTime]
     @State private var selectedDate = Date()
 
     private let calendar = Calendar.current
@@ -13,7 +35,7 @@ struct ScheduleView: View {
             VStack(spacing: 0) {
                 dayStrip
                 Divider()
-                blockList
+                timelineList
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Schedule")
@@ -31,7 +53,7 @@ struct ScheduleView: View {
                         DayPill(
                             date: date,
                             isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
-                            hasBlocks: blocksForDate(date).count > 0
+                            hasBlocks: !timelineItems(for: date).isEmpty
                         )
                         .id(date)
                         .onTapGesture {
@@ -57,21 +79,27 @@ struct ScheduleView: View {
         }
     }
 
-    // MARK: - Block List
+    // MARK: - Timeline List
 
-    private var blockList: some View {
-        let blocks = blocksForDate(selectedDate)
-            .sorted { $0.startTime < $1.startTime }
+    private var timelineList: some View {
+        let items = timelineItems(for: selectedDate)
 
         return ScrollView {
-            if blocks.isEmpty {
+            if items.isEmpty {
                 emptyState
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(blocks) { block in
-                        BlockCard(block: block)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
+                    ForEach(items) { item in
+                        switch item {
+                        case .taskBlock(let block):
+                            BlockCard(block: block)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 6)
+                        case .blocked(_, let title, let start, let end):
+                            BlockedTimeCard(title: title, start: start, end: end)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 6)
+                        }
                     }
                 }
                 .padding(.top, 16)
@@ -98,10 +126,29 @@ struct ScheduleView: View {
 
     // MARK: - Helpers
 
-    private func blocksForDate(_ date: Date) -> [ScheduledBlock] {
-        let start = calendar.startOfDay(for: date)
-        let end = calendar.date(byAdding: .day, value: 1, to: start)!
-        return allBlocks.filter { $0.startTime >= start && $0.startTime < end }
+    private func timelineItems(for date: Date) -> [TimelineItem] {
+        let dayStart = calendar.startOfDay(for: date)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+
+        // Task blocks for this day
+        var items: [TimelineItem] = allBlocks
+            .filter { $0.startTime >= dayStart && $0.startTime < dayEnd }
+            .map { .taskBlock($0) }
+
+        // Blocked time occurrences for this day
+        for blocked in allBlockedTimes {
+            let occurrences = blocked.occurrences(from: dayStart, to: dayEnd)
+            for occ in occurrences {
+                items.append(.blocked(
+                    id: UUID(),
+                    title: blocked.title,
+                    start: occ.start,
+                    end: occ.end
+                ))
+            }
+        }
+
+        return items.sorted { $0.startTime < $1.startTime }
     }
 }
 
@@ -148,7 +195,7 @@ private struct DayPill: View {
     }
 }
 
-// MARK: - Block Card
+// MARK: - Block Card (task work block)
 
 private struct BlockCard: View {
     @Environment(\.modelContext) private var modelContext
@@ -220,6 +267,68 @@ private struct BlockCard: View {
 
     private var contextColor: Color {
         block.task?.context.color ?? Color.deadmanSubtle
+    }
+
+    private func timeString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Blocked Time Card (calendar events / manual blocks)
+
+private struct BlockedTimeCard: View {
+    let title: String
+    let start: Date
+    let end: Date
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Time column
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(timeString(start))
+                    .font(AppFont.mono(13))
+                    .foregroundStyle(.primary)
+                Text(timeString(end))
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(Color.deadmanSubtle)
+            }
+            .frame(width: 52, alignment: .trailing)
+
+            // Color bar — dashed pattern for blocked time
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.deadmanSubtle.opacity(0.4))
+                .frame(width: 4)
+
+            // Content
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(AppFont.body(15))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.deadmanSubtle)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9))
+                    Text("Blocked")
+                        .font(AppFont.caption(11))
+                }
+                .foregroundStyle(Color.deadmanSubtle.opacity(0.7))
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground).opacity(0.6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                        .foregroundStyle(Color.deadmanSubtle.opacity(0.3))
+                )
+        )
     }
 
     private func timeString(_ date: Date) -> String {

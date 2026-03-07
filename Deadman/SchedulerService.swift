@@ -20,6 +20,7 @@ struct SchedulerService {
     static func schedule(
         task: DeadmanTask,
         allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
         settings: UserSettings,
         from startDate: Date = Date(),
         allowOvernight: Bool = false
@@ -33,10 +34,19 @@ struct SchedulerService {
         guard startDate < windowEnd else { return .noSlots }
 
         // Gather existing occupied intervals (exclude completed blocks)
-        let occupied = allBlocks
+        var occupied = allBlocks
             .filter { !$0.isComplete }
             .map { Interval(start: $0.startTime, end: $0.endTime) }
-            .sorted { $0.start < $1.start }
+
+        // Add blocked time occurrences as occupied intervals
+        for blocked in blockedTimes {
+            let occurrences = blocked.occurrences(from: startDate, to: windowEnd)
+            for occ in occurrences {
+                occupied.append(Interval(start: occ.start, end: occ.end))
+            }
+        }
+
+        occupied.sort { $0.start < $1.start }
 
         // Find free slots
         let freeSlots = findFreeSlots(
@@ -102,6 +112,7 @@ struct SchedulerService {
     static func reschedule(
         task: DeadmanTask,
         allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
         settings: UserSettings,
         context: ModelContext
     ) -> ScheduleResult {
@@ -116,7 +127,12 @@ struct SchedulerService {
             !blocksToRemove.contains { $0.id == block.id }
         }
 
-        return schedule(task: task, allBlocks: remainingBlocks, settings: settings)
+        return schedule(
+            task: task,
+            allBlocks: remainingBlocks,
+            blockedTimes: blockedTimes,
+            settings: settings
+        )
     }
 
     // MARK: - Internals

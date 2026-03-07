@@ -6,29 +6,48 @@ struct TaskListView: View {
     @Query(sort: \DeadmanTask.deadline) private var tasks: [DeadmanTask]
     @State private var showingCapture = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
+    @State private var taskToComplete: DeadmanTask?
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        headerSection
-                        statsBar
-                        taskSections
+            ZStack {
+                // Main content
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            headerSection
+                            statsBar
+                            taskSections
+                        }
+                        .padding(.bottom, 100)
                     }
-                    .padding(.bottom, 100)
-                }
-                #if os(iOS)
-                .background(Color(uiColor: .systemGroupedBackground))
-                #else
-                .background(Color(nsColor: .controlBackgroundColor))
-                #endif
+                    #if os(iOS)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    #else
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    #endif
 
-                captureButton
+                    captureButton
+                }
+                .sheet(isPresented: $showingCapture) {
+                    CaptureSheetView()
+                }
+
+                // Completion celebration overlay
+                if let completedTask = taskToComplete {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+
+                    TaskCompletionView(task: completedTask) {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            taskToComplete = nil
+                        }
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
-            .sheet(isPresented: $showingCapture) {
-                CaptureSheetView()
-            }
+            .animation(.easeInOut(duration: 0.35), value: taskToComplete?.id)
         }
     }
 
@@ -151,7 +170,7 @@ struct TaskListView: View {
             if isExpanded {
                 VStack(spacing: 10) {
                     ForEach(tasks) { task in
-                        TaskRowView(task: task)
+                        TaskRowView(task: task, taskToComplete: $taskToComplete)
                             .padding(.horizontal, 20)
                     }
                 }
