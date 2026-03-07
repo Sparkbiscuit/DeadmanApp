@@ -123,24 +123,33 @@ struct BlockedTimeView: View {
 
     private func requestCalendarAccess() {
         let store = EKEventStore()
+        let status = EKEventStore.authorizationStatus(for: .event)
+
+        switch status {
+        case .authorized, .fullAccess:
+            showCalendarImport = true
+            return
+        case .denied, .restricted:
+            calendarPermissionDenied = true
+            return
+        case .notDetermined, .writeOnly:
+            break
+        @unknown default:
+            break
+        }
+
         if #available(iOS 17.0, *) {
             store.requestFullAccessToEvents { granted, _ in
                 DispatchQueue.main.async {
-                    if granted {
-                        showCalendarImport = true
-                    } else {
-                        calendarPermissionDenied = true
-                    }
+                    if granted { showCalendarImport = true }
+                    else { calendarPermissionDenied = true }
                 }
             }
         } else {
             store.requestAccess(to: .event) { granted, _ in
                 DispatchQueue.main.async {
-                    if granted {
-                        showCalendarImport = true
-                    } else {
-                        calendarPermissionDenied = true
-                    }
+                    if granted { showCalendarImport = true }
+                    else { calendarPermissionDenied = true }
                 }
             }
         }

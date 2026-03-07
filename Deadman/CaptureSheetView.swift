@@ -59,7 +59,7 @@ struct CaptureSheetView: View {
             }
             .alert("Scheduling Warning", isPresented: $showWarning) {
                 Button("Save Anyway") { saveTask() }
-                Button("Cancel", role: .cancel) {}
+                Button("Cancel", role: .cancel) { cancelPendingTask() }
             } message: {
                 Text(scheduleWarning ?? "")
             }
@@ -227,6 +227,10 @@ struct CaptureSheetView: View {
 
     // MARK: - Scheduling Logic
 
+    // Holds the pending task + blocks until user confirms or scheduling succeeds
+    @State private var pendingTask: DeadmanTask?
+    @State private var pendingBlocks: [ScheduledBlock] = []
+
     private func attemptSchedule() {
         let descriptor = FetchDescriptor<UserSettings>()
         let settings = (try? modelContext.fetch(descriptor))?.first ?? createDefaultSettings()
@@ -243,7 +247,11 @@ struct CaptureSheetView: View {
             deadline: deadline,
             effortMinutes: effortMinutes
         )
+
+        // Insert task into context so ScheduledBlock relationship works,
+        // but we'll rollback if the user cancels
         modelContext.insert(task)
+        pendingTask = task
 
         let result = SchedulerService.schedule(
             task: task,
@@ -255,10 +263,12 @@ struct CaptureSheetView: View {
         switch result {
         case .success(let blocks):
             for block in blocks { modelContext.insert(block) }
+            pendingTask = nil
+            pendingBlocks = []
             dismiss()
 
         case .partialFit(let blocks, let unscheduledMinutes):
-            for block in blocks { modelContext.insert(block) }
+            pendingBlocks = blocks
             let hours = unscheduledMinutes / 60
             let mins = unscheduledMinutes % 60
             let timeStr = hours > 0 ? "\(hours)h \(mins)m" : "\(mins)m"
@@ -272,8 +282,20 @@ struct CaptureSheetView: View {
     }
 
     private func saveTask() {
-        // Task is already inserted from attemptSchedule; just dismiss
+        // User chose "Save Anyway" — commit the pending task and any partial blocks
+        for block in pendingBlocks { modelContext.insert(block) }
+        pendingTask = nil
+        pendingBlocks = []
         dismiss()
+    }
+
+    private func cancelPendingTask() {
+        // User hit Cancel on the warning — remove the task we pre-inserted
+        if let task = pendingTask {
+            modelContext.delete(task)
+        }
+        pendingTask = nil
+        pendingBlocks = []
     }
 
     private func createDefaultSettings() -> UserSettings {

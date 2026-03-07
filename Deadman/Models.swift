@@ -46,7 +46,7 @@ final class DeadmanTask {
     var effortMinutes: Int
     var isComplete: Bool
     var completedAt: Date?
-    var selfReportedProgress: Double
+    var selfReportedProgress: Double = 0.0
     var userModified: Bool
     var source: TaskSource
     var canvasAssignmentId: String?
@@ -266,7 +266,7 @@ final class UserSettings {
     var deadlineBufferMinutes: Int
     var canvasBaseURL: String?
     var exportToAppleCalendar: Bool
-    var importAppleCalendar: Bool
+    var importAppleCalendar: Bool = false
 
     init() {
         self.id = UUID()
