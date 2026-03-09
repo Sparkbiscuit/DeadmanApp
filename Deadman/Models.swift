@@ -41,14 +41,14 @@ enum RecurrenceRule: String, Codable, CaseIterable, Identifiable {
 final class DeadmanTask {
     var id: UUID = UUID()
     var title: String = ""
-    var context: TaskContext = .personal
+    var context: TaskContext = TaskContext.personal
     var deadline: Date = Date()
     var effortMinutes: Int = 60
     var isComplete: Bool = false
     var completedAt: Date?
     var selfReportedProgress: Double = 0.0
     var userModified: Bool = false
-    var source: TaskSource = .manual
+    var source: TaskSource = TaskSource.manual
     var canvasAssignmentId: String?
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
@@ -187,7 +187,7 @@ final class BlockedTime {
     var title: String = ""
     var startTime: Date = Date()
     var durationMinutes: Int = 60
-    var recurrence: RecurrenceRule = .none
+    var recurrence: RecurrenceRule = RecurrenceRule.none
     var recurrenceEndDate: Date?
     var appleCalendarEventId: String?
 
