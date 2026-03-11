@@ -110,6 +110,7 @@ struct CaptureSheetView: View {
             HStack(spacing: 10) {
                 ForEach(TaskContext.allCases) { ctx in
                     Button {
+                        Haptics.selection()
                         withAnimation(.easeInOut(duration: 0.2)) {
                             context = ctx
                         }
@@ -232,6 +233,7 @@ struct CaptureSheetView: View {
     @State private var pendingBlocks: [ScheduledBlock] = []
 
     private func attemptSchedule() {
+        Haptics.impact(.medium)
         let descriptor = FetchDescriptor<UserSettings>()
         let settings = (try? modelContext.fetch(descriptor))?.first ?? createDefaultSettings()
 
@@ -311,6 +313,7 @@ struct CaptureSheetView: View {
     // MARK: - Voice Input
 
     private func toggleVoiceInput() {
+        Haptics.impact(.light)
         if isListening {
             stopListening()
         } else {
@@ -370,7 +373,10 @@ private struct EffortChip: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
             Text(label)
                 .font(AppFont.caption(14))
                 .fontWeight(.semibold)

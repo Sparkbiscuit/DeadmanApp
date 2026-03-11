@@ -48,7 +48,7 @@ struct TaskRowView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.loomRed)
-                    Text("Not blocked")
+                    Text("Unscheduled")
                         .font(AppFont.caption(12))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.loomRed)
@@ -71,9 +71,11 @@ struct TaskRowView: View {
                         Capsule()
                             .fill(task.context.color)
                             .frame(width: geo.size.width * CGFloat(task.selfReportedProgress), height: 4)
+                            .animation(.easeInOut(duration: 0.4), value: task.selfReportedProgress)
                     }
                 }
                 .frame(height: 4)
+                .accessibilityLabel("Progress: \(Int(task.selfReportedProgress * 100)) percent")
 
                 Text("\(Int(task.selfReportedProgress * 100))%")
                     .font(AppFont.mono(11))
@@ -84,13 +86,13 @@ struct TaskRowView: View {
 
             // Bottom row: time spent + actions
             HStack(spacing: 0) {
-                // Time spent vs estimate
                 timeSpentLabel
 
                 Spacer()
 
                 // Work session button
                 Button {
+                    Haptics.impact(.light)
                     showWorkSession = true
                 } label: {
                     HStack(spacing: 4) {
@@ -109,6 +111,7 @@ struct TaskRowView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(hasActiveSession ? "Stop working on \(task.title)" : "Start working on \(task.title)")
 
                 // Complete task button
                 Button {
@@ -120,6 +123,7 @@ struct TaskRowView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 10)
+                .accessibilityLabel("Mark \(task.title) complete")
             }
         }
         .cardStyle()
@@ -143,6 +147,7 @@ struct TaskRowView: View {
                 Label("Reschedule", systemImage: "arrow.clockwise")
             }
             Button(role: .destructive) {
+                Haptics.notification(.warning)
                 modelContext.delete(task)
             } label: {
                 Label("Delete", systemImage: "trash")
@@ -184,6 +189,7 @@ struct TaskRowView: View {
                     .foregroundStyle(Color.loomSubtle)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var hasActiveSession: Bool {
@@ -199,16 +205,17 @@ struct TaskRowView: View {
     }
 
     private func completeTask() {
+        Haptics.notification(.success)
         withAnimation(.easeInOut(duration: 0.3)) {
             task.isComplete = true
             task.completedAt = Date()
             task.selfReportedProgress = 1.0
         }
-        // Trigger celebration
         taskToComplete = task
     }
 
     private func rescheduleTask() {
+        Haptics.impact(.medium)
         let descriptor = FetchDescriptor<UserSettings>()
         guard let settings = try? modelContext.fetch(descriptor).first else { return }
 

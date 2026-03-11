@@ -122,6 +122,7 @@ struct BlockedTimeView: View {
     }
 
     private func requestCalendarAccess() {
+        Haptics.impact(.light)
         let store = EKEventStore()
         let status = EKEventStore.authorizationStatus(for: .event)
 
@@ -198,10 +199,8 @@ private struct BlockedTimeRow: View {
     }
 
     private var timeRangeString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let start = formatter.string(from: blockedTime.startTime)
-        let end = formatter.string(from: blockedTime.endTime)
+        let start = SharedFormatters.timeFormatter.string(from: blockedTime.startTime)
+        let end = SharedFormatters.timeFormatter.string(from: blockedTime.endTime)
         return "\(start) – \(end)"
     }
 }
@@ -372,6 +371,7 @@ struct CalendarImportView: View {
     }
 
     private func toggleCalendar(_ id: String) {
+        Haptics.selection()
         if selectedCalendarIds.contains(id) {
             selectedCalendarIds.remove(id)
         } else {
@@ -381,7 +381,6 @@ struct CalendarImportView: View {
 
     private func loadCalendars() {
         calendars = store.calendars(for: .event)
-            .filter { $0.allowsContentModifications || true }
             .sorted { $0.title < $1.title }
     }
 

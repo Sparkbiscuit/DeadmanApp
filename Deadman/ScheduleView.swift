@@ -57,6 +57,7 @@ struct ScheduleView: View {
                         )
                         .id(date)
                         .onTapGesture {
+                            Haptics.selection()
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 selectedDate = date
                             }
@@ -178,12 +179,19 @@ private struct DayPill: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(isSelected ? Color.loomRed : Color.clear)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(dayOfWeek) \(dayNumber)\(hasBlocks ? ", has blocks" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    private static let dayOfWeekFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return f
+    }()
+
     private var dayOfWeek: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date).uppercased()
+        Self.dayOfWeekFormatter.string(from: date).uppercased()
     }
 
     private var dayNumber: String {
@@ -248,6 +256,7 @@ private struct BlockCard: View {
 
             // Complete button
             Button {
+                Haptics.impact(.light)
                 withAnimation(.easeInOut(duration: 0.2)) {
                     block.isComplete.toggle()
                 }
@@ -257,6 +266,7 @@ private struct BlockCard: View {
                     .foregroundStyle(block.isComplete ? Color.green : Color.loomSubtle)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(block.isComplete ? "Mark \(block.task?.title ?? "task") incomplete" : "Mark \(block.task?.title ?? "task") complete")
         }
         .padding(14)
         .background(
@@ -270,9 +280,7 @@ private struct BlockCard: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        SharedFormatters.timeFormatter.string(from: date)
     }
 }
 
@@ -332,8 +340,6 @@ private struct BlockedTimeCard: View {
     }
 
     private func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        SharedFormatters.timeFormatter.string(from: date)
     }
 }

@@ -176,6 +176,9 @@ struct TaskCompletionView: View {
                 }
             }
         }
+        .onAppear {
+            Haptics.notification(.success)
+        }
     }
 }
 

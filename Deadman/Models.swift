@@ -236,15 +236,21 @@ final class BlockedTime {
             case .none:
                 return results
             case .daily:
-                current = calendar.date(byAdding: .day, value: 1, to: current)!
+                guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { return results }
+                current = next
             case .weekdays:
+                var next = current
                 repeat {
-                    current = calendar.date(byAdding: .day, value: 1, to: current)!
-                } while calendar.isDateInWeekend(current)
+                    guard let candidate = calendar.date(byAdding: .day, value: 1, to: next) else { return results }
+                    next = candidate
+                } while calendar.isDateInWeekend(next)
+                current = next
             case .weekly:
-                current = calendar.date(byAdding: .weekOfYear, value: 1, to: current)!
+                guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: current) else { return results }
+                current = next
             case .biweekly:
-                current = calendar.date(byAdding: .weekOfYear, value: 2, to: current)!
+                guard let next = calendar.date(byAdding: .weekOfYear, value: 2, to: current) else { return results }
+                current = next
             }
         }
 

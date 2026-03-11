@@ -201,9 +201,7 @@ struct WorkSessionView: View {
     }
 
     private func sessionDateString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d, h:mm a"
-        return formatter.string(from: date)
+        SharedFormatters.sessionFormatter.string(from: date)
     }
 
     // MARK: - Session Logic
@@ -217,6 +215,7 @@ struct WorkSessionView: View {
     }
 
     private func startSession() {
+        Haptics.impact(.medium)
         let session = WorkSession(task: task)
         modelContext.insert(session)
         activeSession = session
@@ -225,6 +224,7 @@ struct WorkSessionView: View {
     }
 
     private func stopSession() {
+        Haptics.impact(.medium)
         timer?.invalidate()
         timer = nil
         reportedProgress = task.selfReportedProgress
@@ -240,6 +240,7 @@ struct WorkSessionView: View {
         session.progressAfter = progressDelta
         task.selfReportedProgress = min(1.0, progress)
 
+        Haptics.notification(.success)
         activeSession = nil
         elapsedSeconds = 0
     }

@@ -201,18 +201,21 @@ struct SchedulerService {
             wakeComps.hour = wakeH
             wakeComps.minute = wakeM
             wakeComps.second = 0
-            let wakeStart = calendar.date(from: wakeComps)!
+            guard let wakeStart = calendar.date(from: wakeComps),
+                  let nextDay = calendar.date(byAdding: .day, value: 1, to: currentDay) else {
+                break
+            }
 
             var sleepComps = calendar.dateComponents([.year, .month, .day], from: currentDay)
             sleepComps.hour = sleepH
             sleepComps.minute = sleepM
             sleepComps.second = 0
-            let sleepEnd = calendar.date(from: sleepComps)!
+            guard let sleepEnd = calendar.date(from: sleepComps) else { break }
 
             if allowOvernight || wakeStart >= sleepEnd {
                 // Use full day (also fallback if wake/sleep are misconfigured)
                 let dayStart = max(currentDay, from)
-                let dayEnd = min(calendar.date(byAdding: .day, value: 1, to: currentDay)!, to)
+                let dayEnd = min(nextDay, to)
                 if dayStart < dayEnd {
                     slots.append(Interval(start: dayStart, end: dayEnd))
                 }
@@ -225,7 +228,7 @@ struct SchedulerService {
                 }
             }
 
-            currentDay = calendar.date(byAdding: .day, value: 1, to: currentDay)!
+            currentDay = nextDay
         }
 
         // Subtract occupied intervals from free slots

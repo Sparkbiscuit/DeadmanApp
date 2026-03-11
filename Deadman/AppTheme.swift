@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Color Palette
 
@@ -24,6 +27,50 @@ extension TaskContext {
         case .personal: return .personalColor
         }
     }
+}
+
+// MARK: - Haptics
+
+struct Haptics {
+    #if os(iOS)
+    static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .medium) {
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+    }
+
+    static func selection() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    static func notification(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        UINotificationFeedbackGenerator().notificationOccurred(type)
+    }
+    #else
+    static func impact(_ style: Any? = nil) {}
+    static func selection() {}
+    static func notification(_ type: Any? = nil) {}
+    #endif
+}
+
+// MARK: - Cached Formatters
+
+enum SharedFormatters {
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
+    static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f
+    }()
+
+    static let sessionFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f
+    }()
 }
 
 // MARK: - Typography
@@ -121,9 +168,7 @@ struct CountdownFormatter {
         let days = hours / 24
 
         if days > 7 {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d"
-            return "Due \(formatter.string(from: deadline))"
+            return "Due \(SharedFormatters.dateFormatter.string(from: deadline))"
         } else if days > 0 {
             return days == 1 ? "Due tomorrow" : "Due in \(days) days"
         } else if hours > 0 {

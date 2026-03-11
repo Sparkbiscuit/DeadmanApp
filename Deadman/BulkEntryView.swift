@@ -59,6 +59,7 @@ struct BulkEntryView: View {
                 ForEach($rows) { $row in
                     BulkRowCard(row: $row) {
                         if rows.count > 1 {
+                            Haptics.impact(.light)
                             withAnimation { rows.removeAll { $0.id == row.id } }
                         }
                     }
@@ -77,6 +78,7 @@ struct BulkEntryView: View {
 
             HStack(spacing: 12) {
                 Button {
+                    Haptics.impact(.light)
                     withAnimation(.easeInOut(duration: 0.2)) {
                         rows.append(BulkRow())
                     }
@@ -135,6 +137,7 @@ struct BulkEntryView: View {
     }
 
     private func scheduleAll() {
+        Haptics.impact(.medium)
         isScheduling = true
 
         let descriptor = FetchDescriptor<UserSettings>()

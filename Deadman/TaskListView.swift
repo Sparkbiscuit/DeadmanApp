@@ -17,7 +17,11 @@ struct TaskListView: View {
                         VStack(spacing: 0) {
                             headerSection
                             statsBar
-                            taskSections
+                            if incompleteTasks.isEmpty {
+                                emptyState
+                            } else {
+                                taskSections
+                            }
                         }
                         .padding(.bottom, 100)
                     }
@@ -55,6 +59,12 @@ struct TaskListView: View {
         }
     }
 
+    // MARK: - Data
+
+    private var incompleteTasks: [LoomTask] {
+        tasks.filter { !$0.isComplete }
+    }
+
     // MARK: - Header
 
     private var headerSection: some View {
@@ -81,7 +91,7 @@ struct TaskListView: View {
     // MARK: - Stats Bar
 
     private var statsBar: some View {
-        let incomplete = tasks.filter { !$0.isComplete }
+        let incomplete = incompleteTasks
         let unscheduled = incomplete.filter { !$0.isFullyScheduled }
         let todayBlocks = todayBlockCount
 
@@ -99,7 +109,7 @@ struct TaskListView: View {
             if !unscheduled.isEmpty {
                 StatPill(
                     value: "\(unscheduled.count)",
-                    label: "unblocked",
+                    label: "unscheduled",
                     color: .loomRed
                 )
             }
@@ -118,11 +128,34 @@ struct TaskListView: View {
             .count
     }
 
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 40)
+
+            Image(systemName: "text.badge.plus")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(Color.loomSubtle)
+
+            VStack(spacing: 6) {
+                Text("No tasks yet")
+                    .font(AppFont.heading(20))
+                    .foregroundStyle(.primary)
+                Text("Tap the + button to add your first task\nand Loom will schedule it for you.")
+                    .font(AppFont.body(15))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 40)
+    }
+
     // MARK: - Task Sections (grouped by context)
 
     private var taskSections: some View {
-        let incomplete = tasks.filter { !$0.isComplete }
-        let sorted = incomplete.sorted { lhs, rhs in
+        let sorted = incompleteTasks.sorted { lhs, rhs in
             let lhsNext = lhs.nextBlock?.startTime ?? Date.distantFuture
             let rhsNext = rhs.nextBlock?.startTime ?? Date.distantFuture
             return lhsNext < rhsNext
@@ -142,6 +175,7 @@ struct TaskListView: View {
         return VStack(spacing: 0) {
             // Section header
             Button {
+                Haptics.selection()
                 withAnimation(.easeInOut(duration: 0.25)) {
                     if isExpanded {
                         expandedContexts.remove(context)
@@ -170,6 +204,8 @@ struct TaskListView: View {
                 .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(context.rawValue), \(tasks.count) tasks")
+            .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to expand")
 
             if isExpanded {
                 VStack(spacing: 10) {
@@ -188,6 +224,7 @@ struct TaskListView: View {
 
     private var captureButton: some View {
         Button {
+            Haptics.impact(.medium)
             showingCapture = true
         } label: {
             Image(systemName: "plus")
@@ -197,6 +234,7 @@ struct TaskListView: View {
                 .background(Color.loomRed, in: Circle())
                 .shadow(color: Color.loomRed.opacity(0.4), radius: 12, y: 6)
         }
+        .accessibilityLabel("Add new task")
         .padding(.trailing, 24)
         .padding(.bottom, 24)
     }
@@ -225,5 +263,7 @@ private struct StatPill: View {
         #else
         .background(Color(nsColor: .tertiaryLabelColor).opacity(0.1), in: Capsule())
         #endif
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value) \(label)")
     }
 }
