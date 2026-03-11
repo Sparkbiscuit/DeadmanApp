@@ -2,13 +2,13 @@ import SwiftUI
 import SwiftData
 
 @main
-struct DeadmanApp: App {
+struct LoomApp: App {
     var body: some Scene {
         WindowGroup {
             MainTabView()
         }
         .modelContainer(for: [
-            DeadmanTask.self,
+            LoomTask.self,
             ScheduledBlock.self,
             WorkSession.self,
             BlockedTime.self,
@@ -58,7 +58,7 @@ struct MainTabView: View {
         .sheet(isPresented: $showBulkEntry) {
             BulkEntryView()
         }
-        .tint(Color.deadmanRed)
+        .tint(Color.loomRed)
         .onAppear {
             ensureSettingsExist()
         }

@@ -3,10 +3,10 @@ import SwiftData
 
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \DeadmanTask.deadline) private var tasks: [DeadmanTask]
+    @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @State private var showingCapture = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
-    @State private var taskToComplete: DeadmanTask?
+    @State private var taskToComplete: LoomTask?
 
     var body: some View {
         NavigationStack {
@@ -35,7 +35,7 @@ struct TaskListView: View {
 
                 // Completion celebration overlay
                 if let completedTask = taskToComplete {
-                    Color.black.opacity(0.4)
+                    Color.black.opacity(0.6)
                         .ignoresSafeArea()
                         .transition(.opacity)
 
@@ -44,6 +44,10 @@ struct TaskListView: View {
                             taskToComplete = nil
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 40)
+                    .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
                     .transition(.scale.combined(with: .opacity))
                 }
             }
@@ -57,7 +61,7 @@ struct TaskListView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(greeting)
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
             Text("Your Tasks")
                 .font(AppFont.title(32))
         }
@@ -96,7 +100,7 @@ struct TaskListView: View {
                 StatPill(
                     value: "\(unscheduled.count)",
                     label: "unblocked",
-                    color: .deadmanRed
+                    color: .loomRed
                 )
             }
         }
@@ -132,7 +136,7 @@ struct TaskListView: View {
         }
     }
 
-    private func contextSection(context: TaskContext, tasks: [DeadmanTask]) -> some View {
+    private func contextSection(context: TaskContext, tasks: [LoomTask]) -> some View {
         let isExpanded = expandedContexts.contains(context)
 
         return VStack(spacing: 0) {
@@ -155,11 +159,11 @@ struct TaskListView: View {
                         .foregroundStyle(.primary)
                     Text("\(tasks.count)")
                         .font(AppFont.caption(12))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 20)
@@ -190,8 +194,8 @@ struct TaskListView: View {
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 60, height: 60)
-                .background(Color.deadmanRed, in: Circle())
-                .shadow(color: Color.deadmanRed.opacity(0.4), radius: 12, y: 6)
+                .background(Color.loomRed, in: Circle())
+                .shadow(color: Color.loomRed.opacity(0.4), radius: 12, y: 6)
         }
         .padding(.trailing, 24)
         .padding(.bottom, 24)
@@ -212,7 +216,7 @@ private struct StatPill: View {
                 .foregroundStyle(color)
             Text(label)
                 .font(AppFont.caption(12))
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -5,7 +5,7 @@ struct WorkSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    let task: DeadmanTask
+    let task: LoomTask
     @State private var activeSession: WorkSession?
     @State private var elapsedSeconds: Int = 0
     @State private var timer: Timer?
@@ -31,7 +31,7 @@ struct WorkSessionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
             .sheet(isPresented: $showProgressPrompt) {
@@ -79,7 +79,7 @@ struct WorkSessionView: View {
     }
 
     private var budgetColor: Color {
-        task.isOverBudget ? .orange : Color.deadmanSubtle
+        task.isOverBudget ? .orange : Color.loomSubtle
     }
 
     private var budgetLabel: String {
@@ -97,16 +97,16 @@ struct WorkSessionView: View {
         VStack(spacing: 12) {
             Text(timerString)
                 .font(.system(size: 64, weight: .light, design: .monospaced))
-                .foregroundStyle(activeSession != nil ? .primary : Color.deadmanSubtle)
+                .foregroundStyle(activeSession != nil ? .primary : Color.loomSubtle)
 
             if activeSession != nil {
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(Color.deadmanRed)
+                        .fill(Color.loomRed)
                         .frame(width: 8, height: 8)
                     Text("Working")
                         .font(AppFont.caption(13))
-                        .foregroundStyle(Color.deadmanRed)
+                        .foregroundStyle(Color.loomRed)
                 }
                 .transition(.opacity)
             }
@@ -138,10 +138,10 @@ struct WorkSessionView: View {
                             .font(.system(size: 28))
                             .foregroundStyle(.white)
                             .frame(width: 72, height: 72)
-                            .background(Color.deadmanRed, in: Circle())
+                            .background(Color.loomRed, in: Circle())
                         Text("Stop")
                             .font(AppFont.caption(12))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 }
             } else {
@@ -158,7 +158,7 @@ struct WorkSessionView: View {
                             .shadow(color: task.context.color.opacity(0.4), radius: 12, y: 6)
                         Text("Start Working")
                             .font(AppFont.caption(12))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 }
             }
@@ -176,7 +176,7 @@ struct WorkSessionView: View {
             if !sessions.isEmpty {
                 Text("Recent Sessions")
                     .font(AppFont.caption(12))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
                     .padding(.bottom, 2)
 
                 ForEach(Array(sessions), id: \.id) { session in
@@ -257,14 +257,14 @@ struct WorkSessionView: View {
 // MARK: - Progress Prompt
 
 struct ProgressPromptView: View {
-    let task: DeadmanTask
+    let task: LoomTask
     let sessionMinutes: Int
     let currentProgress: Double
     let onSubmit: (Double) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var progress: Double
 
-    init(task: DeadmanTask, sessionMinutes: Int, currentProgress: Double, onSubmit: @escaping (Double) -> Void) {
+    init(task: LoomTask, sessionMinutes: Int, currentProgress: Double, onSubmit: @escaping (Double) -> Void) {
         self.task = task
         self.sessionMinutes = sessionMinutes
         self.currentProgress = currentProgress
@@ -291,7 +291,7 @@ struct ProgressPromptView: View {
             VStack(spacing: 12) {
                 Text("How much of this task is done overall?")
                     .font(AppFont.caption(14))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
 
                 // Progress slider
                 VStack(spacing: 8) {
@@ -308,11 +308,11 @@ struct ProgressPromptView: View {
                     HStack {
                         Text("Before: \(Int(currentProgress * 100))%")
                             .font(AppFont.mono(11))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                         Spacer()
                         Text("Done")
                             .font(AppFont.mono(11))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 }
             }

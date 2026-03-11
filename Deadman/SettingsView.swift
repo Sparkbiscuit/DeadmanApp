@@ -22,6 +22,7 @@ struct SettingsView: View {
                 scheduleSection
                 blockedTimesSection
                 blockSizeSection
+                dailyFocusSection
                 bufferSection
                 calendarSection
                 aboutSection
@@ -116,7 +117,7 @@ struct SettingsView: View {
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
             .buttonStyle(.plain)
@@ -140,7 +141,7 @@ struct SettingsView: View {
                     Spacer()
                     Text(CountdownFormatter.effortString(minutes: settings.minBlockMinutes))
                         .font(AppFont.mono(14))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
 
@@ -153,13 +154,36 @@ struct SettingsView: View {
                     Spacer()
                     Text(CountdownFormatter.effortString(minutes: settings.maxBlockMinutes))
                         .font(AppFont.mono(14))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
         } header: {
             Text("Block Size")
         } footer: {
             Text("Tasks are split into blocks within this range.")
+        }
+    }
+
+    // MARK: - Daily Focus Section
+
+    private var dailyFocusSection: some View {
+        Section {
+            Stepper(value: Binding(
+                get: { settings.dailyMaxMinutesPerTask },
+                set: { settings.dailyMaxMinutesPerTask = $0 }
+            ), in: 15...360, step: 15) {
+                HStack {
+                    Label("Daily focus limit", systemImage: "hourglass")
+                    Spacer()
+                    Text(CountdownFormatter.effortString(minutes: settings.dailyMaxMinutesPerTask))
+                        .font(AppFont.mono(14))
+                        .foregroundStyle(Color.loomSubtle)
+                }
+            }
+        } header: {
+            Text("Daily Focus")
+        } footer: {
+            Text("Maximum time per task per day. Spreads work across multiple days to prevent marathon sessions.")
         }
     }
 
@@ -176,7 +200,7 @@ struct SettingsView: View {
                     Spacer()
                     Text(CountdownFormatter.effortString(minutes: settings.deadlineBufferMinutes))
                         .font(AppFont.mono(14))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
         } header: {
@@ -199,7 +223,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar")
         } footer: {
-            Text("One-way export only. Deadman manages all scheduling internally.")
+            Text("One-way export only. Loom manages all scheduling internally.")
         }
     }
 
@@ -211,7 +235,7 @@ struct SettingsView: View {
                 Text("Version")
                 Spacer()
                 Text("1.0.0")
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
             }
         } header: {
             Text("About")

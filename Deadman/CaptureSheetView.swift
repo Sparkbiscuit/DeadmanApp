@@ -54,7 +54,7 @@ struct CaptureSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
             .alert("Scheduling Warning", isPresented: $showWarning) {
@@ -75,7 +75,7 @@ struct CaptureSheetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("What needs to get done?")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
 
             HStack(spacing: 12) {
                 TextField("e.g. Finish lab report", text: $title)
@@ -88,11 +88,11 @@ struct CaptureSheetView: View {
                 } label: {
                     Image(systemName: isListening ? "mic.fill" : "mic")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(isListening ? Color.deadmanRed : Color.deadmanSubtle)
+                        .foregroundStyle(isListening ? Color.loomRed : Color.loomSubtle)
                         .frame(width: 44, height: 44)
                         .background(
                             Circle()
-                                .fill(isListening ? Color.deadmanRed.opacity(0.15) : Color(.tertiarySystemFill))
+                                .fill(isListening ? Color.loomRed.opacity(0.15) : Color(.tertiarySystemFill))
                         )
                 }
             }
@@ -105,7 +105,7 @@ struct CaptureSheetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Context")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
 
             HStack(spacing: 10) {
                 ForEach(TaskContext.allCases) { ctx in
@@ -141,7 +141,7 @@ struct CaptureSheetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Deadline")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
 
             DatePicker(
                 "",
@@ -160,7 +160,7 @@ struct CaptureSheetView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Estimated effort")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
 
             HStack(spacing: 10) {
                 ForEach(effortOptions, id: \.self) { mins in
@@ -219,7 +219,7 @@ struct CaptureSheetView: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(title.isEmpty ? Color.deadmanSubtle : Color.deadmanRed)
+                    .fill(title.isEmpty ? Color.loomSubtle : Color.loomRed)
             )
         }
         .disabled(title.isEmpty)
@@ -228,7 +228,7 @@ struct CaptureSheetView: View {
     // MARK: - Scheduling Logic
 
     // Holds the pending task + blocks until user confirms or scheduling succeeds
-    @State private var pendingTask: DeadmanTask?
+    @State private var pendingTask: LoomTask?
     @State private var pendingBlocks: [ScheduledBlock] = []
 
     private func attemptSchedule() {
@@ -241,7 +241,7 @@ struct CaptureSheetView: View {
         let blockedDescriptor = FetchDescriptor<BlockedTime>()
         let blockedTimes = (try? modelContext.fetch(blockedDescriptor)) ?? []
 
-        let task = DeadmanTask(
+        let task = LoomTask(
             title: title,
             context: context,
             deadline: deadline,
@@ -379,7 +379,7 @@ private struct EffortChip: View {
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.deadmanRed : Color(.tertiarySystemFill))
+                        .fill(isSelected ? Color.loomRed : Color(.tertiarySystemFill))
                 )
         }
         .buttonStyle(.plain)

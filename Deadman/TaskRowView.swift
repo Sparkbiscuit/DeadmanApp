@@ -3,8 +3,8 @@ import SwiftData
 
 struct TaskRowView: View {
     @Environment(\.modelContext) private var modelContext
-    let task: DeadmanTask
-    @Binding var taskToComplete: DeadmanTask?
+    let task: LoomTask
+    @Binding var taskToComplete: LoomTask?
     @State private var showWorkSession = false
 
     var body: some View {
@@ -47,11 +47,11 @@ struct TaskRowView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.deadmanRed)
+                        .foregroundStyle(Color.loomRed)
                     Text("Not blocked")
                         .font(AppFont.caption(12))
                         .fontWeight(.semibold)
-                        .foregroundStyle(Color.deadmanRed)
+                        .foregroundStyle(Color.loomRed)
                     Text("·")
                         .foregroundStyle(.secondary)
                     Text("\(CountdownFormatter.effortString(minutes: task.remainingMinutes)) remaining")
@@ -100,12 +100,12 @@ struct TaskRowView: View {
                             .font(AppFont.caption(12))
                             .fontWeight(.semibold)
                     }
-                    .foregroundStyle(hasActiveSession ? Color.deadmanRed : task.context.color)
+                    .foregroundStyle(hasActiveSession ? Color.loomRed : task.context.color)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
                         Capsule()
-                            .fill(hasActiveSession ? Color.deadmanRed.opacity(0.12) : task.context.color.opacity(0.12))
+                            .fill(hasActiveSession ? Color.loomRed.opacity(0.12) : task.context.color.opacity(0.12))
                     )
                 }
                 .buttonStyle(.plain)
@@ -116,7 +116,7 @@ struct TaskRowView: View {
                 } label: {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 22, weight: .light))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 10)
@@ -160,16 +160,16 @@ struct TaskRowView: View {
             if spent > 0 {
                 Image(systemName: "timer")
                     .font(.system(size: 10))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
                 Text(CountdownFormatter.effortString(minutes: spent))
                     .font(AppFont.mono(11))
                     .foregroundStyle(task.isOverBudget ? .orange : .primary)
                 Text("/")
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
                 Text(CountdownFormatter.effortString(minutes: estimate))
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
                 if task.isOverBudget {
                     Text("over")
                         .font(AppFont.caption(10))
@@ -178,10 +178,10 @@ struct TaskRowView: View {
             } else {
                 Image(systemName: "timer")
                     .font(.system(size: 10))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
                 Text("0m / \(CountdownFormatter.effortString(minutes: estimate))")
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
             }
         }
     }
@@ -192,8 +192,8 @@ struct TaskRowView: View {
 
     private var deadlineColor: Color {
         let hours = task.deadline.timeIntervalSince(Date()) / 3600
-        if hours < 0 { return .deadmanRed }
-        if hours < 24 { return .deadmanRed }
+        if hours < 0 { return .loomRed }
+        if hours < 24 { return .loomRed }
         if hours < 72 { return .orange }
         return .secondary
     }

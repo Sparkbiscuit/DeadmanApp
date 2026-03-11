@@ -38,7 +38,7 @@ enum RecurrenceRule: String, Codable, CaseIterable, Identifiable {
 // MARK: - Task
 
 @Model
-final class DeadmanTask {
+final class LoomTask {
     var id: UUID = UUID()
     var title: String = ""
     var context: TaskContext = TaskContext.personal
@@ -125,7 +125,7 @@ final class DeadmanTask {
 @Model
 final class ScheduledBlock {
     var id: UUID = UUID()
-    var task: DeadmanTask?
+    var task: LoomTask?
     var startTime: Date = Date()
     var durationMinutes: Int = 30
     var isComplete: Bool = false
@@ -133,7 +133,7 @@ final class ScheduledBlock {
     var appleCalendarEventId: String?
 
     init(
-        task: DeadmanTask,
+        task: LoomTask,
         startTime: Date,
         durationMinutes: Int
     ) {
@@ -156,12 +156,12 @@ final class ScheduledBlock {
 @Model
 final class WorkSession {
     var id: UUID = UUID()
-    var task: DeadmanTask?
+    var task: LoomTask?
     var startedAt: Date = Date()
     var endedAt: Date?
     var progressAfter: Double = 0.0
 
-    init(task: DeadmanTask) {
+    init(task: LoomTask) {
         self.id = UUID()
         self.task = task
         self.startedAt = Date()
@@ -263,6 +263,7 @@ final class UserSettings {
     var sleepMinute: Int = 0
     var minBlockMinutes: Int = 30
     var maxBlockMinutes: Int = 90
+    var dailyMaxMinutesPerTask: Int = 120
     var deadlineBufferMinutes: Int = 120
     var canvasBaseURL: String?
     var exportToAppleCalendar: Bool = false
@@ -276,6 +277,7 @@ final class UserSettings {
         self.sleepMinute = 0
         self.minBlockMinutes = 30
         self.maxBlockMinutes = 90
+        self.dailyMaxMinutesPerTask = 120
         self.deadlineBufferMinutes = 120
         self.canvasBaseURL = nil
         self.exportToAppleCalendar = false

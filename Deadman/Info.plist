@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Deadman needs access to your calendar to import events as blocked time, so tasks aren't scheduled during your existing commitments.</string>
+	<string>Loom needs access to your calendar to import events as blocked time, so tasks aren't scheduled during your existing commitments.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Deadman needs access to your calendar to import events as blocked time.</string>
+	<string>Loom needs access to your calendar to import events as blocked time.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Deadman uses speech recognition for voice task entry.</string>
+	<string>Loom uses speech recognition for voice task entry.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Deadman needs microphone access for voice task entry.</string>
+	<string>Loom needs microphone access for voice task entry.</string>
 </dict>
 </plist>

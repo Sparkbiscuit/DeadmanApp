@@ -5,15 +5,15 @@ import SwiftUI
 extension Color {
     // Context colors
     static let schoolColor = Color(red: 0.35, green: 0.47, blue: 0.95)     // Soft indigo-blue
-    static let workColor = Color(red: 0.95, green: 0.55, blue: 0.25)       // Warm amber
-    static let personalColor = Color(red: 0.40, green: 0.78, blue: 0.58)   // Sage green
+    static let workColor = Color(red: 0.85, green: 0.50, blue: 0.20)       // Warm amber (contrast-safe)
+    static let personalColor = Color(red: 0.25, green: 0.65, blue: 0.45)   // Sage green (contrast-safe)
 
     // Semantic
-    static let deadmanRed = Color(red: 0.92, green: 0.26, blue: 0.28)      // Urgent / brand
-    static let deadmanDark = Color(red: 0.09, green: 0.09, blue: 0.11)     // Background dark
-    static let deadmanCard = Color(red: 0.13, green: 0.13, blue: 0.15)     // Card surface
-    static let deadmanCardLight = Color(red: 0.96, green: 0.96, blue: 0.97) // Card surface light
-    static let deadmanSubtle = Color(red: 0.55, green: 0.55, blue: 0.58)   // Muted text
+    static let loomRed = Color(red: 0.92, green: 0.26, blue: 0.28)      // Urgent / brand
+    static let loomDark = Color(red: 0.09, green: 0.09, blue: 0.11)     // Background dark
+    static let loomCard = Color(red: 0.13, green: 0.13, blue: 0.15)     // Card surface
+    static let loomCardLight = Color(red: 0.96, green: 0.96, blue: 0.97) // Card surface light
+    static let loomSubtle = Color(red: 0.44, green: 0.44, blue: 0.47)   // Muted text (WCAG AA compliant)
 }
 
 extension TaskContext {
@@ -58,7 +58,7 @@ struct CardModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(16)
-            .background(colorScheme == .dark ? Color.deadmanCard : Color.deadmanCardLight)
+            .background(colorScheme == .dark ? Color.loomCard : Color.loomCardLight)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

@@ -13,12 +13,16 @@ enum ScheduleResult {
 
 struct SchedulerService {
 
+    /// Minimum buffer (in minutes) before the first scheduled block for a new task.
+    /// Prevents tasks from being marked "overdue" immediately upon creation.
+    private static let newTaskBufferMinutes = 15
+
     // MARK: - Public API
 
     /// Schedule a task by finding free slots between now and its deadline.
     /// Returns the result indicating full success, partial fit, or no slots.
     static func schedule(
-        task: DeadmanTask,
+        task: LoomTask,
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime] = [],
         settings: UserSettings,
@@ -31,7 +35,10 @@ struct SchedulerService {
         let bufferSeconds = TimeInterval(settings.deadlineBufferMinutes * 60)
         let windowEnd = task.deadline.addingTimeInterval(-bufferSeconds)
 
-        guard startDate < windowEnd else { return .noSlots }
+        // Push start forward so newly created tasks don't begin in the current moment
+        let effectiveStart = startDate.addingTimeInterval(TimeInterval(newTaskBufferMinutes * 60))
+
+        guard effectiveStart < windowEnd else { return .noSlots }
 
         // Gather existing occupied intervals (exclude completed blocks)
         var occupied = allBlocks
@@ -40,7 +47,7 @@ struct SchedulerService {
 
         // Add blocked time occurrences as occupied intervals
         for blocked in blockedTimes {
-            let occurrences = blocked.occurrences(from: startDate, to: windowEnd)
+            let occurrences = blocked.occurrences(from: effectiveStart, to: windowEnd)
             for occ in occurrences {
                 occupied.append(Interval(start: occ.start, end: occ.end))
             }
@@ -50,7 +57,7 @@ struct SchedulerService {
 
         // Find free slots
         let freeSlots = findFreeSlots(
-            from: startDate,
+            from: effectiveStart,
             to: windowEnd,
             occupied: occupied,
             settings: settings,
@@ -64,10 +71,15 @@ struct SchedulerService {
             maxBlock: settings.maxBlockMinutes
         )
 
-        // Assign chunks to earliest available slots
+        // Assign chunks to earliest available slots, respecting daily per-task cap
+        let dailyCap = settings.dailyMaxMinutesPerTask
+        let calendar = Calendar.current
         var newBlocks: [ScheduledBlock] = []
         var slotIndex = 0
         var slotOffset: TimeInterval = 0
+
+        // Track minutes assigned per calendar day for this task
+        var minutesPerDay: [Date: Int] = [:]
 
         for chunk in chunks {
             var placed = false
@@ -76,14 +88,31 @@ struct SchedulerService {
                 let slotStart = slot.start.addingTimeInterval(slotOffset)
                 let available = slot.end.timeIntervalSince(slotStart) / 60.0
 
-                if available >= Double(chunk) {
+                // Check daily cap for this day
+                let dayKey = calendar.startOfDay(for: slotStart)
+                let usedToday = minutesPerDay[dayKey, default: 0]
+                let remainingCap = dailyCap - usedToday
+
+                if remainingCap <= 0 {
+                    // This day is full for this task — advance to next slot
+                    // (slots are per-day awake windows, so moving to next slot = next day typically)
+                    slotIndex += 1
+                    slotOffset = 0
+                    continue
+                }
+
+                // The chunk may need to be capped for today
+                let effectiveChunk = min(chunk, remainingCap)
+
+                if available >= Double(effectiveChunk) {
                     let block = ScheduledBlock(
                         task: task,
                         startTime: slotStart,
-                        durationMinutes: chunk
+                        durationMinutes: effectiveChunk
                     )
                     newBlocks.append(block)
-                    slotOffset += TimeInterval(chunk * 60)
+                    slotOffset += TimeInterval(effectiveChunk * 60)
+                    minutesPerDay[dayKey, default: 0] += effectiveChunk
                     placed = true
                     break
                 } else {
@@ -110,7 +139,7 @@ struct SchedulerService {
 
     /// Reschedule remaining effort for a task from the current time.
     static func reschedule(
-        task: DeadmanTask,
+        task: LoomTask,
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime] = [],
         settings: UserSettings,
@@ -231,19 +260,22 @@ struct SchedulerService {
 
     /// Split total effort into chunks respecting min/max block sizes.
     private static func splitEffort(minutes: Int, minBlock: Int, maxBlock: Int) -> [Int] {
-        guard minutes > 0 else { return [] }
+        guard minutes > 0, maxBlock > 0 else { return [] }
+
+        let effectiveMin = max(1, minBlock)
+        let effectiveMax = max(effectiveMin, maxBlock)
 
         var chunks: [Int] = []
         var remaining = minutes
 
         while remaining > 0 {
-            if remaining <= maxBlock {
+            if remaining <= effectiveMax {
                 // Last chunk: use it all if >= minBlock, otherwise use minBlock
-                chunks.append(remaining >= minBlock ? remaining : min(minBlock, remaining))
+                chunks.append(remaining >= effectiveMin ? remaining : min(effectiveMin, remaining))
                 remaining = 0
             } else {
-                chunks.append(maxBlock)
-                remaining -= maxBlock
+                chunks.append(effectiveMax)
+                remaining -= effectiveMax
             }
         }
 

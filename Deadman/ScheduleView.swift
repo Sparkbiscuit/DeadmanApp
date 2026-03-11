@@ -112,13 +112,13 @@ struct ScheduleView: View {
         VStack(spacing: 12) {
             Image(systemName: "calendar")
                 .font(.system(size: 40, weight: .light))
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
             Text("No blocks scheduled")
                 .font(AppFont.body())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
             Text("Add tasks and they'll appear here")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle.opacity(0.7))
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -165,18 +165,18 @@ private struct DayPill: View {
         VStack(spacing: 4) {
             Text(dayOfWeek)
                 .font(AppFont.caption(11))
-                .foregroundStyle(isSelected ? .white : Color.deadmanSubtle)
+                .foregroundStyle(isSelected ? .white : Color.loomSubtle)
             Text(dayNumber)
                 .font(AppFont.heading(17))
-                .foregroundStyle(isSelected ? .white : isToday ? Color.deadmanRed : .primary)
+                .foregroundStyle(isSelected ? .white : isToday ? Color.loomRed : .primary)
             Circle()
-                .fill(hasBlocks ? (isSelected ? .white : Color.deadmanSubtle) : .clear)
+                .fill(hasBlocks ? (isSelected ? .white : Color.loomSubtle) : .clear)
                 .frame(width: 5, height: 5)
         }
         .frame(width: 44, height: 64)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isSelected ? Color.deadmanRed : Color.clear)
+                .fill(isSelected ? Color.loomRed : Color.clear)
         )
     }
 
@@ -210,7 +210,7 @@ private struct BlockCard: View {
                     .foregroundStyle(.primary)
                 Text(timeString(block.endTime))
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
             }
             .frame(width: 52, alignment: .trailing)
 
@@ -225,7 +225,7 @@ private struct BlockCard: View {
                     .font(AppFont.body(15))
                     .fontWeight(.medium)
                     .strikethrough(block.isComplete)
-                    .foregroundStyle(block.isComplete ? Color.deadmanSubtle : .primary)
+                    .foregroundStyle(block.isComplete ? Color.loomSubtle : .primary)
 
                 HStack(spacing: 8) {
                     if let ctx = block.task?.context {
@@ -235,11 +235,11 @@ private struct BlockCard: View {
                     }
                     Text(CountdownFormatter.effortString(minutes: block.durationMinutes))
                         .font(AppFont.mono(11))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                     if block.isLocked {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 9))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 }
             }
@@ -254,7 +254,7 @@ private struct BlockCard: View {
             } label: {
                 Image(systemName: block.isComplete ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(block.isComplete ? Color.green : Color.deadmanSubtle)
+                    .foregroundStyle(block.isComplete ? Color.green : Color.loomSubtle)
             }
             .buttonStyle(.plain)
         }
@@ -266,7 +266,7 @@ private struct BlockCard: View {
     }
 
     private var contextColor: Color {
-        block.task?.context.color ?? Color.deadmanSubtle
+        block.task?.context.color ?? Color.loomSubtle
     }
 
     private func timeString(_ date: Date) -> String {
@@ -292,13 +292,13 @@ private struct BlockedTimeCard: View {
                     .foregroundStyle(.primary)
                 Text(timeString(end))
                     .font(AppFont.mono(11))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
             }
             .frame(width: 52, alignment: .trailing)
 
             // Color bar — dashed pattern for blocked time
             RoundedRectangle(cornerRadius: 2)
-                .fill(Color.deadmanSubtle.opacity(0.4))
+                .fill(Color.loomSubtle)
                 .frame(width: 4)
 
             // Content
@@ -306,7 +306,7 @@ private struct BlockedTimeCard: View {
                 Text(title)
                     .font(AppFont.body(15))
                     .fontWeight(.medium)
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill")
@@ -314,7 +314,7 @@ private struct BlockedTimeCard: View {
                     Text("Blocked")
                         .font(AppFont.caption(11))
                 }
-                .foregroundStyle(Color.deadmanSubtle.opacity(0.7))
+                .foregroundStyle(.tertiary)
             }
 
             Spacer()
@@ -322,11 +322,11 @@ private struct BlockedTimeCard: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground).opacity(0.6))
+                .fill(Color(.secondarySystemGroupedBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                        .foregroundStyle(Color.deadmanSubtle.opacity(0.3))
+                        .foregroundStyle(Color.loomSubtle.opacity(0.4))
                 )
         )
     }

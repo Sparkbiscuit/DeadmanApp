@@ -24,7 +24,7 @@ struct BulkEntryView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
             .alert("Scheduled", isPresented: $showSummary) {
@@ -44,7 +44,7 @@ struct BulkEntryView: View {
                 .foregroundStyle(.primary)
             Text("Great for entering assignments from a syllabus.")
                 .font(AppFont.caption())
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(Color.loomSubtle)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -88,12 +88,12 @@ struct BulkEntryView: View {
                             .font(AppFont.caption(14))
                             .fontWeight(.semibold)
                     }
-                    .foregroundStyle(Color.deadmanRed)
+                    .foregroundStyle(Color.loomRed)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.deadmanRed, lineWidth: 1.5)
+                            .stroke(Color.loomRed, lineWidth: 1.5)
                     )
                 }
 
@@ -118,7 +118,7 @@ struct BulkEntryView: View {
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(validRows.isEmpty ? Color.deadmanSubtle : Color.deadmanRed)
+                            .fill(validRows.isEmpty ? Color.loomSubtle : Color.loomRed)
                     )
                 }
                 .disabled(validRows.isEmpty || isScheduling)
@@ -155,7 +155,7 @@ struct BulkEntryView: View {
         var warningCount = 0
 
         for row in validRows {
-            let task = DeadmanTask(
+            let task = LoomTask(
                 title: row.name,
                 context: row.context,
                 deadline: row.deadline,
@@ -228,7 +228,7 @@ private struct BulkRowCard: View {
                 Button(action: onDelete) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
                 .buttonStyle(.plain)
             }

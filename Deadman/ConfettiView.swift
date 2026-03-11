@@ -18,7 +18,7 @@ struct ConfettiView: View {
     let onComplete: () -> Void
 
     private let colors: [Color] = [
-        .deadmanRed, .schoolColor, .workColor, .personalColor,
+        .loomRed, .schoolColor, .workColor, .personalColor,
         .yellow, .pink, .purple, .mint, .orange, .cyan
     ]
 
@@ -100,13 +100,18 @@ private struct Triangle: Shape {
 // MARK: - Task Completion Sheet
 
 struct TaskCompletionView: View {
-    let task: DeadmanTask
+    @Environment(\.colorScheme) private var colorScheme
+    let task: LoomTask
     let onDismiss: () -> Void
     @State private var showConfetti = true
 
     var body: some View {
         ZStack {
-            VStack(spacing: 20) {
+            // Solid background so text is always legible
+            (colorScheme == .dark ? Color(.systemBackground) : Color(.systemBackground))
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
                 Spacer()
 
                 Image(systemName: "checkmark.seal.fill")
@@ -117,11 +122,13 @@ struct TaskCompletionView: View {
                 VStack(spacing: 8) {
                     Text("Task Complete!")
                         .font(AppFont.title(28))
+                        .foregroundStyle(.primary)
 
                     Text(task.title)
                         .font(AppFont.body())
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
                 }
 
                 // Stats
@@ -182,7 +189,7 @@ private struct StatRow: View {
         HStack {
             Text(label)
                 .font(AppFont.caption(14))
-                .foregroundStyle(Color.deadmanSubtle)
+                .foregroundStyle(.secondary)
             Spacer()
             HStack(spacing: 6) {
                 Text(value)
@@ -190,8 +197,8 @@ private struct StatRow: View {
                     .foregroundStyle(color)
                 if let detail {
                     Text("(\(detail))")
-                        .font(AppFont.mono(11))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .font(AppFont.mono(12))
+                        .foregroundStyle(.secondary)
                 }
             }
         }

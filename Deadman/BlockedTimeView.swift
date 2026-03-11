@@ -45,7 +45,7 @@ struct BlockedTimeView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Deadman needs calendar access to import your events as blocked time. Enable it in Settings > Privacy > Calendars.")
+                Text("Loom needs calendar access to import your events as blocked time. Enable it in Settings > Privacy > Calendars.")
             }
         }
     }
@@ -68,12 +68,12 @@ struct BlockedTimeView: View {
                             .foregroundStyle(.primary)
                         Text("Pull in existing events as blocked time")
                             .font(AppFont.caption(12))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                 }
             }
             .buttonStyle(.plain)
@@ -94,10 +94,10 @@ struct BlockedTimeView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "clock.badge.xmark")
                             .font(.system(size: 28, weight: .light))
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                         Text("No blocked times yet")
                             .font(AppFont.caption())
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                     .padding(.vertical, 20)
                     Spacer()
@@ -176,10 +176,10 @@ private struct BlockedTimeRow: View {
                 HStack(spacing: 6) {
                     Text(timeRangeString)
                         .font(AppFont.mono(12))
-                        .foregroundStyle(Color.deadmanSubtle)
+                        .foregroundStyle(Color.loomSubtle)
                     if blockedTime.recurrence != .none {
                         Text("·")
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                         Text(blockedTime.recurrence.rawValue)
                             .font(AppFont.caption(11))
                             .foregroundStyle(Color.workColor)
@@ -192,7 +192,7 @@ private struct BlockedTimeRow: View {
             if blockedTime.appleCalendarEventId != nil {
                 Image(systemName: "calendar")
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.deadmanSubtle)
+                    .foregroundStyle(Color.loomSubtle)
             }
         }
     }
@@ -310,7 +310,7 @@ struct CalendarImportView: View {
                     Section {
                         Text("No calendars found.")
                             .font(AppFont.body())
-                            .foregroundStyle(Color.deadmanSubtle)
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 } else {
                     Section {
@@ -328,7 +328,7 @@ struct CalendarImportView: View {
                                     Spacer()
                                     if selectedCalendarIds.contains(cal.calendarIdentifier) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(Color.deadmanRed)
+                                            .foregroundStyle(Color.loomRed)
                                             .fontWeight(.semibold)
                                     }
                                 }
