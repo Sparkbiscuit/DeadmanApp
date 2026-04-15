@@ -164,6 +164,71 @@ struct SchedulerService {
         )
     }
 
+    // MARK: - Suggestions
+
+    /// Generate human-readable, actionable hints for why a task didn't fully fit
+    /// and what the user could change. Returns an empty array if everything looks fine.
+    static func suggestions(
+        task: LoomTask,
+        settings: UserSettings,
+        unscheduledMinutes: Int,
+        isNoSlots: Bool,
+        now: Date = Date()
+    ) -> [String] {
+        var hints: [String] = []
+        let calendar = Calendar.current
+
+        let secondsToDeadline = task.deadline.timeIntervalSince(now)
+        let hoursToDeadline = secondsToDeadline / 3600
+
+        // 1. Deadline is imminent
+        if hoursToDeadline < 24 {
+            hints.append("Your deadline is less than 24h away — extend it by a day to unlock more slots.")
+        }
+
+        // 2. Daily focus cap is the bottleneck
+        let daysUntilDeadline = max(1, Int(ceil(secondsToDeadline / 86_400)))
+        let dailyCapacityMinutes = settings.dailyMaxMinutesPerTask * daysUntilDeadline
+        if task.remainingMinutes > dailyCapacityMinutes {
+            let capStr = CountdownFormatter.effortString(minutes: settings.dailyMaxMinutesPerTask)
+            hints.append("Your daily focus limit (\(capStr)/day) caps this task at \(CountdownFormatter.effortString(minutes: dailyCapacityMinutes)) before the deadline. Raise it in Settings or extend the deadline.")
+        }
+
+        // 3. Deadline buffer eating into available time
+        if settings.deadlineBufferMinutes > 0 {
+            let bufferHours = Double(settings.deadlineBufferMinutes) / 60.0
+            if bufferHours >= hoursToDeadline * 0.5, hoursToDeadline > 0 {
+                hints.append("Your deadline buffer (\(CountdownFormatter.effortString(minutes: settings.deadlineBufferMinutes))) is consuming most of the time left. Lower it in Settings.")
+            }
+        }
+
+        // 4. Narrow wake/sleep window
+        let wakeMinutes = settings.wakeHour * 60 + settings.wakeMinute
+        let sleepMinutes = settings.sleepHour * 60 + settings.sleepMinute
+        let awakeMinutesPerDay = max(0, sleepMinutes - wakeMinutes)
+        if awakeMinutesPerDay > 0, awakeMinutesPerDay < 8 * 60 {
+            let hrs = awakeMinutesPerDay / 60
+            hints.append("Your awake window is only \(hrs)h/day. Widen wake/sleep times, or allow overnight scheduling.")
+        }
+
+        // 5. Minimum block is larger than the free gaps are likely to be
+        if settings.minBlockMinutes >= 60, task.remainingMinutes < settings.minBlockMinutes * 2 {
+            hints.append("Your minimum block (\(CountdownFormatter.effortString(minutes: settings.minBlockMinutes))) may be too large for this task. Lower it in Settings.")
+        }
+
+        // 6. Task effort exceeds the time left in the day window (noSlots only)
+        if isNoSlots, calendar.isDate(task.deadline, inSameDayAs: now) {
+            hints.append("The deadline is today — there simply isn't enough time. Extend the deadline or reduce the estimate.")
+        }
+
+        // Always include a fallback if we found nothing specific
+        if hints.isEmpty {
+            hints.append("Try extending the deadline or reducing the estimate.")
+        }
+
+        return hints
+    }
+
     // MARK: - Internals
 
     private struct Interval {

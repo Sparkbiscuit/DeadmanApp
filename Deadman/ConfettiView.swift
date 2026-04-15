@@ -13,9 +13,14 @@ struct ConfettiPiece: Identifiable {
 }
 
 struct ConfettiView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pieces: [ConfettiPiece] = []
     @State private var animate = false
     let onComplete: () -> Void
+
+    private static let animationDuration: Double = 2.8
+    // Slight pad so the last frame is clearly off-screen before dismiss.
+    private static let completionDelay: Double = animationDuration + 0.2
 
     private let colors: [Color] = [
         .loomRed, .schoolColor, .workColor, .personalColor,
@@ -40,16 +45,22 @@ struct ConfettiView: View {
                 }
             }
             .onAppear {
+                // Honor reduce-motion: skip the confetti entirely.
+                if reduceMotion {
+                    onComplete()
+                    return
+                }
                 generatePieces(in: geo.size)
-                withAnimation(.easeOut(duration: 2.8)) {
+                withAnimation(.easeOut(duration: Self.animationDuration)) {
                     animate = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.completionDelay) {
                     onComplete()
                 }
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func generatePieces(in size: CGSize) {
@@ -57,7 +68,7 @@ struct ConfettiView: View {
             ConfettiPiece(
                 x: CGFloat.random(in: -20...(size.width + 20)),
                 y: CGFloat.random(in: -size.height * 0.5...(-10)),
-                color: colors.randomElement()!,
+                color: colors.randomElement() ?? .loomRed,
                 size: CGFloat.random(in: 5...10),
                 rotation: Double.random(in: -180...180),
                 speed: Double.random(in: 1.0...2.5),

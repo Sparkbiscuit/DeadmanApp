@@ -64,6 +64,13 @@ struct CaptureSheetView: View {
                 Text(scheduleWarning ?? "")
             }
             .onAppear { titleFocused = true }
+            .onDisappear {
+                // Ensure the microphone tap is always removed, even if the
+                // user swipes the sheet away mid-recording.
+                if isListening {
+                    stopListening()
+                }
+            }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
@@ -152,6 +159,7 @@ struct CaptureSheetView: View {
             )
             .datePickerStyle(.compact)
             .labelsHidden()
+            .accessibilityLabel("Deadline")
         }
     }
 
@@ -188,15 +196,18 @@ struct CaptureSheetView: View {
 
             if showCustomEffort {
                 Stepper(
-                    value: $customEffort,
+                    value: Binding(
+                        get: { customEffort },
+                        set: { newValue in
+                            customEffort = newValue
+                            effortMinutes = newValue
+                        }
+                    ),
                     in: 180...720,
                     step: 30
                 ) {
                     Text(CountdownFormatter.effortString(minutes: customEffort))
                         .font(AppFont.mono(15))
-                }
-                .onChange(of: customEffort) { _, newValue in
-                    effortMinutes = newValue
                 }
                 .padding(.top, 4)
             }
@@ -228,7 +239,8 @@ struct CaptureSheetView: View {
 
     // MARK: - Scheduling Logic
 
-    // Holds the pending task + blocks until user confirms or scheduling succeeds
+    // Holds the pending task + blocks until the user confirms.
+    // Nothing is inserted into SwiftData until commit, so canceling is a no-op rollback.
     @State private var pendingTask: LoomTask?
     @State private var pendingBlocks: [ScheduledBlock] = []
 
@@ -250,11 +262,6 @@ struct CaptureSheetView: View {
             effortMinutes: effortMinutes
         )
 
-        // Insert task into context so ScheduledBlock relationship works,
-        // but we'll rollback if the user cancels
-        modelContext.insert(task)
-        pendingTask = task
-
         let result = SchedulerService.schedule(
             task: task,
             allBlocks: allBlocks,
@@ -262,11 +269,11 @@ struct CaptureSheetView: View {
             settings: settings
         )
 
+        pendingTask = task
+
         switch result {
         case .success(let blocks):
-            for block in blocks { modelContext.insert(block) }
-            pendingTask = nil
-            pendingBlocks = []
+            commitPendingTask(blocks: blocks)
             dismiss()
 
         case .partialFit(let blocks, let unscheduledMinutes):
@@ -274,28 +281,52 @@ struct CaptureSheetView: View {
             let hours = unscheduledMinutes / 60
             let mins = unscheduledMinutes % 60
             let timeStr = hours > 0 ? "\(hours)h \(mins)m" : "\(mins)m"
-            scheduleWarning = "\(timeStr) of effort couldn't be scheduled before your deadline. Consider extending your deadline or reducing the estimate."
+            var message = "\(timeStr) of effort couldn't be scheduled before your deadline."
+            let hints = SchedulerService.suggestions(
+                task: task,
+                settings: settings,
+                unscheduledMinutes: unscheduledMinutes,
+                isNoSlots: false
+            )
+            if !hints.isEmpty {
+                message += "\n\n" + hints.map { "• \($0)" }.joined(separator: "\n")
+            }
+            scheduleWarning = message
             showWarning = true
 
         case .noSlots:
-            scheduleWarning = "No available time slots found before your deadline. Try extending the deadline, reducing the estimate, or allowing overnight scheduling."
+            pendingBlocks = []
+            var message = "No available time slots found before your deadline."
+            let hints = SchedulerService.suggestions(
+                task: task,
+                settings: settings,
+                unscheduledMinutes: task.remainingMinutes,
+                isNoSlots: true
+            )
+            if !hints.isEmpty {
+                message += "\n\n" + hints.map { "• \($0)" }.joined(separator: "\n")
+            }
+            scheduleWarning = message
             showWarning = true
         }
     }
 
-    private func saveTask() {
-        // User chose "Save Anyway" — commit the pending task and any partial blocks
-        for block in pendingBlocks { modelContext.insert(block) }
+    private func commitPendingTask(blocks: [ScheduledBlock]) {
+        guard let task = pendingTask else { return }
+        modelContext.insert(task)
+        for block in blocks { modelContext.insert(block) }
         pendingTask = nil
         pendingBlocks = []
+    }
+
+    private func saveTask() {
+        // User chose "Save Anyway" — commit whatever we could schedule (may be empty).
+        commitPendingTask(blocks: pendingBlocks)
         dismiss()
     }
 
     private func cancelPendingTask() {
-        // User hit Cancel on the warning — remove the task we pre-inserted
-        if let task = pendingTask {
-            modelContext.delete(task)
-        }
+        // Nothing was ever inserted — just discard the in-memory objects.
         pendingTask = nil
         pendingBlocks = []
     }

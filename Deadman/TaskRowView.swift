@@ -6,6 +6,7 @@ struct TaskRowView: View {
     let task: LoomTask
     @Binding var taskToComplete: LoomTask?
     @State private var showWorkSession = false
+    @State private var rescheduleFeedback: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -17,9 +18,17 @@ struct TaskRowView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
 
-                    Text(CountdownFormatter.deadlineString(from: Date(), to: task.deadline))
-                        .font(AppFont.caption(12))
-                        .foregroundStyle(deadlineColor)
+                    HStack(spacing: 4) {
+                        if let icon = deadlineIcon {
+                            Image(systemName: icon)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(deadlineColor)
+                        }
+                        Text(CountdownFormatter.deadlineString(from: Date(), to: task.deadline))
+                            .font(AppFont.caption(12))
+                            .foregroundStyle(deadlineColor)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
 
                 Spacer()
@@ -127,6 +136,22 @@ struct TaskRowView: View {
             }
         }
         .cardStyle()
+        .overlay(alignment: .top) {
+            if let message = rescheduleFeedback {
+                Text(message)
+                    .font(AppFont.caption(12))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule().fill(task.context.color)
+                    )
+                    .offset(y: -10)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .accessibilityAddTraits(.isStaticText)
+            }
+        }
         .sheet(isPresented: $showWorkSession) {
             WorkSessionView(task: task)
         }
@@ -204,6 +229,16 @@ struct TaskRowView: View {
         return .secondary
     }
 
+    /// Non-color indicator for deadline urgency so users who can't perceive the
+    /// color difference still get a signal.
+    private var deadlineIcon: String? {
+        let hours = task.deadline.timeIntervalSince(Date()) / 3600
+        if hours < 0 { return "exclamationmark.triangle.fill" }
+        if hours < 24 { return "exclamationmark.circle.fill" }
+        if hours < 72 { return "clock.fill" }
+        return nil
+    }
+
     private func completeTask() {
         Haptics.notification(.success)
         withAnimation(.easeInOut(duration: 0.3)) {
@@ -225,12 +260,34 @@ struct TaskRowView: View {
         let blockedDescriptor = FetchDescriptor<BlockedTime>()
         let blockedTimes = (try? modelContext.fetch(blockedDescriptor)) ?? []
 
-        _ = SchedulerService.reschedule(
+        let result = SchedulerService.reschedule(
             task: task,
             allBlocks: allBlocks,
             blockedTimes: blockedTimes,
             settings: settings,
             context: modelContext
         )
+
+        let message: String
+        switch result {
+        case .success(let blocks):
+            Haptics.notification(.success)
+            message = blocks.isEmpty ? "Nothing to reschedule" : "Rescheduled \(blocks.count) block\(blocks.count == 1 ? "" : "s")"
+        case .partialFit(let blocks, let unscheduled):
+            Haptics.notification(.warning)
+            message = "Partial: \(blocks.count) block\(blocks.count == 1 ? "" : "s"), \(CountdownFormatter.effortString(minutes: unscheduled)) unscheduled"
+        case .noSlots:
+            Haptics.notification(.warning)
+            message = "No slots available"
+        }
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            rescheduleFeedback = message
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                rescheduleFeedback = nil
+            }
+        }
     }
 }

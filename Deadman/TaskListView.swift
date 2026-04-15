@@ -5,8 +5,13 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @State private var showingCapture = false
+    @State private var showingCompleted = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
     @State private var taskToComplete: LoomTask?
+
+    private var completedCount: Int {
+        tasks.filter { $0.isComplete }.count
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,6 +40,21 @@ struct TaskListView: View {
                 }
                 .sheet(isPresented: $showingCapture) {
                     CaptureSheetView()
+                }
+                .sheet(isPresented: $showingCompleted) {
+                    CompletedTasksView()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Haptics.selection()
+                            showingCompleted = true
+                        } label: {
+                            Image(systemName: "checkmark.seal")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .accessibilityLabel("Completed tasks\(completedCount > 0 ? ", \(completedCount) completed" : "")")
+                    }
                 }
 
                 // Completion celebration overlay
@@ -121,7 +141,8 @@ struct TaskListView: View {
     private var todayBlockCount: Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)
+            ?? today.addingTimeInterval(86_400)
 
         return tasks.flatMap { $0.scheduledBlocks }
             .filter { !$0.isComplete && $0.startTime >= today && $0.startTime < tomorrow }

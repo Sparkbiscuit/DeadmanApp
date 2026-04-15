@@ -25,6 +25,7 @@
 		0CB001012C6D3EF700D079F0 /* WorkSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB001002C6D3EF700D079F0 /* WorkSessionView.swift */; };
 		0CB001032C6D3EF700D079F0 /* BlockedTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB001022C6D3EF700D079F0 /* BlockedTimeView.swift */; };
 		0CB001052C6D3EF700D079F0 /* ConfettiView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB001042C6D3EF700D079F0 /* ConfettiView.swift */; };
+		0CB002012C6D3EF700D079F0 /* CompletedTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB002002C6D3EF700D079F0 /* CompletedTasksView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +68,7 @@
 		0CB001002C6D3EF700D079F0 /* WorkSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionView.swift; sourceTree = "<group>"; };
 		0CB001022C6D3EF700D079F0 /* BlockedTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedTimeView.swift; sourceTree = "<group>"; };
 		0CB001042C6D3EF700D079F0 /* ConfettiView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfettiView.swift; sourceTree = "<group>"; };
+		0CB002002C6D3EF700D079F0 /* CompletedTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedTasksView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +132,7 @@
 				0CB001002C6D3EF700D079F0 /* WorkSessionView.swift */,
 				0CB001022C6D3EF700D079F0 /* BlockedTimeView.swift */,
 				0CB001042C6D3EF700D079F0 /* ConfettiView.swift */,
+				0CB002002C6D3EF700D079F0 /* CompletedTasksView.swift */,
 				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
 				021ED3082C6D3EF800D079F0 /* Deadman.entitlements */,
 				021ED3092C6D3EF800D079F0 /* Preview Content */,
@@ -305,6 +308,7 @@
 				0CB001012C6D3EF700D079F0 /* WorkSessionView.swift in Sources */,
 				0CB001032C6D3EF700D079F0 /* BlockedTimeView.swift in Sources */,
 				0CB001052C6D3EF700D079F0 /* ConfettiView.swift in Sources */,
+				0CB002012C6D3EF700D079F0 /* CompletedTasksView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
