@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { margin: 0; }
+    * { box-sizing: border-box; }
+  </style>
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="0,0"></x-import>
+</helmet>
+
+<div style="min-height:100vh; background:{{c.bg}}; color:{{c.text}}; font-family:{{bodyFont}}; transition:background 0.25s ease, color 0.25s ease;">
+
+  <!-- Top bar -->
+  <div style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:14px 48px; background:{{c.bg}}; border-bottom:1px solid {{c.border}};">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <img src="assets/loom-mark.png" alt="Loom" style="width:26px; height:26px; object-fit:contain;" />
+      <span style="font-family:{{headingFont}}; font-weight:900; font-size:18px; letter-spacing:-0.01em;">Loom</span>
+      <span style="font-size:13px; font-weight:700; color:{{c.textSubtle}}; padding-left:12px; border-left:1px solid {{c.border}};">Design System</span>
+    </div>
+    <button onClick="{{toggleTheme}}" style="display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; border-radius:999px; border:1px solid {{c.border}}; background:{{c.surface2}}; cursor:pointer; color:{{c.text}}; font-family:{{bodyFont}};">
+      <span style="width:24px; height:24px; border-radius:50%; background:{{c.surface}}; display:flex; align-items:center; justify-content:center; color:{{accent.500}};">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"></path></svg>
+        </sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+        </sc-if>
+      </span>
+      <span style="font-size:13px; font-weight:700;">{{themeLabel}}</span>
+    </button>
+  </div>
+
+  <!-- Hero -->
+  <div style="max-width:1040px; margin:0 auto; padding:64px 48px 32px;">
+    <div style="font-size:13px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:{{accent.500}}; margin-bottom:14px;">Foundations &amp; Components</div>
+    <h1 style="font-family:{{headingFont}}; font-size:52px; font-weight:900; letter-spacing:-0.02em; margin:0 0 16px;">Loom</h1>
+    <p style="font-size:18px; line-height:1.6; color:{{c.textSubtle}}; max-width:620px; margin:0;">A deadline-first task manager. Capture what needs doing, Loom blocks real time on your calendar before it's due, and tracks whether you're keeping pace.</p>
+  </div>
+
+  <!-- ============ FOUNDATIONS ============ -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 24px;">
+    <h2 style="font-family:{{headingFont}}; font-size:28px; font-weight:800; margin:0 0 32px; letter-spacing:-0.01em;">Foundations</h2>
+  </div>
+
+  <!-- Color -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 56px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Color</h3>
+
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:{{c.textFaint}}; margin-bottom:16px;">Brand — {{accent.name}} (tweakable)</div>
+      <div style="display:flex; flex-wrap:wrap; gap:14px;">
+        <sc-for list="{{brandScale}}" as="s" hint-placeholder-count="5">
+          <div style="width:104px;">
+            <div style="width:100%; height:60px; border-radius:12px; background:{{s.hex}}; border:1px solid {{c.border}};"></div>
+            <div style="margin-top:8px; font-size:12px; font-weight:700;">{{s.label}}</div>
+            <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">{{s.hex}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:{{c.textFaint}}; margin-bottom:16px;">Semantic — urgency &amp; task contexts</div>
+      <div style="display:flex; flex-wrap:wrap; gap:14px;">
+        <sc-for list="{{semanticColors}}" as="s" hint-placeholder-count="4">
+          <div style="width:150px;">
+            <div style="width:100%; height:60px; border-radius:12px; background:{{s.hex}}; border:1px solid {{c.border}};"></div>
+            <div style="margin-top:8px; font-size:12px; font-weight:700;">{{s.name}}</div>
+            <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">{{s.hex}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="background:#FFFFFF; border:1px solid rgba(0,0,0,0.08); border-radius:20px; padding:24px;">
+        <div style="font-size:13px; font-weight:700; color:#6E6E76; margin-bottom:14px;">Surfaces — Light</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <sc-for list="{{lightTokens}}" as="t" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:28px; height:28px; border-radius:8px; background:{{t.hex}}; border:1px solid rgba(0,0,0,0.1); flex-shrink:0;"></div>
+              <span style="font-size:13px; font-weight:600; color:#1C1C1E;">{{t.name}}</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:#9A9AA2; margin-left:auto;">{{t.hex}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background:#1C1C1F; border:1px solid rgba(255,255,255,0.08); border-radius:20px; padding:24px;">
+        <div style="font-size:13px; font-weight:700; color:#9A9AA2; margin-bottom:14px;">Surfaces — Dark</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <sc-for list="{{darkTokens}}" as="t" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:28px; height:28px; border-radius:8px; background:{{t.hex}}; border:1px solid rgba(255,255,255,0.12); flex-shrink:0;"></div>
+              <span style="font-size:13px; font-weight:600; color:#F5F5F7;">{{t.name}}</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:#9A9AA2; margin-left:auto;">{{t.hex}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 56px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Typography</h3>
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; margin-bottom:16px;">
+      <div style="font-size:13px; font-weight:700; color:{{c.textFaint}}; margin-bottom:18px;">Nunito — display, heading, body &amp; caption</div>
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <sc-for list="{{typeSpecimens}}" as="t" hint-placeholder-count="4">
+          <div style="display:flex; align-items:baseline; gap:20px; padding-bottom:18px; border-bottom:1px solid {{c.border}};">
+            <span style="width:76px; flex-shrink:0; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">{{t.label}}</span>
+            <span style="font-family:{{headingFont}}; font-size:{{t.size}}px; font-weight:{{t.weight}};">{{t.sample}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:20px; display:flex; align-items:center; gap:20px;">
+        <span style="width:76px; flex-shrink:0; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">Mono</span>
+        <span style="font-family:'JetBrains Mono', monospace; font-size:16px; font-weight:600;">45m / 2h · in 3 days</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spacing & Radii -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 56px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Spacing &amp; Shape</h3>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px;">
+        <div style="font-size:13px; font-weight:700; color:{{c.textFaint}}; margin-bottom:16px;">Spacing scale (px)</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <sc-for list="{{spacingTokens}}" as="sp" hint-placeholder-count="8">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:{{sp}}px; height:14px; background:{{accent.500}}; border-radius:3px; flex-shrink:0;"></div>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:12px; color:{{c.textSubtle}};">{{sp}}px</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px;">
+        <div style="font-size:13px; font-weight:700; color:{{c.textFaint}}; margin-bottom:16px;">Corner radii (tweakable)</div>
+        <div style="display:flex; flex-wrap:wrap; gap:16px;">
+          <sc-for list="{{radiiTokens}}" as="t" hint-placeholder-count="5">
+            <div style="text-align:center;">
+              <div style="width:56px; height:56px; background:{{c.surface2}}; border:1px solid {{c.border}}; border-radius:{{t.value}}px;"></div>
+              <div style="margin-top:8px; font-size:11px; font-weight:700; color:{{c.textSubtle}};">{{t.label}} · {{t.value}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elevation -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 64px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Elevation</h3>
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:220px; background:{{c.surface}}; border-radius:16px; padding:24px; box-shadow:0 1px 2px rgba(0,0,0,0.06), 0 8px 20px rgba(0,0,0,0.05);">
+        <div style="font-size:13px; font-weight:700;">Card</div>
+        <div style="font-size:12px; color:{{c.textSubtle}}; margin-top:4px;">Subtle, mostly for light mode</div>
+      </div>
+      <div style="flex:1; min-width:220px; background:{{c.surface}}; border-radius:24px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
+        <div style="font-size:13px; font-weight:700;">Sheet / Modal</div>
+        <div style="font-size:12px; color:{{c.textSubtle}}; margin-top:4px;">Elevated overlay, both themes</div>
+      </div>
+      <div style="flex:1; min-width:220px; background:{{accent.500}}; border-radius:24px; padding:24px; box-shadow:0 12px 24px {{accent.500}}66; color:#fff;">
+        <div style="font-size:13px; font-weight:700;">Tinted (FAB)</div>
+        <div style="font-size:12px; opacity:0.85; margin-top:4px;">Shadow color-matched to fill</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COMPONENTS ============ -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 24px;">
+    <h2 style="font-family:{{headingFont}}; font-size:28px; font-weight:800; margin:0 0 32px; letter-spacing:-0.01em;">Components</h2>
+  </div>
+
+  <!-- Buttons -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 40px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Buttons</h3>
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; display:flex; align-items:center; gap:28px; flex-wrap:wrap;">
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.04em;">Primary</div>
+        <button style="display:flex; align-items:center; gap:8px; padding:15px 22px; border-radius:{{r.button}}px; border:none; background:{{accent.500}}; color:#fff; font-family:{{headingFont}}; font-weight:700; font-size:15px; cursor:pointer;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          Schedule it
+        </button>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.04em;">FAB</div>
+        <button style="width:56px; height:56px; border-radius:50%; border:none; background:{{accent.500}}; color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 20px {{accent.500}}55; cursor:pointer;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg>
+        </button>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.04em;">Icon toggle (idle / active)</div>
+        <div style="display:flex; gap:10px;">
+          <div style="width:44px; height:44px; border-radius:50%; background:{{c.surface2}}; display:flex; align-items:center; justify-content:center; color:{{c.textSubtle}};">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"></rect><path d="M6 11a6 6 0 0012 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="M12 17v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+          </div>
+          <div style="width:44px; height:44px; border-radius:50%; background:{{red}}22; display:flex; align-items:center; justify-content:center; color:{{red}};">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M6 11a6 6 0 0012 0" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"></path><path d="M12 17v3" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"></path></svg>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.04em;">Ghost</div>
+        <button style="padding:15px 20px; border-radius:{{r.button}}px; border:none; background:transparent; color:{{c.textSubtle}}; font-family:{{headingFont}}; font-weight:700; font-size:15px; cursor:pointer;">Cancel</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Chips & Tags -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 40px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Chips &amp; Tags</h3>
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; display:flex; flex-direction:column; gap:24px;">
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Context tag</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <sc-for list="{{contextChips}}" as="ctx" hint-placeholder-count="3">
+            <span style="display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px; background:{{ctx.color}}; color:#fff; font-size:11px; font-weight:700;">{{ctx.name}}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Context picker (selected / unselected)</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <sc-for list="{{contextChips}}" as="ctx" hint-placeholder-count="3">
+            <sc-if value="{{ctx.selected}}" hint-placeholder-val="{{false}}">
+              <span style="display:flex; align-items:center; gap:6px; padding:10px 14px; border-radius:999px; background:{{ctx.color}}; color:#fff; font-size:13px; font-weight:700;">{{ctx.name}}</span>
+            </sc-if>
+            <sc-if value="{{ctx.unselected}}" hint-placeholder-val="{{true}}">
+              <span style="display:flex; align-items:center; gap:6px; padding:10px 14px; border-radius:999px; background:{{c.surface2}}; color:{{c.text}}; font-size:13px; font-weight:700;">{{ctx.name}}</span>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Effort chip</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <sc-for list="{{effortChips}}" as="e" hint-placeholder-count="4">
+            <sc-if value="{{e.selected}}" hint-placeholder-val="{{false}}">
+              <span style="padding:10px 16px; border-radius:999px; background:{{accent.500}}; color:#fff; font-size:13px; font-weight:700;">{{e.label}}</span>
+            </sc-if>
+            <sc-if value="{{e.unselected}}" hint-placeholder-val="{{true}}">
+              <span style="padding:10px 16px; border-radius:999px; background:{{c.surface2}}; color:{{c.text}}; font-size:13px; font-weight:700;">{{e.label}}</span>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Work session toggle (idle / active)</div>
+        <div style="display:flex; gap:10px;">
+          <span style="display:flex; align-items:center; gap:5px; padding:6px 12px; border-radius:999px; background:{{school}}22; color:{{school}}; font-size:12px; font-weight:700;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l14 8-14 8V4z"></path></svg>
+            Start
+          </span>
+          <span style="display:flex; align-items:center; gap:5px; padding:6px 12px; border-radius:999px; background:{{red}}22; color:{{red}}; font-size:12px; font-weight:700;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"></rect></svg>
+            Working...
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Cards -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 40px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Task Card</h3>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+      <sc-for list="{{cards}}" as="card" hint-placeholder-count="2">
+        <div style="flex:1; min-width:320px; background:{{c.surface}}; border-radius:{{r.card}}px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <div style="flex:1;">
+              <div style="font-family:{{headingFont}}; font-size:16px; font-weight:700;">{{card.title}}</div>
+              <div style="font-size:12px; font-weight:600; margin-top:4px; color:{{card.deadlineColor}};">{{card.deadlineText}}</div>
+            </div>
+            <span style="padding:4px 8px; border-radius:999px; background:{{card.contextColor}}; color:#fff; font-size:11px; font-weight:700; flex-shrink:0;">{{card.contextName}}</span>
+          </div>
+
+          <sc-if value="{{card.hasNext}}" hint-placeholder-val="{{true}}">
+            <div style="display:flex; align-items:center; gap:6px; color:{{c.textSubtle}}; font-size:12px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="color:{{card.contextColor}};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span>{{card.nextText}}</span>
+              <span>·</span>
+              <span style="font-family:'JetBrains Mono', monospace; font-size:11px;">{{card.nextDur}}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{card.hasWarn}}" hint-placeholder-val="{{false}}">
+            <div style="display:flex; align-items:center; gap:6px; color:{{red}}; font-size:12px; font-weight:700;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 4L2 20h20L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+              <span>{{card.warnText}}</span>
+            </div>
+          </sc-if>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="flex:1; height:4px; border-radius:999px; background:{{c.surface3}}; position:relative; overflow:hidden;">
+              <div style="position:absolute; left:0; top:0; bottom:0; width:{{card.progressPct}}%; background:{{card.contextColor}}; border-radius:999px;"></div>
+            </div>
+            <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{card.contextColor}}; width:32px; text-align:right;">{{card.progressPct}}%</span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:0; padding-top:2px;">
+            <div style="display:flex; align-items:center; gap:4px; font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 13V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 2h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span style="color:{{card.spentColor}};">{{card.spent}}</span>
+              <span>/</span>
+              <span>{{card.estimate}}</span>
+              <sc-if value="{{card.overBudget}}" hint-placeholder-val="{{false}}">
+                <span style="color:#E0A020; font-family:{{headingFont}}; font-size:10px; font-weight:700;">over</span>
+              </sc-if>
+            </div>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+              <sc-if value="{{card.sessionActive}}" hint-placeholder-val="{{false}}">
+                <span style="display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px; background:{{red}}22; color:{{red}}; font-size:12px; font-weight:700;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"></rect></svg>
+                  Working...
+                </span>
+              </sc-if>
+              <sc-if value="{{card.sessionIdle}}" hint-placeholder-val="{{true}}">
+                <span style="display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px; background:{{card.contextColor}}22; color:{{card.contextColor}}; font-size:12px; font-weight:700;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l14 8-14 8V4z"></path></svg>
+                  Start
+                </span>
+              </sc-if>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:{{c.textFaint}};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4"></circle></svg>
+            </div>
+          </div>
+
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- Progress & Stats -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 40px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Progress &amp; Stats</h3>
+    <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:28px; display:flex; flex-direction:column; gap:24px;">
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Self-reported progress</div>
+        <div style="display:flex; align-items:center; gap:10px; max-width:320px;">
+          <div style="flex:1; height:4px; border-radius:999px; background:{{c.surface3}}; position:relative; overflow:hidden;">
+            <div style="position:absolute; left:0; top:0; bottom:0; width:62%; background:{{accent.500}}; border-radius:999px;"></div>
+          </div>
+          <span style="font-family:'JetBrains Mono', monospace; font-size:12px; color:{{accent.500}};">62%</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.04em;">Stat pills</div>
+        <div style="display:flex; gap:12px;">
+          <sc-for list="{{statPills}}" as="p" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:4px; padding:8px 12px; border-radius:999px; background:{{c.surface2}};">
+              <span style="font-family:{{headingFont}}; font-size:16px; font-weight:800; color:{{p.color}};">{{p.value}}</span>
+              <span style="font-size:12px; color:{{c.textSubtle}};">{{p.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts & Banners -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 40px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Alerts &amp; Banners</h3>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+
+      <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-left:3px solid {{red}}; border-radius:16px; padding:20px 24px;">
+        <div style="display:flex; align-items:center; gap:8px; color:{{red}}; font-weight:700; font-size:14px; margin-bottom:6px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 4L2 20h20L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+          Scheduling warning
+        </div>
+        <div style="font-size:13px; color:{{c.textSubtle}}; line-height:1.5; margin-bottom:14px;">1h 30m of effort couldn't be scheduled before the deadline. Extend the deadline or reduce the estimate.</div>
+        <div style="display:flex; gap:10px;">
+          <button style="padding:9px 16px; border-radius:{{r.button}}px; border:none; background:{{red}}; color:#fff; font-family:{{headingFont}}; font-weight:700; font-size:13px;">Save Anyway</button>
+          <button style="padding:9px 16px; border-radius:{{r.button}}px; border:none; background:transparent; color:{{c.textSubtle}}; font-family:{{headingFont}}; font-weight:700; font-size:13px;">Cancel</button>
+        </div>
+      </div>
+
+      <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:16px; padding:16px 24px; display:flex; align-items:center; gap:10px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:{{school}}; flex-shrink:0;"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span style="font-size:13px; color:{{c.text}};">Synced with Canvas · 2 minutes ago</span>
+      </div>
+
+      <div style="background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:16px; padding:16px 24px; display:flex; align-items:center; gap:10px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="color:{{red}}; flex-shrink:0;"><path d="M12 4L2 20h20L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+        <span style="font-size:13px; font-weight:700; color:{{red}};">Not blocked</span>
+        <span style="font-size:13px; color:{{c.textSubtle}};">· 1h 30m remaining</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Empty state & Onboarding & Celebration -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 64px;">
+    <h3 style="font-size:14px; font-weight:800; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.06em; margin:0 0 20px;">Empty, Onboarding &amp; Celebration <span style="color:{{c.textFaint}}; font-weight:600; text-transform:none; letter-spacing:0;">— new, not yet in the app</span></h3>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+
+      <div style="flex:1; min-width:280px; background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:36px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:{{c.surface2}}; display:flex; align-items:center; justify-content:center; color:{{c.textFaint}}; margin-bottom:6px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 12l3-8h12l3 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M3 12v6a2 2 0 002 2h14a2 2 0 002-2v-6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M3 12h5.5a2.5 2.5 0 005 0H21" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+        </div>
+        <div style="font-family:{{headingFont}}; font-weight:800; font-size:16px;">Nothing in Personal</div>
+        <div style="font-size:13px; color:{{c.textSubtle}}; max-width:220px;">Tasks you add without a deadline pressure show up here.</div>
+        <button style="margin-top:10px; padding:9px 16px; border-radius:999px; border:1px solid {{c.border}}; background:transparent; color:{{accent.500}}; font-family:{{headingFont}}; font-weight:700; font-size:13px;">Add a task</button>
+      </div>
+
+      <div style="flex:1; min-width:280px; background:{{c.surface}}; border:1px solid {{c.border}}; border-radius:20px; padding:36px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px;">
+        <div style="width:52px; height:52px; border-radius:50%; background:{{accent.100}}; display:flex; align-items:center; justify-content:center; color:{{accent.600}}; margin-bottom:6px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+        </div>
+        <div style="font-family:{{headingFont}}; font-weight:800; font-size:16px;">Auto-scheduled</div>
+        <div style="font-size:13px; color:{{c.textSubtle}}; max-width:220px;">Loom finds real time before your deadline and blocks it out.</div>
+        <div style="display:flex; gap:6px; margin-top:12px;">
+          <span style="width:6px; height:6px; border-radius:50%; background:{{accent.500}};"></span>
+          <span style="width:6px; height:6px; border-radius:50%; background:{{c.surface3}};"></span>
+          <span style="width:6px; height:6px; border-radius:50%; background:{{c.surface3}};"></span>
+        </div>
+      </div>
+
+      <div style="flex:1; min-width:280px; background:{{c.surface}}; border-radius:20px; padding:36px 24px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px; position:relative; overflow:hidden;">
+        <span style="position:absolute; top:14px; left:24px; width:8px; height:8px; border-radius:2px; background:{{school}}; transform:rotate(20deg);"></span>
+        <span style="position:absolute; top:30px; right:32px; width:7px; height:7px; border-radius:50%; background:{{work}};"></span>
+        <span style="position:absolute; top:60px; left:44px; width:6px; height:6px; border-radius:50%; background:{{personal}};"></span>
+        <span style="position:absolute; top:20px; right:70px; width:8px; height:8px; border-radius:2px; background:{{accent.500}}; transform:rotate(-15deg);"></span>
+        <span style="position:absolute; bottom:70px; left:20px; width:7px; height:7px; border-radius:2px; background:{{red}}; transform:rotate(35deg);"></span>
+        <span style="position:absolute; bottom:80px; right:24px; width:6px; height:6px; border-radius:50%; background:{{accent.300}};"></span>
+        <div style="width:52px; height:52px; border-radius:50%; background:{{accent.500}}; display:flex; align-items:center; justify-content:center; color:#fff; margin-bottom:6px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        </div>
+        <div style="font-family:{{headingFont}}; font-weight:800; font-size:16px;">Nice work!</div>
+        <div style="font-size:13px; color:{{c.textSubtle}};">Task complete — on to the next one.</div>
+        <button style="margin-top:10px; padding:9px 16px; border-radius:999px; border:none; background:{{c.surface2}}; color:{{c.text}}; font-family:{{headingFont}}; font-weight:700; font-size:13px;">Continue</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ IN CONTEXT ============ -->
+  <div style="max-width:1200px; margin:0 auto; padding:0 48px 24px;">
+    <h2 style="font-family:{{headingFont}}; font-size:28px; font-weight:800; margin:0 0 8px; letter-spacing:-0.01em;">In Context</h2>
+    <p style="font-size:14px; color:{{c.textSubtle}}; margin:0 0 32px;">Components assembled into real screens — toggle theme above to see both.</p>
+  </div>
+
+  <div style="max-width:1200px; margin:0 auto; padding:0 48px 96px; display:flex; gap:40px; flex-wrap:wrap; justify-content:center;">
+
+    <div>
+      <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-align:center; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.06em;">Your Tasks</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{isDark}}" width="{{phoneWidth}}" height="{{phoneHeight}}" hint-size="360,780">
+        <div style="height:100%; overflow:auto; background:{{c.bg}}; padding-top:60px; font-family:{{bodyFont}};">
+          <div style="padding:0 20px 8px;">
+            <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}};">Good afternoon</div>
+            <div style="font-family:{{headingFont}}; font-size:26px; font-weight:900; margin-top:2px;">Your Tasks</div>
+          </div>
+          <div style="display:flex; gap:10px; padding:12px 20px 18px;">
+            <sc-for list="{{statPills}}" as="p" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:4px; padding:7px 10px; border-radius:999px; background:{{c.surface2}};">
+                <span style="font-family:{{headingFont}}; font-size:14px; font-weight:800; color:{{p.color}};">{{p.value}}</span>
+                <span style="font-size:11px; color:{{c.textSubtle}};">{{p.label}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:0 20px 10px; display:flex; align-items:center; gap:8px;">
+            <span style="color:{{school}};"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4h7a3 3 0 013 3v13a2.5 2.5 0 00-2.5-2.5H4V4z" fill="currentColor"></path><path d="M20 4h-7a3 3 0 00-3 3v13a2.5 2.5 0 012.5-2.5H20V4z" fill="currentColor"></path></svg></span>
+            <span style="font-family:{{headingFont}}; font-size:15px; font-weight:700;">School</span>
+            <span style="font-size:12px; color:{{c.textFaint}};">1</span>
+          </div>
+          <div style="padding:0 20px 16px;">
+            <div style="background:{{c.surface}}; border-radius:{{r.card}}px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:flex-start; gap:8px;">
+                <div style="flex:1;">
+                  <div style="font-family:{{headingFont}}; font-size:16px; font-weight:700;">Finish lab report</div>
+                  <div style="font-size:12px; font-weight:600; margin-top:4px; color:{{red}};">Due tomorrow</div>
+                </div>
+                <span style="padding:4px 8px; border-radius:999px; background:{{school}}; color:#fff; font-size:11px; font-weight:700;">School</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; color:{{c.textSubtle}}; font-size:12px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="color:{{school}};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <span>Starts in 2 hours</span><span>·</span><span style="font-family:'JetBrains Mono', monospace;">45m</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="flex:1; height:4px; border-radius:999px; background:{{c.surface3}}; position:relative; overflow:hidden;"><div style="position:absolute; left:0; top:0; bottom:0; width:40%; background:{{school}}; border-radius:999px;"></div></div>
+                <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{school}};">40%</span>
+              </div>
+            </div>
+          </div>
+          <div style="padding:0 20px 10px; display:flex; align-items:center; gap:8px;">
+            <span style="color:{{work}};"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9 8V6a2 2 0 012-2h2a2 2 0 012 2v2" stroke="currentColor" stroke-width="1.8"></path><rect x="3" y="8" width="18" height="11" rx="2" fill="currentColor"></rect></svg></span>
+            <span style="font-family:{{headingFont}}; font-size:15px; font-weight:700;">Work</span>
+            <span style="font-size:12px; color:{{c.textFaint}};">1</span>
+          </div>
+          <div style="padding:0 20px 40px;">
+            <div style="background:{{c.surface}}; border-radius:{{r.card}}px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:flex-start; gap:8px;">
+                <div style="flex:1;">
+                  <div style="font-family:{{headingFont}}; font-size:16px; font-weight:700;">Draft client proposal</div>
+                  <div style="font-size:12px; font-weight:600; margin-top:4px; color:{{c.textSubtle}};">Due in 3 days</div>
+                </div>
+                <span style="padding:4px 8px; border-radius:999px; background:{{work}}; color:#fff; font-size:11px; font-weight:700;">Work</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; color:{{red}}; font-size:12px; font-weight:700;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 4L2 20h20L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+                <span>Not blocked</span><span style="font-weight:400; color:{{c.textSubtle}};">· 1h 30m remaining</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="flex:1; height:4px; border-radius:999px; background:{{c.surface3}}; position:relative; overflow:hidden;"><div style="position:absolute; left:0; top:0; bottom:0; width:65%; background:{{work}}; border-radius:999px;"></div></div>
+                <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{work}};">65%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <div>
+      <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-align:center; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.06em;">Capture</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{isDark}}" width="{{phoneWidth}}" height="{{phoneHeight}}" hint-size="360,780">
+        <div style="height:100%; overflow:auto; background:{{c.surface}}; padding-top:70px; font-family:{{bodyFont}};">
+          <div style="width:36px; height:5px; border-radius:999px; background:{{c.surface3}}; margin:0 auto 24px;"></div>
+          <div style="padding:0 20px 22px;">
+            <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">What needs to get done?</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-family:{{headingFont}}; font-size:19px; font-weight:700; flex:1;">Finish lab report</span>
+              <span style="width:40px; height:40px; border-radius:50%; background:{{c.surface2}}; display:flex; align-items:center; justify-content:center; color:{{c.textSubtle}}; flex-shrink:0;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"></rect><path d="M6 11a6 6 0 0012 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              </span>
+            </div>
+          </div>
+          <div style="padding:0 20px 22px;">
+            <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">Context</div>
+            <div style="display:flex; gap:8px;">
+              <sc-for list="{{contextChips}}" as="ctx" hint-placeholder-count="3">
+                <sc-if value="{{ctx.selected}}" hint-placeholder-val="{{false}}">
+                  <span style="padding:9px 13px; border-radius:999px; background:{{ctx.color}}; color:#fff; font-size:12px; font-weight:700;">{{ctx.name}}</span>
+                </sc-if>
+                <sc-if value="{{ctx.unselected}}" hint-placeholder-val="{{true}}">
+                  <span style="padding:9px 13px; border-radius:999px; background:{{c.surface2}}; color:{{c.text}}; font-size:12px; font-weight:700;">{{ctx.name}}</span>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:0 20px 22px;">
+            <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">Estimated effort</div>
+            <div style="display:flex; gap:8px;">
+              <sc-for list="{{effortChips}}" as="e" hint-placeholder-count="4">
+                <sc-if value="{{e.selected}}" hint-placeholder-val="{{false}}">
+                  <span style="padding:9px 14px; border-radius:999px; background:{{accent.500}}; color:#fff; font-size:12px; font-weight:700;">{{e.label}}</span>
+                </sc-if>
+                <sc-if value="{{e.unselected}}" hint-placeholder-val="{{true}}">
+                  <span style="padding:9px 14px; border-radius:999px; background:{{c.surface2}}; color:{{c.text}}; font-size:12px; font-weight:700;">{{e.label}}</span>
+                </sc-if>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:12px 20px 40px;">
+            <button style="width:100%; padding:16px; border-radius:{{r.button}}px; border:none; background:{{accent.500}}; color:#fff; font-family:{{headingFont}}; font-weight:700; font-size:16px; display:flex; align-items:center; justify-content:center; gap:8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              Schedule it
+            </button>
+          </div>
+        </div>
+      </x-import>
+    </div>
+
+    <div>
+      <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-align:center; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.06em;">Onboarding</div>
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{isDark}}" width="{{phoneWidth}}" height="{{phoneHeight}}" hint-size="360,780">
+        <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:{{c.bg}}; padding:0 32px; font-family:{{bodyFont}};">
+          <div style="width:76px; height:76px; border-radius:24px; background:{{accent.100}}; display:flex; align-items:center; justify-content:center; color:{{accent.600}}; margin-bottom:24px;">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.6"></rect><path d="M6 11a6 6 0 0012 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M12 17v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div style="font-family:{{headingFont}}; font-size:24px; font-weight:900; margin-bottom:10px;">Capture in seconds</div>
+          <div style="font-size:15px; line-height:1.5; color:{{c.textSubtle}}; margin-bottom:28px;">Speak or type a task — Loom takes it from there.</div>
+          <div style="display:flex; gap:6px; margin-bottom:28px;">
+            <span style="width:18px; height:6px; border-radius:999px; background:{{accent.500}};"></span>
+            <span style="width:6px; height:6px; border-radius:999px; background:{{c.surface3}};"></span>
+            <span style="width:6px; height:6px; border-radius:999px; background:{{c.surface3}};"></span>
+          </div>
+          <button style="width:100%; padding:16px; border-radius:{{r.button}}px; border:none; background:{{accent.500}}; color:#fff; font-family:{{headingFont}}; font-weight:700; font-size:16px;">Continue</button>
+        </div>
+      </x-import>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div style="max-width:1040px; margin:0 auto; padding:0 48px 64px; border-top:1px solid {{c.border}}; padding-top:32px;">
+    <div style="font-size:13px; color:{{c.textFaint}}; line-height:1.7;">
+      Type: Nunito + JetBrains Mono are now the permanent typeface pair, replacing SF Rounded/SF Mono everywhere. Iconography here is simplified line/fill glyphs standing in for SF Symbols (book‑fill, briefcase‑fill, person‑fill, clock‑fill, mic, exclamationmark.triangle.fill, timer, checkmark.circle, calendar.badge.clock). Empty states, alerts/banners, onboarding and the completion celebration are new — formalized from patterns implied by the app but not yet designed.
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 1400},
+  &quot;accent&quot;: {&quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#C1571F&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;#C1571F&quot;, &quot;#5A78E0&quot;, &quot;#3FA372&quot;], &quot;section&quot;: &quot;Brand&quot;},
+  &quot;radiusStyle&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;soft&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;soft&quot;, &quot;crisp&quot;], &quot;section&quot;: &quot;Shape&quot;}
+}">
+const ACCENT_MAP = {
+  '#C1571F': { name: 'Ember',  100: '#FBE4D4', 300: '#EFA36C', 500: '#C1571F', 600: '#A64715', 700: '#8A3A10' },
+  '#5A78E0': { name: 'Indigo', 100: '#E3E9FC', 300: '#A9BBF2', 500: '#5A78E0', 600: '#4560C2', 700: '#33499E' },
+  '#3FA372': { name: 'Sage',   100: '#DCF2E7', 300: '#8ED0AF', 500: '#3FA372', 600: '#2F8A5C', 700: '#256E49' },
+};
+
+const RED = { 100: '#FBE0DF', 500: '#E2434A', 600: '#C93039' };
+const SCHOOL = '#5A78E0';
+const WORK = '#E0A020';
+const PERSONAL = '#3FA372';
+
+const RADII = {
+  soft:  { sm: 8, button: 14, card: 16, sheet: 24 },
+  crisp: { sm: 2, button: 6,  card: 6,  sheet: 10 },
+};
+
+function darkColors() {
+  return {
+    bg: '#121214', surface: '#1C1C1F', surface2: '#29292D', surface3: '#333338',
+    border: 'rgba(255,255,255,0.08)', text: '#F5F5F7', textSubtle: '#9A9AA2', textFaint: '#6E6E76',
+  };
+}
+function lightColors() {
+  return {
+    bg: '#F4F4F6', surface: '#FFFFFF', surface2: '#EAEAEF', surface3: '#DEDEE3',
+    border: 'rgba(0,0,0,0.07)', text: '#1C1C1E', textSubtle: '#6E6E76', textFaint: '#9A9AA2',
+  };
+}
+
+class Component extends DCLogic {
+  state = { theme: 'dark' };
+
+  toggleTheme = () => {
+    this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
+  };
+
+  renderVals() {
+    const isDark = this.state.theme === 'dark';
+    const isLight = !isDark;
+    const c = isDark ? darkColors() : lightColors();
+
+    const accentKey = this.props.accent ?? '#C1571F';
+    const accent = ACCENT_MAP[accentKey] || ACCENT_MAP['#C1571F'];
+
+    const radiusStyle = this.props.radiusStyle ?? 'soft';
+    const r = RADII[radiusStyle] || RADII.soft;
+
+    // Type is settled: Nunito (+ JetBrains Mono for numerals) permanently replaces SF Rounded/SF Mono.
+    const headingFont = "'Nunito', sans-serif";
+    const bodyFont = headingFont;
+
+    const brandScale = [
+      { label: '100', hex: accent[100] },
+      { label: '300', hex: accent[300] },
+      { label: '500', hex: accent[500] },
+      { label: '600', hex: accent[600] },
+      { label: '700', hex: accent[700] },
+    ];
+
+    const semanticColors = [
+      { name: 'Urgent · Destructive', hex: RED[500] },
+      { name: 'School', hex: SCHOOL },
+      { name: 'Work', hex: WORK },
+      { name: 'Personal', hex: PERSONAL },
+    ];
+
+    const lightTokens = [
+      { name: 'Background', hex: '#F4F4F6' },
+      { name: 'Surface', hex: '#FFFFFF' },
+      { name: 'Surface 2', hex: '#EAEAEF' },
+      { name: 'Text', hex: '#1C1C1E' },
+      { name: 'Text Subtle', hex: '#6E6E76' },
+    ];
+    const darkTokens = [
+      { name: 'Background', hex: '#121214' },
+      { name: 'Surface', hex: '#1C1C1F' },
+      { name: 'Surface 2', hex: '#29292D' },
+      { name: 'Text', hex: '#F5F5F7' },
+      { name: 'Text Subtle', hex: '#9A9AA2' },
+    ];
+
+    const spacingTokens = [4, 8, 12, 16, 20, 24, 32, 40];
+
+    const radiiTokens = [
+      { label: 'sm', value: r.sm },
+      { label: 'button', value: r.button },
+      { label: 'card', value: r.card },
+      { label: 'sheet', value: r.sheet },
+      { label: 'capsule', value: 999 },
+    ];
+
+    const typeSpecimens = [
+      { label: 'Display', sample: 'Your Tasks', size: 34, weight: 800 },
+      { label: 'Heading', sample: 'Finish lab report', size: 20, weight: 700 },
+      { label: 'Body', sample: 'Loom finds real time before your deadline.', size: 16, weight: 400 },
+      { label: 'Caption', sample: 'DUE TOMORROW', size: 13, weight: 700 },
+    ];
+
+    const contextChips = [
+      { name: 'School', color: SCHOOL, selected: false, unselected: true },
+      { name: 'Work', color: WORK, selected: true, unselected: false },
+      { name: 'Personal', color: PERSONAL, selected: false, unselected: true },
+    ];
+
+    const effortChips = [
+      { label: '30m', selected: false, unselected: true },
+      { label: '1h', selected: true, unselected: false },
+      { label: '2h', selected: false, unselected: true },
+      { label: '3h+', selected: false, unselected: true },
+    ];
+
+    const statPills = [
+      { value: '6', label: 'active', color: c.text },
+      { value: '3', label: 'today', color: SCHOOL },
+      { value: '2', label: 'unblocked', color: RED[500] },
+    ];
+
+    const cards = [
+      {
+        title: 'Finish lab report', contextName: 'School', contextColor: SCHOOL,
+        deadlineText: 'Due tomorrow', deadlineColor: RED[500],
+        hasNext: true, hasWarn: false, nextText: 'Starts in 2 hours', nextDur: '45m',
+        progressPct: 40, spent: '45m', spentColor: c.text, estimate: '2h',
+        sessionActive: false, sessionIdle: true, overBudget: false,
+      },
+      {
+        title: 'Draft client proposal', contextName: 'Work', contextColor: WORK,
+        deadlineText: 'Due in 3 days', deadlineColor: c.textSubtle,
+        hasNext: false, hasWarn: true, warnText: 'Not blocked · 1h 30m remaining',
+        progressPct: 65, spent: '1h 45m', spentColor: '#E0A020', estimate: '1h 30m',
+        sessionActive: true, sessionIdle: false, overBudget: true,
+      },
+    ];
+
+    return {
+      phoneWidth: 360, phoneHeight: 780,
+      theme: this.state.theme,
+      isDark, isLight,
+      themeLabel: isDark ? 'Dark' : 'Light',
+      toggleTheme: this.toggleTheme,
+      c, accent, r, headingFont, bodyFont,
+      brandScale, semanticColors, lightTokens, darkTokens,
+      spacingTokens, radiiTokens, typeSpecimens,
+      contextChips, effortChips, statPills, cards,
+      red: RED[500], redDark: RED[600],
+      school: SCHOOL, work: WORK, personal: PERSONAL,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { margin: 0; }
+    * { box-sizing: border-box; }
+  </style>
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="0,0"></x-import>
+</helmet>
+
+<div style="min-height:100vh; background:{{c.bg}}; color:{{c.text}}; font-family:'Nunito', sans-serif; transition:background 0.25s ease, color 0.25s ease;">
+
+  <!-- Top bar -->
+  <div style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:14px 48px; background:{{c.bg}}; border-bottom:1px solid {{c.border}};">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <img src="assets/loom-mark.png" alt="Loom" style="width:26px; height:26px; object-fit:contain;" />
+      <span style="font-weight:900; font-size:18px; letter-spacing:-0.01em;">Loom</span>
+      <span style="font-size:13px; font-weight:700; color:{{c.textSubtle}}; padding-left:12px; border-left:1px solid {{c.border}};">UI Kit — click-through prototype</span>
+    </div>
+    <button onClick="{{toggleTheme}}" style="display:flex; align-items:center; gap:8px; padding:6px 14px 6px 6px; border-radius:999px; border:1px solid {{c.border}}; background:{{c.surface2}}; cursor:pointer; color:{{c.text}}; font-family:'Nunito', sans-serif;">
+      <span style="width:24px; height:24px; border-radius:50%; background:{{c.surface}}; display:flex; align-items:center; justify-content:center; color:{{accent.500}};">
+        <sc-if value="{{isDark}}" hint-placeholder-val="{{true}}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"></path></svg>
+        </sc-if>
+        <sc-if value="{{isLight}}" hint-placeholder-val="{{false}}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8L6 18M18 6l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+        </sc-if>
+      </span>
+      <span style="font-size:13px; font-weight:700;">{{themeLabel}}</span>
+    </button>
+  </div>
+
+  <div style="max-width:1040px; margin:0 auto; padding:56px 48px 16px; text-align:center;">
+    <div style="font-size:13px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:{{accent.500}}; margin-bottom:14px;">Tasks · Capture · Bulk Entry · Work Session · Schedule · Settings · Celebration</div>
+    <h1 style="font-size:36px; font-weight:900; letter-spacing:-0.02em; margin:0 0 12px;">Try it</h1>
+    <p style="font-size:16px; line-height:1.6; color:{{c.textSubtle}}; max-width:520px; margin:0 auto;">A working click-through of Loom, built from the design system. Tap around — add a task, start a timer, complete something.</p>
+  </div>
+
+  <!-- Phone -->
+  <div style="display:flex; justify-content:center; padding:24px 48px 96px;">
+    <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{isDark}}" width="{{phoneWidth}}" height="{{phoneHeight}}" hint-size="390,844">
+      <div style="height:100%; position:relative; overflow:hidden; background:{{c.bg}}; font-family:'Nunito', sans-serif;">
+
+        <!-- ============ TAB: TASKS ============ -->
+        <sc-if value="{{showTasksTab}}" hint-placeholder-val="{{true}}">
+          <div style="position:absolute; inset:0; padding-top:58px; padding-bottom:70px; overflow:auto;">
+            <div style="padding:0 20px 8px;">
+              <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}};">Good afternoon</div>
+              <div style="font-size:26px; font-weight:900; margin-top:2px;">Your Tasks</div>
+            </div>
+            <div style="display:flex; gap:10px; padding:12px 20px 18px;">
+              <div style="display:flex; align-items:center; gap:4px; padding:7px 10px; border-radius:999px; background:{{c.surface2}};">
+                <span style="font-size:14px; font-weight:800;">{{activeCount}}</span>
+                <span style="font-size:11px; color:{{c.textSubtle}};">active</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:4px; padding:7px 10px; border-radius:999px; background:{{c.surface2}};">
+                <span style="font-size:14px; font-weight:800; color:{{school}};">{{blockedCount}}</span>
+                <span style="font-size:11px; color:{{c.textSubtle}};">today</span>
+              </div>
+              <sc-if value="{{hasUnblocked}}" hint-placeholder-val="{{false}}">
+                <div style="display:flex; align-items:center; gap:4px; padding:7px 10px; border-radius:999px; background:{{c.surface2}};">
+                  <span style="font-size:14px; font-weight:800; color:{{red}};">{{unblockedCount}}</span>
+                  <span style="font-size:11px; color:{{c.textSubtle}};">unblocked</span>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-for list="{{groups}}" as="grp" hint-placeholder-count="3">
+              <div style="padding:0 20px 10px; display:flex; align-items:center; gap:8px;">
+                <span style="font-size:15px; font-weight:700;">{{grp.name}}</span>
+                <span style="font-size:12px; color:{{c.textFaint}};">{{grp.count}}</span>
+              </div>
+              <div style="padding:0 20px 16px; display:flex; flex-direction:column; gap:10px;">
+                <sc-for list="{{grp.items}}" as="t" hint-placeholder-count="1">
+                  <div style="background:{{c.surface}}; border-radius:{{r.card}}px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:flex-start; gap:8px;">
+                      <div style="flex:1;">
+                        <div style="font-size:16px; font-weight:700;">{{t.title}}</div>
+                        <div style="font-size:12px; font-weight:600; margin-top:4px; color:{{t.deadlineColor}};">{{t.deadlineText}}</div>
+                      </div>
+                      <span style="padding:4px 8px; border-radius:999px; background:{{t.contextColor}}; color:#fff; font-size:11px; font-weight:700; flex-shrink:0;">{{t.contextName}}</span>
+                    </div>
+
+                    <sc-if value="{{t.hasBlock}}" hint-placeholder-val="{{true}}">
+                      <div style="display:flex; align-items:center; gap:6px; color:{{c.textSubtle}}; font-size:12px;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style="color:{{t.contextColor}};"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                        <span>{{t.nextText}}</span><span>·</span><span style="font-family:'JetBrains Mono', monospace;">{{t.nextDur}}</span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{t.hasWarn}}" hint-placeholder-val="{{false}}">
+                      <div style="display:flex; align-items:center; gap:6px; color:{{red}}; font-size:12px; font-weight:700;">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 4L2 20h20L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path><path d="M12 10v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="12" cy="17" r="1" fill="currentColor"></circle></svg>
+                        <span>{{t.warnText}}</span>
+                      </div>
+                    </sc-if>
+
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <div style="flex:1; height:4px; border-radius:999px; background:{{c.surface3}}; position:relative; overflow:hidden;">
+                        <div style="position:absolute; left:0; top:0; bottom:0; width:{{t.progressPct}}%; background:{{t.contextColor}}; border-radius:999px;"></div>
+                      </div>
+                      <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{t.contextColor}}; width:32px; text-align:right;">{{t.progressPct}}%</span>
+                    </div>
+
+                    <div style="display:flex; align-items:center;">
+                      <div style="display:flex; align-items:center; gap:4px; font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 13V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><path d="M9 2h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+                        <span>{{t.spentLabel}}</span><span>/</span><span>{{t.estimateLabel}}</span>
+                        <sc-if value="{{t.overBudget}}" hint-placeholder-val="{{false}}"><span style="color:#E0A020; font-weight:700;">over</span></sc-if>
+                      </div>
+                      <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+                        <sc-if value="{{t.sessionActive}}" hint-placeholder-val="{{false}}">
+                          <button onClick="{{t.onOpenSession}}" style="display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px; background:{{red}}22; color:{{red}}; font-size:12px; font-weight:700; border:none; cursor:pointer; font-family:'Nunito',sans-serif;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"></rect></svg>Working...
+                          </button>
+                        </sc-if>
+                        <sc-if value="{{t.sessionIdle}}" hint-placeholder-val="{{true}}">
+                          <button onClick="{{t.onOpenSession}}" style="display:flex; align-items:center; gap:4px; padding:5px 10px; border-radius:999px; background:{{t.contextColor}}22; color:{{t.contextColor}}; font-size:12px; font-weight:700; border:none; cursor:pointer; font-family:'Nunito',sans-serif;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l14 8-14 8V4z"></path></svg>Start
+                          </button>
+                        </sc-if>
+                        <button onClick="{{t.onComplete}}" style="width:28px; height:28px; border-radius:50%; border:none; background:transparent; color:{{c.textFaint}}; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4"></circle></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{noActiveTasks}}" hint-placeholder-val="{{false}}">
+              <div style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:60px 32px; gap:6px;">
+                <div style="width:52px; height:52px; border-radius:50%; background:{{c.surface2}}; display:flex; align-items:center; justify-content:center; color:{{c.textFaint}}; margin-bottom:6px;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 12l3-8h12l3 8" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M3 12v6a2 2 0 002 2h14a2 2 0 002-2v-6" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M3 12h5.5a2.5 2.5 0 005 0H21" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+                </div>
+                <div style="font-weight:800; font-size:16px;">All clear</div>
+                <div style="font-size:13px; color:{{c.textSubtle}};">Tap + to add your next task.</div>
+              </div>
+            </sc-if>
+          </div>
+
+          <button onClick="{{openCapture}}" style="position:absolute; right:20px; bottom:88px; width:56px; height:56px; border-radius:50%; border:none; background:{{accent.500}}; color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 20px {{accent.500}}55; cursor:pointer; z-index:5;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></svg>
+          </button>
+        </sc-if>
+
+        <!-- ============ TAB: SCHEDULE ============ -->
+        <sc-if value="{{showScheduleTab}}" hint-placeholder-val="{{false}}">
+          <div style="position:absolute; inset:0; padding-top:58px; padding-bottom:70px; display:flex; flex-direction:column;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:0 20px 8px;">
+              <span style="font-size:26px; font-weight:900;">Schedule</span>
+              <div style="display:flex; gap:2px; background:{{c.surface2}}; border-radius:10px; padding:2px;">
+                <button onClick="{{setDayView}}" style="padding:6px 12px; border-radius:8px; border:none; background:{{dayBtnBg}}; color:{{dayBtnColor}}; font-size:12px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Day</button>
+                <button onClick="{{setWeekView}}" style="padding:6px 12px; border-radius:8px; border:none; background:{{weekBtnBg}}; color:{{weekBtnColor}}; font-size:12px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Week</button>
+              </div>
+            </div>
+
+            <sc-if value="{{scheduleViewIsWeek}}" hint-placeholder-val="{{false}}">
+              <div style="flex:1; overflow:auto; padding:8px 14px 30px;">
+                <div style="display:flex; margin-bottom:6px;">
+                  <div style="width:24px; flex-shrink:0;"></div>
+                  <sc-for list="{{week.weekDays}}" as="d" hint-placeholder-count="7">
+                    <div onClick="{{d.onSelect}}" style="flex:1; text-align:center; cursor:pointer;">
+                      <div style="font-size:9px; font-weight:700; color:{{d.dowColor}};">{{d.dow}}</div>
+                      <div style="font-size:13px; font-weight:800; color:{{d.numColor}};">{{d.num}}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;">
+                  <div style="width:24px; flex-shrink:0; position:relative; height:{{week.gridHeight}}px;">
+                    <sc-for list="{{week.hourLabels}}" as="hl" hint-placeholder-count="6">
+                      <div style="position:absolute; top:{{hl.top}}px; font-size:8px; color:{{c.textFaint}}; transform:translateY(-50%);">{{hl.label}}</div>
+                    </sc-for>
+                  </div>
+                  <div style="flex:1; display:flex; position:relative; height:{{week.gridHeight}}px; border-left:1px solid {{c.border}};">
+                    <sc-for list="{{week.hourLabels}}" as="hl" hint-placeholder-count="6">
+                      <div style="position:absolute; left:0; right:0; top:{{hl.top}}px; height:1px; background:{{c.border}};"></div>
+                    </sc-for>
+                    <sc-for list="{{week.weekDays}}" as="d" hint-placeholder-count="7">
+                      <div style="flex:1; position:relative; border-right:1px solid {{c.border}};">
+                        <sc-for list="{{d.items}}" as="item" hint-placeholder-count="1">
+                          <div onClick="{{item.onSelect}}" title="{{item.title}}" style="position:absolute; left:2px; right:2px; top:{{item.top}}px; height:{{item.height}}px; background:{{item.bg}}; border-radius:4px; cursor:pointer;"></div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{scheduleViewIsDay}}" hint-placeholder-val="{{true}}">
+            <div style="display:flex; gap:8px; padding:10px 20px; overflow:auto;">
+              <sc-for list="{{dayPills}}" as="d" hint-placeholder-count="7">
+                <button onClick="{{d.onSelect}}" style="width:44px; height:64px; border-radius:12px; border:none; background:{{d.bg}}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer; flex-shrink:0; font-family:'Nunito',sans-serif;">
+                  <span style="font-size:11px; font-weight:700; color:{{d.dowColor}};">{{d.dow}}</span>
+                  <span style="font-size:17px; font-weight:800; color:{{d.numColor}};">{{d.num}}</span>
+                  <span style="width:5px; height:5px; border-radius:50%; background:{{d.dotColor}};"></span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="height:1px; background:{{c.border}};"></div>
+            <div style="flex:1; overflow:auto; padding:16px 20px 40px; display:flex; flex-direction:column; gap:10px;">
+              <sc-if value="{{scheduleEmpty}}" hint-placeholder-val="{{false}}">
+                <div style="display:flex; flex-direction:column; align-items:center; text-align:center; padding-top:60px; gap:8px;">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" style="color:{{c.textFaint}};"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.5"></rect><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>
+                  <div style="font-size:14px; color:{{c.textSubtle}};">No blocks scheduled</div>
+                  <div style="font-size:12px; color:{{c.textFaint}};">Add tasks and they'll appear here</div>
+                </div>
+              </sc-if>
+              <sc-for list="{{scheduleItems}}" as="item" hint-placeholder-count="2">
+                <sc-if value="{{item.isBlocked}}" hint-placeholder-val="{{false}}">
+                  <div style="display:flex; gap:14px; align-items:flex-start; padding:14px; border-radius:14px; background:{{c.surface2}}; border:1px dashed {{c.textFaint}};">
+                    <div style="width:52px; text-align:right; flex-shrink:0;">
+                      <div style="font-family:'JetBrains Mono', monospace; font-size:13px;">{{item.start}}</div>
+                      <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">{{item.end}}</div>
+                    </div>
+                    <div style="width:4px; align-self:stretch; border-radius:2px; background:{{c.textFaint}};"></div>
+                    <div style="flex:1;">
+                      <div style="font-size:15px; font-weight:600; color:{{c.textSubtle}};">{{item.title}}</div>
+                      <div style="display:flex; align-items:center; gap:5px; margin-top:4px; color:{{c.textFaint}}; font-size:11px;">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" stroke-width="2" fill="none"></path></svg>Blocked
+                      </div>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{item.isTask}}" hint-placeholder-val="{{true}}">
+                  <div style="display:flex; gap:14px; align-items:flex-start; padding:14px; border-radius:14px; background:{{c.surface2}};">
+                    <div style="width:52px; text-align:right; flex-shrink:0;">
+                      <div style="font-family:'JetBrains Mono', monospace; font-size:13px;">{{item.start}}</div>
+                      <div style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">{{item.end}}</div>
+                    </div>
+                    <div style="width:4px; align-self:stretch; border-radius:2px; background:{{item.color}};"></div>
+                    <div style="flex:1;">
+                      <div style="font-size:15px; font-weight:600; text-decoration:{{item.strike}};">{{item.title}}</div>
+                      <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                        <span style="font-size:11px; color:{{item.color}};">{{item.context}}</span>
+                        <span style="font-family:'JetBrains Mono', monospace; font-size:11px; color:{{c.textSubtle}};">{{item.duration}}</span>
+                      </div>
+                    </div>
+                    <button onClick="{{item.onToggle}}" style="border:none; background:transparent; color:{{item.checkColor}}; cursor:pointer; padding:0; flex-shrink:0;">
+                      <sc-if value="{{item.done}}" hint-placeholder-val="{{false}}">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"></circle><path d="M8 12.5l2.5 2.5L16 9.5" stroke="{{c.surface2}}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                      </sc-if>
+                      <sc-if value="{{item.notDone}}" hint-placeholder-val="{{true}}">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.4"></circle></svg>
+                      </sc-if>
+                    </button>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ============ TAB: SETTINGS ============ -->
+        <sc-if value="{{showSettingsTab}}" hint-placeholder-val="{{false}}">
+          <div style="position:absolute; inset:0; padding-top:58px; padding-bottom:70px; overflow:auto;">
+            <div style="padding:0 20px 16px; font-size:26px; font-weight:900;">Settings</div>
+
+            <div style="padding:0 20px 8px; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">Daily Schedule</div>
+            <div style="margin:0 20px 20px; background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid {{c.border}};">
+                <span style="color:#E0A020;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="16" r="5"></circle><path d="M12 3v3M4.5 8.5l2 2M19.5 8.5l-2 2M3 20h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg></span>
+                <span style="flex:1; font-size:14px;">Wake time</span>
+                <span style="font-family:'JetBrains Mono', monospace; font-size:13px; color:{{c.textSubtle}};">8:00 AM</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px;">
+                <span style="color:{{school}};"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"></path></svg></span>
+                <span style="flex:1; font-size:14px;">Sleep time</span>
+                <span style="font-family:'JetBrains Mono', monospace; font-size:13px; color:{{c.textSubtle}};">11:00 PM</span>
+              </div>
+            </div>
+
+            <div style="padding:0 20px 8px; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">Calendar Blocking</div>
+            <div style="margin:0 20px 20px; background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <button onClick="{{openBlockedTimes}}" style="width:100%; display:flex; align-items:center; gap:10px; padding:14px 16px; border:none; background:transparent; cursor:pointer; font-family:'Nunito',sans-serif; color:{{c.text}};">
+                <span style="flex:1; text-align:left; font-size:14px;">Blocked Times</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:{{c.textFaint}};"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+            </div>
+
+            <div style="padding:0 20px 8px; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">Block Size</div>
+            <div style="margin:0 20px 20px; background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid {{c.border}};">
+                <span style="flex:1; font-size:14px;">Minimum block</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <button onClick="{{decMinBlock}}" style="width:26px; height:26px; border-radius:8px; border:none; background:{{c.surface2}}; color:{{c.text}}; cursor:pointer; font-size:16px; line-height:1;">–</button>
+                  <span style="font-family:'JetBrains Mono', monospace; font-size:13px; width:44px; text-align:center;">{{minBlockLabel}}</span>
+                  <button onClick="{{incMinBlock}}" style="width:26px; height:26px; border-radius:8px; border:none; background:{{c.surface2}}; color:{{c.text}}; cursor:pointer; font-size:16px; line-height:1;">+</button>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px;">
+                <span style="flex:1; font-size:14px;">Maximum block</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <button onClick="{{decMaxBlock}}" style="width:26px; height:26px; border-radius:8px; border:none; background:{{c.surface2}}; color:{{c.text}}; cursor:pointer; font-size:16px; line-height:1;">–</button>
+                  <span style="font-family:'JetBrains Mono', monospace; font-size:13px; width:44px; text-align:center;">{{maxBlockLabel}}</span>
+                  <button onClick="{{incMaxBlock}}" style="width:26px; height:26px; border-radius:8px; border:none; background:{{c.surface2}}; color:{{c.text}}; cursor:pointer; font-size:16px; line-height:1;">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:0 20px 8px; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">Calendar</div>
+            <div style="margin:0 20px 20px; background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px;">
+                <span style="flex:1; font-size:14px;">Export to Apple Calendar</span>
+                <button onClick="{{toggleExportCalendar}}" style="width:44px; height:26px; border-radius:999px; border:none; background:{{exportBg}}; position:relative; cursor:pointer; padding:0;">
+                  <span style="position:absolute; top:2px; left:{{exportLeft}}px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left 0.15s ease; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+                </button>
+              </div>
+            </div>
+
+            <div style="padding:0 20px 8px; font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em;">About</div>
+            <div style="margin:0 20px 30px; background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:10px; padding:14px 16px;">
+                <span style="flex:1; font-size:14px;">Version</span>
+                <span style="font-size:13px; color:{{c.textSubtle}};">1.0.0</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Tab bar -->
+        <sc-if value="{{showTabBar}}" hint-placeholder-val="{{true}}">
+          <div style="position:absolute; left:0; right:0; bottom:0; height:70px; background:{{c.surface}}; border-top:1px solid {{c.border}}; display:flex; align-items:flex-start; padding-top:8px; z-index:8;">
+            <button onClick="{{goTasks}}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:none; background:transparent; cursor:pointer; color:{{tasksTabColor}}; font-family:'Nunito',sans-serif;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M5 12h14M5 17h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px; font-weight:700;">Tasks</span>
+            </button>
+            <button onClick="{{goSchedule}}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:none; background:transparent; cursor:pointer; color:{{scheduleTabColor}}; font-family:'Nunito',sans-serif;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"></rect><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px; font-weight:700;">Schedule</span>
+            </button>
+            <button onClick="{{goSettings}}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; border:none; background:transparent; cursor:pointer; color:{{settingsTabColor}}; font-family:'Nunito',sans-serif;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="7" r="2.2" fill="currentColor"></circle><path d="M6 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="16" cy="14" r="2.2" fill="currentColor"></circle><path d="M2 14h12M20 14h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path><circle cx="9" cy="19" r="2.2" fill="currentColor"></circle><path d="M2 19h5M13 19h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span style="font-size:10px; font-weight:700;">Settings</span>
+            </button>
+          </div>
+        </sc-if>
+
+        <!-- ============ SHEET: CAPTURE ============ -->
+        <sc-if value="{{showCapture}}" hint-placeholder-val="{{false}}">
+          <div onClick="{{closeModal}}" style="position:absolute; inset:0; background:rgba(0,0,0,0.45); z-index:20;"></div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:88%; background:{{c.bg}}; border-radius:24px 24px 0 0; z-index:21; display:flex; flex-direction:column; overflow:auto; padding:10px 20px 30px;">
+            <div style="width:36px; height:5px; border-radius:999px; background:{{c.surface3}}; margin:0 auto 20px;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+              <button onClick="{{closeModal}}" style="border:none; background:transparent; color:{{c.textSubtle}}; font-size:14px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Cancel</button>
+              <button onClick="{{openBulk}}" style="border:none; background:transparent; color:{{accent.500}}; font-size:14px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Bulk add</button>
+            </div>
+
+            <div style="margin-bottom:22px;">
+              <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">What needs to get done?</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input value="{{captureTitle}}" onChange="{{onCaptureTitleChange}}" placeholder="e.g. Finish lab report" style="flex:1; border:none; outline:none; background:transparent; font-family:'Nunito',sans-serif; font-size:19px; font-weight:700; color:{{c.text}};" />
+                <button onClick="{{toggleMic}}" style="width:40px; height:40px; border-radius:50%; border:none; background:{{micBg}}; color:{{micColor}}; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"></rect><path d="M6 11a6 6 0 0012 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div style="margin-bottom:22px;">
+              <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">Context</div>
+              <div style="display:flex; gap:8px;">
+                <sc-for list="{{captureContexts}}" as="ctx" hint-placeholder-count="3">
+                  <button onClick="{{ctx.onSelect}}" style="padding:9px 13px; border-radius:999px; border:none; background:{{ctx.bg}}; color:{{ctx.fg}}; font-size:12px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">{{ctx.name}}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="margin-bottom:26px;">
+              <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; margin-bottom:8px;">Estimated effort</div>
+              <div style="display:flex; gap:8px;">
+                <sc-for list="{{captureEfforts}}" as="ef" hint-placeholder-count="4">
+                  <button onClick="{{ef.onSelect}}" style="padding:9px 14px; border-radius:999px; border:none; background:{{ef.bg}}; color:{{ef.fg}}; font-size:12px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">{{ef.label}}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <button onClick="{{submitCapture}}" style="padding:16px; border-radius:{{r.button}}px; border:none; background:{{accent.500}}; color:#fff; font-family:'Nunito',sans-serif; font-weight:700; font-size:16px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              Schedule it
+            </button>
+          </div>
+        </sc-if>
+
+        <!-- ============ SHEET: BULK ENTRY ============ -->
+        <sc-if value="{{showBulk}}" hint-placeholder-val="{{false}}">
+          <div onClick="{{closeModal}}" style="position:absolute; inset:0; background:rgba(0,0,0,0.45); z-index:20;"></div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:90%; background:{{c.bg}}; border-radius:24px 24px 0 0; z-index:21; display:flex; flex-direction:column;">
+            <div style="width:36px; height:5px; border-radius:999px; background:{{c.surface3}}; margin:10px auto 14px;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0 20px 10px;">
+              <button onClick="{{closeModal}}" style="border:none; background:transparent; color:{{c.textSubtle}}; font-size:14px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Cancel</button>
+              <span style="font-size:14px; font-weight:800;">Bulk Entry</span>
+              <span style="width:52px;"></span>
+            </div>
+            <div style="padding:0 20px 14px;">
+              <div style="font-size:13px;">Add multiple tasks at once</div>
+              <div style="font-size:11px; color:{{c.textSubtle}}; margin-top:2px;">Great for entering assignments from a syllabus.</div>
+            </div>
+            <div style="flex:1; overflow:auto; padding:0 20px; display:flex; flex-direction:column; gap:12px;">
+              <sc-for list="{{bulkRowsView}}" as="row" hint-placeholder-count="2">
+                <div style="background:{{c.surface2}}; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input value="{{row.name}}" onChange="{{row.onNameChange}}" placeholder="Task name" style="flex:1; border:none; outline:none; background:transparent; font-family:'Nunito',sans-serif; font-size:14px; font-weight:600; color:{{c.text}};" />
+                    <button onClick="{{row.onRemove}}" style="border:none; background:transparent; color:{{c.textFaint}}; cursor:pointer;">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" opacity="0.001"></circle><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg>
+                    </button>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button onClick="{{row.onCycleContext}}" style="padding:6px 10px; border-radius:999px; border:none; background:{{row.contextColor}}22; color:{{row.contextColor}}; font-size:11px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">{{row.contextName}}</button>
+                    <button onClick="{{row.onCycleEffort}}" style="padding:6px 10px; border-radius:999px; border:none; background:{{c.surface3}}; color:{{c.text}}; font-size:11px; font-weight:700; cursor:pointer; font-family:'JetBrains Mono', monospace;">{{row.effortLabel}}</button>
+                    <span style="margin-left:auto; font-size:11px; color:{{c.textFaint}};">{{row.deadline}}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:10px; padding:14px 20px 28px; border-top:1px solid {{c.border}};">
+              <button onClick="{{addBulkRow}}" style="flex-shrink:0; padding:12px 16px; border-radius:10px; border:1.5px solid {{red}}; background:transparent; color:{{red}}; font-size:13px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">+ Add Row</button>
+              <button onClick="{{scheduleAllBulk}}" style="flex:1; padding:12px 16px; border-radius:10px; border:none; background:{{accent.500}}; color:#fff; font-size:14px; font-weight:800; cursor:pointer; font-family:'Nunito',sans-serif;">Schedule All</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ SHEET: WORK SESSION ============ -->
+        <sc-if value="{{showWorkSession}}" hint-placeholder-val="{{false}}">
+          <div onClick="{{closeModal}}" style="position:absolute; inset:0; background:rgba(0,0,0,0.45); z-index:20;"></div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:78%; background:{{c.bg}}; border-radius:24px 24px 0 0; z-index:21; display:flex; flex-direction:column; padding:10px 24px 30px;">
+            <div style="width:36px; height:5px; border-radius:999px; background:{{c.surface3}}; margin:0 auto 14px;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+              <button onClick="{{closeModal}}" style="border:none; background:transparent; color:{{c.textSubtle}}; font-size:14px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Close</button>
+              <span style="font-size:14px; font-weight:800;">Work Session</span>
+              <span style="width:44px;"></span>
+            </div>
+
+            <sc-if value="{{showProgressPrompt}}" hint-placeholder-val="{{false}}">
+              <div style="display:flex; flex-direction:column; align-items:center; text-align:center; gap:16px; flex:1; justify-content:center;">
+                <div style="font-size:20px; font-weight:800;">Nice work!</div>
+                <div style="font-size:14px; color:{{c.textSubtle}};">You worked for {{sessionElapsedLabel}}.</div>
+                <div style="width:100%; margin-top:8px;">
+                  <div style="font-size:13px; color:{{c.textSubtle}}; margin-bottom:10px;">How much of this task is done overall?</div>
+                  <div style="font-size:32px; font-weight:800; color:{{activeTaskColor}}; margin-bottom:10px;">{{progressValue}}%</div>
+                  <input type="range" min="{{progressMin}}" max="100" step="5" value="{{progressValue}}" onChange="{{onProgressChange}}" style="width:100%; accent-color:{{activeTaskColor}};" />
+                </div>
+                <button onClick="{{saveProgress}}" style="width:100%; margin-top:10px; padding:15px; border-radius:14px; border:none; background:{{activeTaskColor}}; color:#fff; font-family:'Nunito',sans-serif; font-weight:700; font-size:16px; cursor:pointer;">Save Progress</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{showTimer}}" hint-placeholder-val="{{true}}">
+              <div style="display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:10px;">
+                <span style="padding:5px 10px; border-radius:999px; background:{{activeTaskColor}}; color:#fff; font-size:11px; font-weight:700;">{{activeTaskContext}}</span>
+                <div style="font-size:20px; font-weight:800; text-align:center;">{{activeTaskTitle}}</div>
+                <div style="display:flex; align-items:center; gap:5px; color:{{budgetColor}}; font-size:13px; font-family:'JetBrains Mono', monospace;">{{budgetLabel}}</div>
+              </div>
+              <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;">
+                <div style="font-family:'JetBrains Mono', monospace; font-size:56px; font-weight:600; color:{{timerColor}};">{{timerString}}</div>
+                <sc-if value="{{sessionRunning}}" hint-placeholder-val="{{false}}">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:{{red}};"></span>
+                    <span style="font-size:13px; font-weight:700; color:{{red}};">Working</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{sessionRunning}}" hint-placeholder-val="{{false}}">
+                  <button onClick="{{stopSession}}" style="display:flex; flex-direction:column; align-items:center; gap:6px; border:none; background:transparent; cursor:pointer;">
+                    <span style="width:72px; height:72px; border-radius:50%; background:{{red}}; display:flex; align-items:center; justify-content:center; color:#fff;"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></span>
+                    <span style="font-size:12px; color:{{c.textSubtle}};">Stop</span>
+                  </button>
+                </sc-if>
+                <sc-if value="{{sessionIdle2}}" hint-placeholder-val="{{true}}">
+                  <button onClick="{{startSession}}" style="display:flex; flex-direction:column; align-items:center; gap:6px; border:none; background:transparent; cursor:pointer;">
+                    <span style="width:72px; height:72px; border-radius:50%; background:{{activeTaskColor}}; display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 10px 20px {{activeTaskColor}}55;"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l13 7-13 7V5z"></path></svg></span>
+                    <span style="font-size:12px; color:{{c.textSubtle}};">Start Working</span>
+                  </button>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ============ SHEET: BLOCKED TIMES ============ -->
+        <sc-if value="{{showBlockedTimes}}" hint-placeholder-val="{{false}}">
+          <div onClick="{{closeModal}}" style="position:absolute; inset:0; background:rgba(0,0,0,0.45); z-index:20;"></div>
+          <div style="position:absolute; left:0; right:0; bottom:0; height:80%; background:{{c.bg}}; border-radius:24px 24px 0 0; z-index:21; display:flex; flex-direction:column; padding:10px 20px 30px;">
+            <div style="width:36px; height:5px; border-radius:999px; background:{{c.surface3}}; margin:0 auto 14px;"></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+              <span style="width:44px;"></span>
+              <span style="font-size:14px; font-weight:800;">Blocked Times</span>
+              <button onClick="{{closeModal}}" style="border:none; background:transparent; color:{{accent.500}}; font-size:14px; font-weight:700; cursor:pointer; font-family:'Nunito',sans-serif;">Done</button>
+            </div>
+            <div style="font-size:12px; font-weight:700; color:{{c.textSubtle}}; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:8px;">Manual Events</div>
+            <div style="background:{{c.surface}}; border-radius:14px; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:12px; padding:14px; border-bottom:1px solid {{c.border}};">
+                <div style="width:4px; height:36px; border-radius:2px; background:{{work}};"></div>
+                <div>
+                  <div style="font-size:14px; font-weight:600;">CS 101 Lecture</div>
+                  <div style="font-size:11px; color:{{c.textSubtle}}; margin-top:2px; font-family:'JetBrains Mono', monospace;">10:00 AM – 11:15 AM <span style="font-family:'Nunito',sans-serif; color:{{work}};">· Weekdays</span></div>
+                </div>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; padding:14px;">
+                <div style="width:4px; height:36px; border-radius:2px; background:{{school}};"></div>
+                <div style="flex:1;">
+                  <div style="font-size:14px; font-weight:600;">Team standup</div>
+                  <div style="font-size:11px; color:{{c.textSubtle}}; margin-top:2px; font-family:'JetBrains Mono', monospace;">9:00 AM – 9:15 AM <span style="font-family:'Nunito',sans-serif; color:{{work}};">· Daily</span></div>
+                </div>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="color:{{c.textFaint}};"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ============ CELEBRATION ============ -->
+        <sc-if value="{{showCelebration}}" hint-placeholder-val="{{false}}">
+          <div style="position:absolute; inset:0; background:{{c.bg}}; z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px; overflow:hidden;">
+            <span style="position:absolute; top:14%; left:18%; width:9px; height:9px; border-radius:2px; background:{{school}}; transform:rotate(20deg);"></span>
+            <span style="position:absolute; top:20%; right:20%; width:8px; height:8px; border-radius:50%; background:{{work}};"></span>
+            <span style="position:absolute; top:32%; left:26%; width:7px; height:7px; border-radius:50%; background:{{personal}};"></span>
+            <span style="position:absolute; top:18%; right:34%; width:9px; height:9px; border-radius:2px; background:{{accent.500}}; transform:rotate(-15deg);"></span>
+            <span style="position:absolute; bottom:34%; left:16%; width:8px; height:8px; border-radius:2px; background:{{red}}; transform:rotate(35deg);"></span>
+            <span style="position:absolute; bottom:38%; right:16%; width:7px; height:7px; border-radius:50%; background:{{accent.300}};"></span>
+            <div style="width:72px; height:72px; border-radius:50%; background:{{celebrationColor}}; display:flex; align-items:center; justify-content:center; color:#fff; margin-bottom:20px;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <div style="font-size:24px; font-weight:900; margin-bottom:8px;">Task Complete!</div>
+            <div style="font-size:15px; color:{{c.textSubtle}}; margin-bottom:24px;">{{celebrationTitle}}</div>
+            <button onClick="{{closeCelebration}}" style="width:100%; padding:16px; border-radius:14px; border:none; background:{{celebrationColor}}; color:#fff; font-family:'Nunito',sans-serif; font-weight:700; font-size:16px; cursor:pointer;">Done</button>
+          </div>
+        </sc-if>
+
+      </div>
+    </x-import>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: {&quot;width&quot;: 1200, &quot;height&quot;: 1100},
+  &quot;accent&quot;: {&quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#C1571F&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;#C1571F&quot;, &quot;#5A78E0&quot;, &quot;#3FA372&quot;], &quot;section&quot;: &quot;Brand&quot;},
+  &quot;radiusStyle&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;soft&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;options&quot;: [&quot;soft&quot;, &quot;crisp&quot;], &quot;section&quot;: &quot;Shape&quot;}
+}">
+const ACCENT_MAP = {
+  '#C1571F': { name: 'Ember',  100: '#FBE4D4', 300: '#EFA36C', 500: '#C1571F', 600: '#A64715', 700: '#8A3A10' },
+  '#5A78E0': { name: 'Indigo', 100: '#E3E9FC', 300: '#A9BBF2', 500: '#5A78E0', 600: '#4560C2', 700: '#33499E' },
+  '#3FA372': { name: 'Sage',   100: '#DCF2E7', 300: '#8ED0AF', 500: '#3FA372', 600: '#2F8A5C', 700: '#256E49' },
+};
+const RED = { 100: '#FBE0DF', 500: '#E2434A', 600: '#C93039' };
+const SCHOOL = '#5A78E0';
+const WORK = '#E0A020';
+const PERSONAL = '#3FA372';
+const RADII = { soft: { sm: 8, button: 14, card: 16, sheet: 24 }, crisp: { sm: 2, button: 6, card: 6, sheet: 10 } };
+const CONTEXT_COLOR = { School: SCHOOL, Work: WORK, Personal: PERSONAL };
+const CONTEXT_ORDER = ['School', 'Work', 'Personal'];
+const EFFORT_OPTIONS = [30, 60, 120, 180];
+
+function darkColors() {
+  return { bg: '#121214', surface: '#1C1C1F', surface2: '#29292D', surface3: '#333338', border: 'rgba(255,255,255,0.08)', text: '#F5F5F7', textSubtle: '#9A9AA2', textFaint: '#6E6E76' };
+}
+function lightColors() {
+  return { bg: '#F4F4F6', surface: '#FFFFFF', surface2: '#EAEAEF', surface3: '#DEDEE3', border: 'rgba(0,0,0,0.07)', text: '#1C1C1E', textSubtle: '#6E6E76', textFaint: '#9A9AA2' };
+}
+
+function parseTime(str) {
+  const m = str.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return 9;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && h !== 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return h + min / 60;
+}
+
+function effortString(minutes) {
+  minutes = Math.max(0, Math.round(minutes));
+  if (minutes < 60) return minutes + 'm';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? h + 'h ' + m + 'm' : h + 'h';
+}
+
+let ROW_ID = 100;
+
+class Component extends DCLogic {
+  state = {
+    theme: 'dark',
+    tab: 'tasks',
+    modal: null,
+    tasks: [
+      { id: 1, title: 'Finish lab report', context: 'School', deadlineText: 'Due tomorrow', urgent: true, effortMinutes: 120, spentMinutes: 45, progress: 40, hasBlock: true, nextText: 'Starts in 2 hours', nextDur: '45m', completed: false },
+      { id: 2, title: 'Draft client proposal', context: 'Work', deadlineText: 'Due in 3 days', urgent: false, effortMinutes: 90, spentMinutes: 105, progress: 65, hasBlock: false, warnText: 'Not blocked · 45m remaining', completed: false },
+      { id: 3, title: 'Read Chapter 6', context: 'School', deadlineText: 'Due in 5 days', urgent: false, effortMinutes: 60, spentMinutes: 0, progress: 0, hasBlock: true, nextText: 'Starts tomorrow', nextDur: '1h', completed: false },
+      { id: 4, title: 'Gym session', context: 'Personal', deadlineText: 'Due today', urgent: true, effortMinutes: 45, spentMinutes: 0, progress: 0, hasBlock: true, nextText: 'Starts in 30 min', nextDur: '45m', completed: false },
+      { id: 5, title: 'Prep standup notes', context: 'Work', deadlineText: 'Due in 6 hours', urgent: true, effortMinutes: 30, spentMinutes: 20, progress: 70, hasBlock: true, nextText: 'Starts in 1 hour', nextDur: '30m', completed: false },
+    ],
+    captureTitle: '',
+    captureContext: 'School',
+    captureEffort: 60,
+    micOn: false,
+    bulkRows: [
+      { id: 1, name: 'Problem set 4', context: 'School', effortMinutes: 60 },
+      { id: 2, name: '', context: 'School', effortMinutes: 30 },
+    ],
+    activeTaskId: null,
+    sessionRunning: false,
+    elapsedSeconds: 0,
+    showProgressPrompt: false,
+    progressValue: 0,
+    celebrationTaskId: null,
+    scheduleDay: 0,
+    scheduleView: 'day',
+    scheduleCompleted: {},
+    minBlock: 30,
+    maxBlock: 90,
+    exportCalendar: false,
+  };
+
+  toggleTheme = () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
+
+  goTasks = () => this.setState({ tab: 'tasks', modal: null });
+  goSchedule = () => this.setState({ tab: 'schedule', modal: null });
+  goSettings = () => this.setState({ tab: 'settings', modal: null });
+
+  openCapture = () => this.setState({ modal: 'capture' });
+  openBulk = () => this.setState({ modal: 'bulk' });
+  openBlockedTimes = () => this.setState({ modal: 'blockedTimes' });
+  closeModal = () => this.setState({ modal: null });
+
+  onCaptureTitleChange = (e) => this.setState({ captureTitle: e.target.value });
+  toggleMic = () => this.setState(s => ({ micOn: !s.micOn }));
+
+  submitCapture = () => {
+    const title = this.state.captureTitle.trim();
+    if (!title) return;
+    const newTask = {
+      id: Date.now(), title, context: this.state.captureContext,
+      deadlineText: 'Due in 3 days', urgent: false,
+      effortMinutes: this.state.captureEffort, spentMinutes: 0, progress: 0,
+      hasBlock: true, nextText: 'Starts soon', nextDur: effortString(this.state.captureEffort),
+      completed: false,
+    };
+    this.setState(s => ({ tasks: [...s.tasks, newTask], captureTitle: '', captureContext: 'School', captureEffort: 60, modal: null }));
+  };
+
+  addBulkRow = () => this.setState(s => ({ bulkRows: [...s.bulkRows, { id: ++ROW_ID, name: '', context: 'School', effortMinutes: 60 }] }));
+  removeBulkRow = (id) => this.setState(s => (s.bulkRows.length > 1 ? { bulkRows: s.bulkRows.filter(r => r.id !== id) } : null));
+  updateBulkRow = (id, field, value) => this.setState(s => ({ bulkRows: s.bulkRows.map(r => (r.id === id ? { ...r, [field]: value } : r)) }));
+  cycleBulkContext = (id) => this.setState(s => ({
+    bulkRows: s.bulkRows.map(r => r.id === id ? { ...r, context: CONTEXT_ORDER[(CONTEXT_ORDER.indexOf(r.context) + 1) % CONTEXT_ORDER.length] } : r),
+  }));
+  cycleBulkEffort = (id) => this.setState(s => ({
+    bulkRows: s.bulkRows.map(r => r.id === id ? { ...r, effortMinutes: EFFORT_OPTIONS[(EFFORT_OPTIONS.indexOf(r.effortMinutes) + 1) % EFFORT_OPTIONS.length] } : r),
+  }));
+
+  scheduleAllBulk = () => {
+    const valid = this.state.bulkRows.filter(r => r.name.trim());
+    const newTasks = valid.map(r => ({
+      id: Date.now() + Math.random(), title: r.name.trim(), context: r.context,
+      deadlineText: 'Due in 7 days', urgent: false, effortMinutes: r.effortMinutes,
+      spentMinutes: 0, progress: 0, hasBlock: true, nextText: 'Starts soon', nextDur: effortString(r.effortMinutes),
+      completed: false,
+    }));
+    this.setState(s => ({
+      tasks: [...s.tasks, ...newTasks],
+      bulkRows: [{ id: ++ROW_ID, name: '', context: 'School', effortMinutes: 60 }],
+      modal: null,
+    }));
+  };
+
+  openWorkSession = (taskId) => {
+    this.setState(s => {
+      if (s.activeTaskId !== taskId) {
+        if (this._timer) clearInterval(this._timer);
+        return { activeTaskId: taskId, modal: 'workSession', sessionRunning: false, elapsedSeconds: 0, showProgressPrompt: false };
+      }
+      return { modal: 'workSession' };
+    });
+  };
+
+  startSession = () => {
+    this.setState({ sessionRunning: true, elapsedSeconds: 0 });
+    if (this._timer) clearInterval(this._timer);
+    this._timer = setInterval(() => this.setState(s => ({ elapsedSeconds: s.elapsedSeconds + 1 })), 1000);
+  };
+
+  stopSession = () => {
+    if (this._timer) clearInterval(this._timer);
+    this._timer = null;
+    const task = this.state.tasks.find(t => t.id === this.state.activeTaskId);
+    this.setState({ sessionRunning: false, showProgressPrompt: true, progressValue: task ? task.progress : 0 });
+  };
+
+  onProgressChange = (e) => this.setState({ progressValue: parseInt(e.target.value, 10) });
+
+  saveProgress = () => {
+    const { activeTaskId, elapsedSeconds, progressValue } = this.state;
+    this.setState(s => ({
+      tasks: s.tasks.map(t => t.id === activeTaskId ? { ...t, progress: progressValue, spentMinutes: t.spentMinutes + Math.round(elapsedSeconds / 60) } : t),
+      showProgressPrompt: false, elapsedSeconds: 0, modal: null,
+    }));
+  };
+
+  completeTask = (taskId) => {
+    if (this.state.activeTaskId === taskId && this._timer) { clearInterval(this._timer); this._timer = null; }
+    this.setState(s => ({
+      tasks: s.tasks.map(t => t.id === taskId ? { ...t, completed: true } : t),
+      celebrationTaskId: taskId, modal: 'celebration', sessionRunning: false,
+    }));
+  };
+
+  closeCelebration = () => this.setState({ modal: null, celebrationTaskId: null });
+
+  toggleScheduleItem = (dayIdx, itemId) => this.setState(s => {
+    const key = dayIdx + ':' + itemId;
+    return { scheduleCompleted: { ...s.scheduleCompleted, [key]: !s.scheduleCompleted[key] } };
+  });
+  selectDay = (idx) => this.setState({ scheduleDay: idx });
+  setScheduleView = (v) => this.setState({ scheduleView: v });
+  jumpToDay = (idx) => this.setState({ scheduleDay: idx, scheduleView: 'day' });
+
+  decMinBlock = () => this.setState(s => ({ minBlock: Math.max(15, s.minBlock - 15) }));
+  incMinBlock = () => this.setState(s => ({ minBlock: Math.min(s.maxBlock, s.minBlock + 15) }));
+  decMaxBlock = () => this.setState(s => ({ maxBlock: Math.max(s.minBlock, s.maxBlock - 30) }));
+  incMaxBlock = () => this.setState(s => ({ maxBlock: Math.min(180, s.maxBlock + 30) }));
+  toggleExportCalendar = () => this.setState(s => ({ exportCalendar: !s.exportCalendar }));
+
+  componentWillUnmount() {
+    if (this._timer) clearInterval(this._timer);
+  }
+
+  renderVals() {
+    const isDark = this.state.theme === 'dark';
+    const isLight = !isDark;
+    const c = isDark ? darkColors() : lightColors();
+    const accentKey = this.props.accent ?? '#C1571F';
+    const accent = ACCENT_MAP[accentKey] || ACCENT_MAP['#C1571F'];
+    const radiusStyle = this.props.radiusStyle ?? 'soft';
+    const r = RADII[radiusStyle] || RADII.soft;
+
+    const activeTasks = this.state.tasks.filter(t => !t.completed);
+    const groups = CONTEXT_ORDER.map(name => {
+      const items = activeTasks.filter(t => t.context === name).map(t => {
+        const overBudget = t.spentMinutes > t.effortMinutes;
+        const active = this.state.activeTaskId === t.id && this.state.sessionRunning;
+        return {
+          id: t.id, title: t.title, contextName: t.context, contextColor: CONTEXT_COLOR[t.context],
+          deadlineText: t.deadlineText, deadlineColor: t.urgent ? RED[500] : c.textSubtle,
+          hasBlock: t.hasBlock, hasWarn: !t.hasBlock, nextText: t.nextText, nextDur: t.nextDur, warnText: t.warnText,
+          progressPct: t.progress, spentLabel: effortString(t.spentMinutes), estimateLabel: effortString(t.effortMinutes),
+          overBudget, sessionActive: active, sessionIdle: !active,
+          onOpenSession: () => this.openWorkSession(t.id),
+          onComplete: () => this.completeTask(t.id),
+        };
+      });
+      return { name, count: items.length, items };
+    }).filter(g => g.items.length > 0);
+
+    const activeCount = activeTasks.length;
+    const blockedCount = activeTasks.filter(t => t.hasBlock).length;
+    const unblockedCount = activeTasks.filter(t => !t.hasBlock).length;
+
+    // Capture pickers
+    const captureContexts = CONTEXT_ORDER.map(name => {
+      const selected = this.state.captureContext === name;
+      return { name, bg: selected ? CONTEXT_COLOR[name] : c.surface2, fg: selected ? '#fff' : c.text, onSelect: () => this.setState({ captureContext: name }) };
+    });
+    const captureEffortLabels = { 30: '30m', 60: '1h', 120: '2h', 180: '3h+' };
+    const captureEfforts = EFFORT_OPTIONS.map(mins => {
+      const selected = this.state.captureEffort === mins;
+      return { label: captureEffortLabels[mins], bg: selected ? accent[500] : c.surface2, fg: selected ? '#fff' : c.text, onSelect: () => this.setState({ captureEffort: mins }) };
+    });
+
+    // Bulk rows
+    const bulkRowsView = this.state.bulkRows.map(row => ({
+      id: row.id, name: row.name, contextName: row.context, contextColor: CONTEXT_COLOR[row.context],
+      effortLabel: effortString(row.effortMinutes), deadline: 'in 7 days',
+      onNameChange: (e) => this.updateBulkRow(row.id, 'name', e.target.value),
+      onRemove: () => this.removeBulkRow(row.id),
+      onCycleContext: () => this.cycleBulkContext(row.id),
+      onCycleEffort: () => this.cycleBulkEffort(row.id),
+    }));
+
+    // Work session
+    const activeTask = this.state.tasks.find(t => t.id === this.state.activeTaskId);
+    const elapsed = this.state.elapsedSeconds;
+    const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    const timerString = hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+    const activeTaskColor = activeTask ? CONTEXT_COLOR[activeTask.context] : accent[500];
+    const spentTotal = activeTask ? activeTask.spentMinutes + Math.round(elapsed / 60) : 0;
+    const overBudgetNow = activeTask ? spentTotal > activeTask.effortMinutes : false;
+
+    return {
+      phoneWidth: 390, phoneHeight: 844,
+      theme: this.state.theme, isDark, isLight, themeLabel: isDark ? 'Dark' : 'Light', toggleTheme: this.toggleTheme,
+      c, accent, r, red: RED[500], school: SCHOOL, work: WORK, personal: PERSONAL,
+
+      showTasksTab: this.state.tab === 'tasks' && !this.state.modal,
+      showScheduleTab: this.state.tab === 'schedule' && !this.state.modal,
+      showSettingsTab: this.state.tab === 'settings' && !this.state.modal,
+      showTabBar: !this.state.modal,
+      goTasks: this.goTasks, goSchedule: this.goSchedule, goSettings: this.goSettings,
+      tasksTabColor: this.state.tab === 'tasks' ? accent[500] : c.textFaint,
+      scheduleTabColor: this.state.tab === 'schedule' ? accent[500] : c.textFaint,
+      settingsTabColor: this.state.tab === 'settings' ? accent[500] : c.textFaint,
+
+      groups, activeCount, blockedCount, unblockedCount, hasUnblocked: unblockedCount > 0,
+      noActiveTasks: activeTasks.length === 0,
+      openCapture: this.openCapture,
+
+      showCapture: this.state.modal === 'capture',
+      showBulk: this.state.modal === 'bulk',
+      showWorkSession: this.state.modal === 'workSession',
+      showBlockedTimes: this.state.modal === 'blockedTimes',
+      showCelebration: this.state.modal === 'celebration',
+      closeModal: this.closeModal, openBulk: this.openBulk, openBlockedTimes: this.openBlockedTimes,
+
+      captureTitle: this.state.captureTitle, onCaptureTitleChange: this.onCaptureTitleChange,
+      micOn: this.state.micOn, toggleMic: this.toggleMic,
+      micBg: this.state.micOn ? RED[500] + '22' : c.surface2, micColor: this.state.micOn ? RED[500] : c.textSubtle,
+      captureContexts, captureEfforts, submitCapture: this.submitCapture,
+
+      bulkRowsView, addBulkRow: this.addBulkRow, scheduleAllBulk: this.scheduleAllBulk,
+
+      sessionRunning: this.state.sessionRunning, sessionIdle2: !this.state.sessionRunning,
+      showProgressPrompt: this.state.showProgressPrompt, showTimer: !this.state.showProgressPrompt,
+      startSession: this.startSession, stopSession: this.stopSession, saveProgress: this.saveProgress,
+      onProgressChange: this.onProgressChange, progressValue: this.state.progressValue,
+      progressMin: activeTask ? Math.round(activeTask.progress) : 0,
+      timerString, timerColor: this.state.sessionRunning ? c.text : c.textFaint,
+      activeTaskColor, activeTaskContext: activeTask ? activeTask.context : '', activeTaskTitle: activeTask ? activeTask.title : '',
+      budgetLabel: activeTask ? (overBudgetNow ? `${effortString(spentTotal)} / ${effortString(activeTask.effortMinutes)} (over budget)` : `${effortString(spentTotal)} / ${effortString(activeTask.effortMinutes)} spent`) : '',
+      budgetColor: overBudgetNow ? '#E0A020' : c.textSubtle,
+      sessionElapsedLabel: effortString(Math.round(elapsed / 60) || 1),
+
+      celebrationTitle: (() => { const t = this.state.tasks.find(t => t.id === this.state.celebrationTaskId); return t ? t.title : ''; })(),
+      celebrationColor: (() => { const t = this.state.tasks.find(t => t.id === this.state.celebrationTaskId); return t ? CONTEXT_COLOR[t.context] : accent[500]; })(),
+      closeCelebration: this.closeCelebration,
+
+      dayPills: this.buildDayPills(c, accent),
+      scheduleEmpty: this.getScheduleItems(this.state.scheduleDay).length === 0,
+      scheduleItems: this.getScheduleItemsView(this.state.scheduleDay, c),
+
+      scheduleViewIsDay: this.state.scheduleView === 'day',
+      scheduleViewIsWeek: this.state.scheduleView === 'week',
+      dayLabel: this.state.scheduleView === 'day' ? c.text : c.textFaint,
+      dayBtnBg: this.state.scheduleView === 'day' ? c.surface : 'transparent',
+      dayBtnColor: this.state.scheduleView === 'day' ? c.text : c.textSubtle,
+      weekBtnBg: this.state.scheduleView === 'week' ? c.surface : 'transparent',
+      weekBtnColor: this.state.scheduleView === 'week' ? c.text : c.textSubtle,
+      setDayView: () => this.setScheduleView('day'),
+      setWeekView: () => this.setScheduleView('week'),
+      week: this.buildWeek(c, accent),
+
+      openBlockedTimes2: this.openBlockedTimes,
+      minBlockLabel: effortString(this.state.minBlock), maxBlockLabel: effortString(this.state.maxBlock),
+      decMinBlock: this.decMinBlock, incMinBlock: this.incMinBlock, decMaxBlock: this.decMaxBlock, incMaxBlock: this.incMaxBlock,
+      exportBg: this.state.exportCalendar ? accent[500] : c.surface3, exportLeft: this.state.exportCalendar ? 20 : 2,
+      toggleExportCalendar: this.toggleExportCalendar,
+    };
+  }
+
+  buildDayPills(c, accent) {
+    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    return [0, 1, 2, 3, 4, 5, 6].map(i => {
+      const selected = this.state.scheduleDay === i;
+      const isToday = i === 0;
+      const hasBlocks = i <= 2;
+      return {
+        dow: labels[i], num: String(12 + i), bg: selected ? RED[500] : 'transparent',
+        dowColor: selected ? '#fff' : c.textSubtle,
+        numColor: selected ? '#fff' : (isToday ? RED[500] : c.text),
+        dotColor: hasBlocks ? (selected ? '#fff' : c.textSubtle) : 'transparent',
+        onSelect: () => this.selectDay(i),
+      };
+    });
+  }
+
+  getScheduleItems(dayIdx) {
+    const days = {
+      0: [
+        { id: 'a', type: 'task', title: 'Prep standup notes', start: '9:00 AM', end: '9:30 AM', context: 'Work', duration: '30m' },
+        { id: 'b', type: 'blocked', title: 'Team standup', start: '9:00 AM', end: '9:15 AM' },
+        { id: 'c', type: 'task', title: 'Gym session', start: '5:30 PM', end: '6:15 PM', context: 'Personal', duration: '45m' },
+      ],
+      1: [
+        { id: 'd', type: 'blocked', title: 'CS 101 Lecture', start: '10:00 AM', end: '11:15 AM' },
+        { id: 'e', type: 'task', title: 'Finish lab report', start: '1:00 PM', end: '1:45 PM', context: 'School', duration: '45m' },
+      ],
+      2: [
+        { id: 'f', type: 'task', title: 'Read Chapter 6', start: '11:00 AM', end: '12:00 PM', context: 'School', duration: '1h' },
+      ],
+    };
+    return days[dayIdx] || [];
+  }
+
+  buildWeek(c, accent) {
+    const START_HOUR = 7, END_HOUR = 22, PX_PER_HOUR = 22;
+    const gridHeight = (END_HOUR - START_HOUR) * PX_PER_HOUR;
+    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const hourLabels = [7, 10, 13, 16, 19, 22].map(h => ({
+      top: (h - START_HOUR) * PX_PER_HOUR,
+      label: h === 12 ? '12p' : h > 12 ? (h - 12) + 'p' : h + 'a',
+    }));
+
+    const weekDays = [0, 1, 2, 3, 4, 5, 6].map(i => {
+      const items = this.getScheduleItems(i).map(item => {
+        const start = parseTime(item.start);
+        const end = parseTime(item.end);
+        const top = Math.max(0, (start - START_HOUR) * PX_PER_HOUR);
+        const height = Math.max(10, (end - start) * PX_PER_HOUR);
+        const isTask = item.type === 'task';
+        return {
+          top, height, title: item.title,
+          bg: isTask ? CONTEXT_COLOR[item.context] : c.surface3,
+          fg: isTask ? '#fff' : c.textSubtle,
+          onSelect: () => this.jumpToDay(i),
+        };
+      });
+      return {
+        dow: labels[i], num: String(12 + i), items,
+        isToday: i === 0, onSelect: () => this.jumpToDay(i),
+        dowColor: this.state.scheduleDay === i ? RED[500] : c.textSubtle,
+        numColor: i === 0 ? RED[500] : c.text,
+      };
+    });
+
+    return { gridHeight, hourLabels, weekDays };
+  }
+
+  getScheduleItemsView(dayIdx, c) {
+    return this.getScheduleItems(dayIdx).map(item => {
+      const isTask = item.type === 'task';
+      const key = dayIdx + ':' + item.id;
+      const done = !!this.state.scheduleCompleted[key];
+      return {
+        isBlocked: !isTask, isTask, title: item.title, start: item.start, end: item.end,
+        context: item.context, color: isTask ? CONTEXT_COLOR[item.context] : c.textFaint,
+        duration: item.duration, strike: done ? 'line-through' : 'none',
+        done, notDone: !done, checkColor: done ? '#2F8A5C' : c.textFaint,
+        onToggle: () => this.toggleScheduleItem(dayIdx, item.id),
+      };
+    });
+  }
+}
+</script>
+</body>
+</html>
