@@ -1,0 +1,288 @@
+import Foundation
+import SwiftData
+
+// MARK: - Enums
+
+enum TaskContext: String, Codable, CaseIterable, Identifiable {
+    case school = "School"
+    case work = "Work"
+    case personal = "Personal"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .school: return "book.fill"
+        case .work: return "briefcase.fill"
+        case .personal: return "person.fill"
+        }
+    }
+}
+
+enum TaskSource: String, Codable {
+    case manual
+    case canvas
+    case bulkEntry
+}
+
+// MARK: - Task
+
+@Model
+final class LoomTask {
+    var id: UUID
+    var title: String
+    var context: TaskContext
+    var deadline: Date
+    var effortMinutes: Int
+    var isComplete: Bool
+    var userModified: Bool
+    var source: TaskSource
+    var canvasAssignmentId: String?
+    /// Self-reported completion (0–100) from work sessions; combined with
+    /// block-based progress, whichever is further along.
+    var manualProgressPercent: Int = 0
+
+    @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
+    var scheduledBlocks: [ScheduledBlock]
+
+    @Relationship(deleteRule: .cascade, inverse: \WorkSession.task)
+    var workSessions: [WorkSession] = []
+
+    init(
+        title: String,
+        context: TaskContext,
+        deadline: Date,
+        effortMinutes: Int,
+        source: TaskSource = .manual
+    ) {
+        self.id = UUID()
+        self.title = title
+        self.context = context
+        self.deadline = deadline
+        self.effortMinutes = effortMinutes
+        self.isComplete = false
+        self.userModified = false
+        self.source = source
+        self.canvasAssignmentId = nil
+        self.manualProgressPercent = 0
+        self.scheduledBlocks = []
+        self.workSessions = []
+    }
+
+    var completedMinutes: Int {
+        scheduledBlocks
+            .filter { $0.isComplete }
+            .reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    /// Actual minutes worked, from timed work sessions.
+    var timeSpentMinutes: Int {
+        workSessions.reduce(0) { $0 + ($1.durationSeconds + 30) / 60 }
+    }
+
+    var isOverBudget: Bool {
+        timeSpentMinutes > effortMinutes
+    }
+
+    /// Effort considered done: block-based or self-reported, whichever is greater.
+    var effectiveCompletedMinutes: Int {
+        let manual = effortMinutes * min(100, max(0, manualProgressPercent)) / 100
+        return min(effortMinutes, max(completedMinutes, manual))
+    }
+
+    /// 0.0–1.0 for progress bars.
+    var progressFraction: Double {
+        guard effortMinutes > 0 else { return 0 }
+        return min(1.0, Double(effectiveCompletedMinutes) / Double(effortMinutes))
+    }
+
+    var progressPercent: Int {
+        Int((progressFraction * 100).rounded())
+    }
+
+    var remainingMinutes: Int {
+        max(0, effortMinutes - effectiveCompletedMinutes)
+    }
+
+    var nextBlock: ScheduledBlock? {
+        scheduledBlocks
+            .filter { !$0.isComplete && $0.endTime > Date() }
+            .sorted { $0.startTime < $1.startTime }
+            .first
+    }
+
+    /// Minutes of not-yet-completed work that still have a future block reserved.
+    var futureScheduledMinutes: Int {
+        let now = Date()
+        return scheduledBlocks
+            .filter { !$0.isComplete && $0.endTime > now }
+            .reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    var isFullyScheduled: Bool {
+        futureScheduledMinutes >= remainingMinutes
+    }
+}
+
+// MARK: - ScheduledBlock
+
+@Model
+final class ScheduledBlock {
+    var id: UUID
+    var task: LoomTask?
+    var startTime: Date
+    var durationMinutes: Int
+    var isComplete: Bool
+    var isLocked: Bool
+    var appleCalendarEventId: String?
+
+    init(
+        task: LoomTask,
+        startTime: Date,
+        durationMinutes: Int
+    ) {
+        self.id = UUID()
+        self.task = task
+        self.startTime = startTime
+        self.durationMinutes = durationMinutes
+        self.isComplete = false
+        self.isLocked = false
+        self.appleCalendarEventId = nil
+    }
+
+    var endTime: Date {
+        startTime.addingTimeInterval(TimeInterval(durationMinutes * 60))
+    }
+}
+
+// MARK: - WorkSession
+
+@Model
+final class WorkSession {
+    var id: UUID
+    var task: LoomTask?
+    var startedAt: Date
+    var durationSeconds: Int
+
+    init(task: LoomTask, startedAt: Date, durationSeconds: Int) {
+        self.id = UUID()
+        self.task = task
+        self.startedAt = startedAt
+        self.durationSeconds = durationSeconds
+    }
+}
+
+// MARK: - BlockedTime
+
+/// A recurring window (class, standup, commute…) the scheduler must not book over.
+@Model
+final class BlockedTime {
+    var id: UUID
+    var label: String
+    /// Calendar weekdays this repeats on (1 = Sunday … 7 = Saturday).
+    var weekdays: [Int]
+    var startHour: Int
+    var startMinute: Int
+    var durationMinutes: Int
+
+    init(
+        label: String,
+        weekdays: [Int],
+        startHour: Int,
+        startMinute: Int,
+        durationMinutes: Int
+    ) {
+        self.id = UUID()
+        self.label = label
+        self.weekdays = weekdays
+        self.startHour = startHour
+        self.startMinute = startMinute
+        self.durationMinutes = durationMinutes
+    }
+
+    /// Human label for the repeat pattern ("Daily", "Weekdays", "Mon, Wed"…).
+    var repeatLabel: String {
+        let set = Set(weekdays)
+        if set == Set(1...7) { return "Daily" }
+        if set == Set(2...6) { return "Weekdays" }
+        if set == Set([1, 7]) { return "Weekends" }
+        let symbols = Calendar.current.shortWeekdaySymbols
+        return weekdays.sorted()
+            .compactMap { $0 >= 1 && $0 <= 7 ? symbols[$0 - 1] : nil }
+            .joined(separator: ", ")
+    }
+
+    /// Concrete occurrences of this window between two dates.
+    func occurrences(from: Date, to: Date, calendar: Calendar = .current) -> [DateInterval] {
+        guard durationMinutes > 0, !weekdays.isEmpty else { return [] }
+        var result: [DateInterval] = []
+        var day = calendar.startOfDay(for: from)
+        let lastDay = calendar.startOfDay(for: to)
+        while day <= lastDay {
+            if weekdays.contains(calendar.component(.weekday, from: day)),
+               let start = calendar.date(bySettingHour: startHour, minute: startMinute, second: 0, of: day) {
+                let end = start.addingTimeInterval(TimeInterval(durationMinutes * 60))
+                if end > from && start < to {
+                    result.append(DateInterval(start: start, end: end))
+                }
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return result
+    }
+}
+
+// MARK: - UserSettings
+
+@Model
+final class UserSettings {
+    var id: UUID
+    var wakeHour: Int
+    var wakeMinute: Int
+    var sleepHour: Int
+    var sleepMinute: Int
+    var minBlockMinutes: Int
+    var maxBlockMinutes: Int
+    var deadlineBufferMinutes: Int
+    /// Max minutes of task blocks the scheduler may place on a single day. 0 = no limit.
+    var dailyFocusMinutes: Int = 0
+    var canvasBaseURL: String?
+    var exportToAppleCalendar: Bool
+    var loomCalendarIdentifier: String?
+
+    init() {
+        self.id = UUID()
+        self.wakeHour = 8
+        self.wakeMinute = 0
+        self.sleepHour = 23
+        self.sleepMinute = 0
+        self.minBlockMinutes = 30
+        self.maxBlockMinutes = 90
+        self.deadlineBufferMinutes = 120
+        self.dailyFocusMinutes = 0
+        self.canvasBaseURL = nil
+        self.exportToAppleCalendar = false
+        self.loomCalendarIdentifier = nil
+    }
+
+    var wakeTime: DateComponents {
+        DateComponents(hour: wakeHour, minute: wakeMinute)
+    }
+
+    var sleepTime: DateComponents {
+        DateComponents(hour: sleepHour, minute: sleepMinute)
+    }
+
+    /// The single settings row, created on first use. Always fetch through here
+    /// so the app can't end up with competing duplicates.
+    static func fetchOrCreate(in context: ModelContext) -> UserSettings {
+        let descriptor = FetchDescriptor<UserSettings>()
+        if let existing = (try? context.fetch(descriptor))?.first {
+            return existing
+        }
+        let fresh = UserSettings()
+        context.insert(fresh)
+        return fresh
+    }
+}

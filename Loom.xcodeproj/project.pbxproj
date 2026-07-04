@@ -1,0 +1,715 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		021ED3012C6D3EF700D079F0 /* LoomApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3002C6D3EF700D079F0 /* LoomApp.swift */; };
+		021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 021ED3062C6D3EF800D079F0 /* Assets.xcassets */; };
+		021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 021ED30A2C6D3EF800D079F0 /* Preview Assets.xcassets */; };
+		021ED3152C6D3EF800D079F0 /* LoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3142C6D3EF800D079F0 /* LoomTests.swift */; };
+		021ED31F2C6D3EF800D079F0 /* LoomUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED31E2C6D3EF800D079F0 /* LoomUITests.swift */; };
+		021ED3212C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */; };
+		0CA001012C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
+		0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001022C6D3EF700D079F0 /* SchedulerService.swift */; };
+		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
+		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
+		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
+		0CA0010B2C6D3EF700D079F0 /* CaptureSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA0010A2C6D3EF700D079F0 /* CaptureSheetView.swift */; };
+		0CA0010D2C6D3EF700D079F0 /* ScheduleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA0010C2C6D3EF700D079F0 /* ScheduleView.swift */; };
+		0CA0010F2C6D3EF700D079F0 /* BulkEntryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA0010E2C6D3EF700D079F0 /* BulkEntryView.swift */; };
+		0CA001112C6D3EF700D079F0 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001102C6D3EF700D079F0 /* SettingsView.swift */; };
+		0CA002012C6D3EF700D079F0 /* WorkSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA002002C6D3EF700D079F0 /* WorkSessionView.swift */; };
+		0CA002032C6D3EF700D079F0 /* BlockedTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA002022C6D3EF700D079F0 /* BlockedTimeView.swift */; };
+		0CA002052C6D3EF700D079F0 /* ConfettiView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA002042C6D3EF700D079F0 /* ConfettiView.swift */; };
+		0CA002072C6D3EF700D079F0 /* CalendarExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */; };
+		0CA002212C6D3EF700D079F0 /* Nunito-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002112C6D3EF700D079F0 /* Nunito-Regular.ttf */; };
+		0CA002222C6D3EF700D079F0 /* Nunito-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002122C6D3EF700D079F0 /* Nunito-SemiBold.ttf */; };
+		0CA002232C6D3EF700D079F0 /* Nunito-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002132C6D3EF700D079F0 /* Nunito-Bold.ttf */; };
+		0CA002242C6D3EF700D079F0 /* Nunito-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002142C6D3EF700D079F0 /* Nunito-ExtraBold.ttf */; };
+		0CA002252C6D3EF700D079F0 /* Nunito-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002152C6D3EF700D079F0 /* Nunito-Black.ttf */; };
+		0CA002262C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */; };
+		0CA002272C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */; };
+		0CA002282C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		021ED3112C6D3EF800D079F0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 021ED2F52C6D3EF700D079F0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 021ED2FC2C6D3EF700D079F0;
+			remoteInfo = Loom;
+		};
+		021ED31B2C6D3EF800D079F0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 021ED2F52C6D3EF700D079F0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 021ED2FC2C6D3EF700D079F0;
+			remoteInfo = Loom;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		021ED2FD2C6D3EF700D079F0 /* Loom.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Loom.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		021ED3002C6D3EF700D079F0 /* LoomApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomApp.swift; sourceTree = "<group>"; };
+		021ED3062C6D3EF800D079F0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		021ED30A2C6D3EF800D079F0 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		021ED3102C6D3EF800D079F0 /* LoomTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoomTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		021ED3142C6D3EF800D079F0 /* LoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomTests.swift; sourceTree = "<group>"; };
+		021ED31A2C6D3EF800D079F0 /* LoomUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LoomUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		021ED31E2C6D3EF800D079F0 /* LoomUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITests.swift; sourceTree = "<group>"; };
+		021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		0CA001002C6D3EF700D079F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		0CA001022C6D3EF700D079F0 /* SchedulerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerService.swift; sourceTree = "<group>"; };
+		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
+		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
+		0CA0010A2C6D3EF700D079F0 /* CaptureSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheetView.swift; sourceTree = "<group>"; };
+		0CA0010C2C6D3EF700D079F0 /* ScheduleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleView.swift; sourceTree = "<group>"; };
+		0CA0010E2C6D3EF700D079F0 /* BulkEntryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkEntryView.swift; sourceTree = "<group>"; };
+		0CA001102C6D3EF700D079F0 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0CA002002C6D3EF700D079F0 /* WorkSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionView.swift; sourceTree = "<group>"; };
+		0CA002022C6D3EF700D079F0 /* BlockedTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedTimeView.swift; sourceTree = "<group>"; };
+		0CA002042C6D3EF700D079F0 /* ConfettiView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfettiView.swift; sourceTree = "<group>"; };
+		0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarExportService.swift; sourceTree = "<group>"; };
+		0CA002082C6D3EF700D079F0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0CA002112C6D3EF700D079F0 /* Nunito-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Nunito-Regular.ttf"; sourceTree = "<group>"; };
+		0CA002122C6D3EF700D079F0 /* Nunito-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Nunito-SemiBold.ttf"; sourceTree = "<group>"; };
+		0CA002132C6D3EF700D079F0 /* Nunito-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Nunito-Bold.ttf"; sourceTree = "<group>"; };
+		0CA002142C6D3EF700D079F0 /* Nunito-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Nunito-ExtraBold.ttf"; sourceTree = "<group>"; };
+		0CA002152C6D3EF700D079F0 /* Nunito-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Nunito-Black.ttf"; sourceTree = "<group>"; };
+		0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Medium.ttf"; sourceTree = "<group>"; };
+		0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-SemiBold.ttf"; sourceTree = "<group>"; };
+		0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		021ED2FA2C6D3EF700D079F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED30D2C6D3EF800D079F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED3172C6D3EF800D079F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		021ED2F42C6D3EF700D079F0 = {
+			isa = PBXGroup;
+			children = (
+				021ED2FF2C6D3EF700D079F0 /* Loom */,
+				021ED3132C6D3EF800D079F0 /* LoomTests */,
+				021ED31D2C6D3EF800D079F0 /* LoomUITests */,
+				021ED2FE2C6D3EF700D079F0 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		021ED2FE2C6D3EF700D079F0 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				021ED2FD2C6D3EF700D079F0 /* Loom.app */,
+				021ED3102C6D3EF800D079F0 /* LoomTests.xctest */,
+				021ED31A2C6D3EF800D079F0 /* LoomUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		021ED2FF2C6D3EF700D079F0 /* Loom */ = {
+			isa = PBXGroup;
+			children = (
+				021ED3002C6D3EF700D079F0 /* LoomApp.swift */,
+				0CA001002C6D3EF700D079F0 /* Models.swift */,
+				0CA001022C6D3EF700D079F0 /* SchedulerService.swift */,
+				0CA001042C6D3EF700D079F0 /* AppTheme.swift */,
+				0CA001062C6D3EF700D079F0 /* TaskListView.swift */,
+				0CA001082C6D3EF700D079F0 /* TaskRowView.swift */,
+				0CA0010A2C6D3EF700D079F0 /* CaptureSheetView.swift */,
+				0CA0010C2C6D3EF700D079F0 /* ScheduleView.swift */,
+				0CA0010E2C6D3EF700D079F0 /* BulkEntryView.swift */,
+				0CA001102C6D3EF700D079F0 /* SettingsView.swift */,
+				0CA002002C6D3EF700D079F0 /* WorkSessionView.swift */,
+				0CA002022C6D3EF700D079F0 /* BlockedTimeView.swift */,
+				0CA002042C6D3EF700D079F0 /* ConfettiView.swift */,
+				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
+				0CA002082C6D3EF700D079F0 /* Info.plist */,
+				0CA002102C6D3EF700D079F0 /* Fonts */,
+				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
+				021ED3092C6D3EF800D079F0 /* Preview Content */,
+			);
+			path = Loom;
+			sourceTree = "<group>";
+		};
+		021ED3092C6D3EF800D079F0 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				021ED30A2C6D3EF800D079F0 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		021ED3132C6D3EF800D079F0 /* LoomTests */ = {
+			isa = PBXGroup;
+			children = (
+				021ED3142C6D3EF800D079F0 /* LoomTests.swift */,
+			);
+			path = LoomTests;
+			sourceTree = "<group>";
+		};
+		021ED31D2C6D3EF800D079F0 /* LoomUITests */ = {
+			isa = PBXGroup;
+			children = (
+				021ED31E2C6D3EF800D079F0 /* LoomUITests.swift */,
+				021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */,
+			);
+			path = LoomUITests;
+			sourceTree = "<group>";
+		};
+		0CA002102C6D3EF700D079F0 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				0CA002112C6D3EF700D079F0 /* Nunito-Regular.ttf */,
+				0CA002122C6D3EF700D079F0 /* Nunito-SemiBold.ttf */,
+				0CA002132C6D3EF700D079F0 /* Nunito-Bold.ttf */,
+				0CA002142C6D3EF700D079F0 /* Nunito-ExtraBold.ttf */,
+				0CA002152C6D3EF700D079F0 /* Nunito-Black.ttf */,
+				0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */,
+				0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */,
+				0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		021ED2FC2C6D3EF700D079F0 /* Loom */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 021ED3242C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "Loom" */;
+			buildPhases = (
+				021ED2F92C6D3EF700D079F0 /* Sources */,
+				021ED2FA2C6D3EF700D079F0 /* Frameworks */,
+				021ED2FB2C6D3EF700D079F0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Loom;
+			productName = Loom;
+			productReference = 021ED2FD2C6D3EF700D079F0 /* Loom.app */;
+			productType = "com.apple.product-type.application";
+		};
+		021ED30F2C6D3EF800D079F0 /* LoomTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 021ED3272C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "LoomTests" */;
+			buildPhases = (
+				021ED30C2C6D3EF800D079F0 /* Sources */,
+				021ED30D2C6D3EF800D079F0 /* Frameworks */,
+				021ED30E2C6D3EF800D079F0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				021ED3122C6D3EF800D079F0 /* PBXTargetDependency */,
+			);
+			name = LoomTests;
+			productName = LoomTests;
+			productReference = 021ED3102C6D3EF800D079F0 /* LoomTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		021ED3192C6D3EF800D079F0 /* LoomUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 021ED32A2C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "LoomUITests" */;
+			buildPhases = (
+				021ED3162C6D3EF800D079F0 /* Sources */,
+				021ED3172C6D3EF800D079F0 /* Frameworks */,
+				021ED3182C6D3EF800D079F0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				021ED31C2C6D3EF800D079F0 /* PBXTargetDependency */,
+			);
+			name = LoomUITests;
+			productName = LoomUITests;
+			productReference = 021ED31A2C6D3EF800D079F0 /* LoomUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		021ED2F52C6D3EF700D079F0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					021ED2FC2C6D3EF700D079F0 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+					021ED30F2C6D3EF800D079F0 = {
+						CreatedOnToolsVersion = 15.4;
+						TestTargetID = 021ED2FC2C6D3EF700D079F0;
+					};
+					021ED3192C6D3EF800D079F0 = {
+						CreatedOnToolsVersion = 15.4;
+						TestTargetID = 021ED2FC2C6D3EF700D079F0;
+					};
+				};
+			};
+			buildConfigurationList = 021ED2F82C6D3EF700D079F0 /* Build configuration list for PBXProject "Loom" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 021ED2F42C6D3EF700D079F0;
+			productRefGroup = 021ED2FE2C6D3EF700D079F0 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				021ED2FC2C6D3EF700D079F0 /* Loom */,
+				021ED30F2C6D3EF800D079F0 /* LoomTests */,
+				021ED3192C6D3EF800D079F0 /* LoomUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		021ED2FB2C6D3EF700D079F0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */,
+				021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */,
+				0CA002212C6D3EF700D079F0 /* Nunito-Regular.ttf in Resources */,
+				0CA002222C6D3EF700D079F0 /* Nunito-SemiBold.ttf in Resources */,
+				0CA002232C6D3EF700D079F0 /* Nunito-Bold.ttf in Resources */,
+				0CA002242C6D3EF700D079F0 /* Nunito-ExtraBold.ttf in Resources */,
+				0CA002252C6D3EF700D079F0 /* Nunito-Black.ttf in Resources */,
+				0CA002262C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf in Resources */,
+				0CA002272C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */,
+				0CA002282C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED30E2C6D3EF800D079F0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED3182C6D3EF800D079F0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		021ED2F92C6D3EF700D079F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				021ED3012C6D3EF700D079F0 /* LoomApp.swift in Sources */,
+				0CA001012C6D3EF700D079F0 /* Models.swift in Sources */,
+				0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */,
+				0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */,
+				0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */,
+				0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */,
+				0CA0010B2C6D3EF700D079F0 /* CaptureSheetView.swift in Sources */,
+				0CA0010D2C6D3EF700D079F0 /* ScheduleView.swift in Sources */,
+				0CA0010F2C6D3EF700D079F0 /* BulkEntryView.swift in Sources */,
+				0CA001112C6D3EF700D079F0 /* SettingsView.swift in Sources */,
+				0CA002012C6D3EF700D079F0 /* WorkSessionView.swift in Sources */,
+				0CA002032C6D3EF700D079F0 /* BlockedTimeView.swift in Sources */,
+				0CA002052C6D3EF700D079F0 /* ConfettiView.swift in Sources */,
+				0CA002072C6D3EF700D079F0 /* CalendarExportService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED30C2C6D3EF800D079F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				021ED3152C6D3EF800D079F0 /* LoomTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		021ED3162C6D3EF800D079F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				021ED31F2C6D3EF800D079F0 /* LoomUITests.swift in Sources */,
+				021ED3212C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		021ED3122C6D3EF800D079F0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 021ED2FC2C6D3EF700D079F0 /* Loom */;
+			targetProxy = 021ED3112C6D3EF800D079F0 /* PBXContainerItemProxy */;
+		};
+		021ED31C2C6D3EF800D079F0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 021ED2FC2C6D3EF700D079F0 /* Loom */;
+			targetProxy = 021ED31B2C6D3EF800D079F0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		021ED3222C6D3EF800D079F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		021ED3232C6D3EF800D079F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		021ED3252C6D3EF800D079F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Loom/Preview Content\"";
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Loom/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loom;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		021ED3262C6D3EF800D079F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Loom/Preview Content\"";
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Loom/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loom;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		021ED3282C6D3EF800D079F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Loom.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Loom";
+			};
+			name = Debug;
+		};
+		021ED3292C6D3EF800D079F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Loom.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Loom";
+			};
+			name = Release;
+		};
+		021ED32B2C6D3EF800D079F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Loom;
+			};
+			name = Debug;
+		};
+		021ED32C2C6D3EF800D079F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				MACOSX_DEPLOYMENT_TARGET = 14.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Loom;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		021ED2F82C6D3EF700D079F0 /* Build configuration list for PBXProject "Loom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				021ED3222C6D3EF800D079F0 /* Debug */,
+				021ED3232C6D3EF800D079F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		021ED3242C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "Loom" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				021ED3252C6D3EF800D079F0 /* Debug */,
+				021ED3262C6D3EF800D079F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		021ED3272C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "LoomTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				021ED3282C6D3EF800D079F0 /* Debug */,
+				021ED3292C6D3EF800D079F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		021ED32A2C6D3EF800D079F0 /* Build configuration list for PBXNativeTarget "LoomUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				021ED32B2C6D3EF800D079F0 /* Debug */,
+				021ED32C2C6D3EF800D079F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCVersionGroup section */
+/* End XCVersionGroup section */
+	};
+	rootObject = 021ED2F52C6D3EF700D079F0 /* Project object */;
+}
