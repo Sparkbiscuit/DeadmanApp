@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsArray: [UserSettings]
     @State private var showCalendarDeniedAlert = false
+    @State private var didPushNow = false
 
     var body: some View {
         NavigationStack {
@@ -245,14 +246,41 @@ struct SettingsView: View {
                     setCalendarExport(enabled, settings: settings)
                 }
             )) {
-                Label("Export to Apple Calendar", systemImage: "calendar")
+                Label("Export to Apple Calendar", systemImage: "calendar.badge.plus")
                     .font(AppFont.body(15))
             }
             .tint(Color.brand500)
+
+            Toggle(isOn: Binding(
+                get: { settings.importFromAppleCalendar },
+                set: { enabled in
+                    setCalendarImport(enabled, settings: settings)
+                }
+            )) {
+                Label("Import busy times", systemImage: "calendar.badge.clock")
+                    .font(AppFont.body(15))
+            }
+            .tint(Color.brand500)
+
+            Button {
+                pushBlocksNow(settings: settings)
+            } label: {
+                HStack {
+                    Label("Push blocks to Calendar now", systemImage: "arrow.up.circle")
+                        .font(AppFont.body(15))
+                        .foregroundStyle(Color.brand500)
+                    Spacer()
+                    if didPushNow {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.personalColor)
+                    }
+                }
+            }
         } header: {
-            Text("Calendar")
+            Text("Apple Calendar")
         } footer: {
-            Text("One-way export into a dedicated \u{201C}Loom\u{201D} calendar. Loom manages all scheduling internally.")
+            Text("Export mirrors your blocks into a dedicated \u{201C}Loom\u{201D} calendar. Import treats your other calendars' events as busy time the scheduler works around — they never become tasks.")
         }
         .listRowBackground(Color.loomSurface)
     }
@@ -275,6 +303,41 @@ struct SettingsView: View {
         }
     }
 
+    private func setCalendarImport(_ enabled: Bool, settings: UserSettings) {
+        if enabled {
+            Task { @MainActor in
+                let granted = await CalendarExportService.requestAccess()
+                if granted {
+                    settings.importFromAppleCalendar = true
+                    CalendarImportService.syncNow(context: modelContext, settings: settings)
+                    // Scheduled work moves out of the way of the imported events.
+                    replanAfterBusyChange(context: modelContext)
+                } else {
+                    settings.importFromAppleCalendar = false
+                    showCalendarDeniedAlert = true
+                }
+            }
+        } else {
+            settings.importFromAppleCalendar = false
+            CalendarImportService.removeImportedEvents(context: modelContext)
+        }
+    }
+
+    private func pushBlocksNow(settings: UserSettings) {
+        Task { @MainActor in
+            let granted = await CalendarExportService.requestAccess()
+            if granted {
+                CalendarExportService.syncNow(context: modelContext, settings: settings)
+                withAnimation { didPushNow = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation { didPushNow = false }
+                }
+            } else {
+                showCalendarDeniedAlert = true
+            }
+        }
+    }
+
     // MARK: - About
 
     private var aboutSection: some View {
@@ -283,7 +346,7 @@ struct SettingsView: View {
                 Text("Version")
                     .font(AppFont.body(15))
                 Spacer()
-                Text("1.0.0")
+                Text(appVersion)
                     .font(AppFont.body(14))
                     .foregroundStyle(Color.loomSubtle)
             }
@@ -291,5 +354,11 @@ struct SettingsView: View {
             Text("About")
         }
         .listRowBackground(Color.loomSurface)
+    }
+
+    private var appVersion: String {
+        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0"
+        let build = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "1"
+        return "\(version) (\(build))"
     }
 }

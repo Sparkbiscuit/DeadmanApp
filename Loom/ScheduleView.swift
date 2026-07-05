@@ -10,6 +10,7 @@ struct ScheduleView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ScheduledBlock.startTime) private var allBlocks: [ScheduledBlock]
     @Query private var blockedTimes: [BlockedTime]
+    @Query private var busyEvents: [BusyEvent]
     @State private var selectedDate = Date()
     @State private var viewMode: ViewMode = .day
     @State private var celebrationTask: LoomTask?
@@ -154,6 +155,8 @@ struct ScheduleView: View {
                             }
                         case .blocked(let interval, let label):
                             BlockedTimeCard(interval: interval, label: label)
+                        case .busy(let event):
+                            BusyEventCard(event: event)
                         }
                     }
                 }
@@ -277,6 +280,8 @@ struct ScheduleView: View {
                 )
             case .blocked(let interval, _):
                 return (interval, .loomSurface3)
+            case .busy(let event):
+                return (DateInterval(start: event.startTime, end: event.endTime), .loomSurface3)
             }
         }()
 
@@ -320,11 +325,13 @@ struct ScheduleView: View {
     private enum DayItem: Identifiable {
         case block(ScheduledBlock)
         case blocked(DateInterval, String)
+        case busy(BusyEvent)
 
         var id: String {
             switch self {
             case .block(let block): return block.id.uuidString
             case .blocked(let interval, let label): return "\(label)-\(interval.start.timeIntervalSince1970)"
+            case .busy(let event): return event.id.uuidString
             }
         }
 
@@ -332,6 +339,7 @@ struct ScheduleView: View {
             switch self {
             case .block(let block): return block.startTime
             case .blocked(let interval, _): return interval.start
+            case .busy(let event): return event.startTime
             }
         }
     }
@@ -349,6 +357,10 @@ struct ScheduleView: View {
                 .occurrences(from: start, to: end)
                 .map { .blocked($0, blocked.label) })
         }
+
+        items.append(contentsOf: busyEvents
+            .filter { $0.startTime >= start && $0.startTime < end }
+            .map { .busy($0) })
 
         return items.sorted { $0.start < $1.start }
     }
@@ -528,6 +540,54 @@ private struct BlockedTimeCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.loomFaint, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        )
+    }
+}
+
+// MARK: - Busy Event Card (imported from a calendar)
+
+private struct BusyEventCard: View {
+    let event: BusyEvent
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(TimeFormatter.clock.string(from: event.startTime))
+                    .font(AppFont.mono(13))
+                    .foregroundStyle(Color.loomText)
+                Text(TimeFormatter.clock.string(from: event.endTime))
+                    .font(AppFont.monoMedium(11))
+                    .foregroundStyle(Color.loomSubtle)
+            }
+            .frame(width: 56, alignment: .trailing)
+
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.loomFaint)
+                .frame(width: 4)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(AppFont.bodySemibold(15))
+                    .foregroundStyle(Color.loomSubtle)
+                HStack(spacing: 5) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 9))
+                    Text(event.calendarName ?? "Calendar")
+                        .font(AppFont.caption(11))
+                }
+                .foregroundStyle(Color.loomFaint)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.loomSurface2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.loomBorder, lineWidth: 1)
         )
     }
 }

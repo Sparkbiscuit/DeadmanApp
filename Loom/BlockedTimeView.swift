@@ -66,18 +66,21 @@ struct BlockedTimeView: View {
     }
 }
 
-/// Move any already-scheduled work out of the way of the current blocked times.
+/// Move any already-scheduled work out of the way of the current blocked times
+/// and imported calendar events.
 @MainActor
-func replanAfterBlockedTimeChange(context: ModelContext) {
+func replanAfterBusyChange(context: ModelContext) {
     let settings = UserSettings.fetchOrCreate(in: context)
     let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
     let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
     let blockedTimes = (try? context.fetch(FetchDescriptor<BlockedTime>())) ?? []
+    let busyEvents = (try? context.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
-    SchedulerService.replanBlockedTimeConflicts(
+    SchedulerService.replanConflicts(
         tasks: tasks,
         allBlocks: allBlocks,
         blockedTimes: blockedTimes,
+        busyEvents: busyEvents,
         settings: settings,
         context: context
     )
@@ -229,7 +232,7 @@ private struct AddBlockedTimeSheet: View {
         )
         modelContext.insert(blocked)
         // Anything already booked inside this window gets moved out of the way.
-        replanAfterBlockedTimeChange(context: modelContext)
+        replanAfterBusyChange(context: modelContext)
         dismiss()
     }
 

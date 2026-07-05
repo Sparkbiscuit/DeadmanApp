@@ -152,6 +152,7 @@ struct BulkEntryView: View {
     private func scheduleAll() {
         let settings = UserSettings.fetchOrCreate(in: modelContext)
         let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         var blockDescriptor = FetchDescriptor<ScheduledBlock>()
         blockDescriptor.sortBy = [SortDescriptor(\ScheduledBlock.startTime)]
@@ -174,6 +175,7 @@ struct BulkEntryView: View {
                 task: task,
                 allBlocks: allBlocks,
                 blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
                 settings: settings,
                 from: Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
             )

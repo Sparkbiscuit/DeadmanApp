@@ -4,7 +4,7 @@ import SwiftData
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
-    @Binding var replannedCount: Int
+    @Binding var replanSummary: CatchUpSummary
     @State private var showingCapture = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
     @State private var workSessionTask: LoomTask?
@@ -106,17 +106,28 @@ struct TaskListView: View {
 
     @ViewBuilder
     private var replanBanner: some View {
-        if replannedCount > 0 {
-            InfoBanner(
-                icon: "arrow.triangle.2.circlepath",
-                text: replannedCount == 1
-                    ? "Replanned 1 task with missed blocks"
-                    : "Replanned \(replannedCount) tasks with missed blocks"
-            )
+        if replanSummary.replannedTasks > 0 {
+            VStack(spacing: 10) {
+                InfoBanner(
+                    icon: "arrow.triangle.2.circlepath",
+                    text: replanSummary.replannedTasks == 1
+                        ? "Replanned 1 task with missed blocks"
+                        : "Replanned \(replanSummary.replannedTasks) tasks with missed blocks"
+                )
+                if replanSummary.unschedulableTasks > 0 {
+                    InfoBanner(
+                        icon: "exclamationmark.triangle.fill",
+                        text: replanSummary.unschedulableTasks == 1
+                            ? "1 task no longer fits before its deadline — extend it or trim the estimate"
+                            : "\(replanSummary.unschedulableTasks) tasks no longer fit before their deadlines — extend them or trim the estimates",
+                        tint: .loomRed
+                    )
+                }
+            }
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
             .onTapGesture {
-                withAnimation { replannedCount = 0 }
+                withAnimation { replanSummary = CatchUpSummary() }
             }
         }
     }

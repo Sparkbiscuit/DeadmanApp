@@ -21,7 +21,6 @@ enum TaskContext: String, Codable, CaseIterable, Identifiable {
 
 enum TaskSource: String, Codable {
     case manual
-    case canvas
     case bulkEntry
 }
 
@@ -37,7 +36,6 @@ final class LoomTask {
     var isComplete: Bool
     var userModified: Bool
     var source: TaskSource
-    var canvasAssignmentId: String?
     /// Self-reported completion (0–100) from work sessions; combined with
     /// block-based progress, whichever is further along.
     var manualProgressPercent: Int = 0
@@ -63,7 +61,6 @@ final class LoomTask {
         self.isComplete = false
         self.userModified = false
         self.source = source
-        self.canvasAssignmentId = nil
         self.manualProgressPercent = 0
         self.scheduledBlocks = []
         self.workSessions = []
@@ -235,6 +232,45 @@ final class BlockedTime {
     }
 }
 
+// MARK: - BusyEvent
+
+enum BusySource: String, Codable {
+    case appleCalendar
+    case googleCalendar
+}
+
+/// A concrete busy window imported from an external calendar. Occupies
+/// scheduler slots and shows on the schedule, but is deliberately not a task —
+/// it never appears in the task list and carries no effort or progress.
+@Model
+final class BusyEvent {
+    var id: UUID
+    var source: BusySource
+    /// The external event identifier — re-imports upsert on this, never duplicate.
+    var sourceId: String
+    var title: String
+    var startTime: Date
+    var endTime: Date
+    var calendarName: String?
+
+    init(
+        source: BusySource,
+        sourceId: String,
+        title: String,
+        startTime: Date,
+        endTime: Date,
+        calendarName: String? = nil
+    ) {
+        self.id = UUID()
+        self.source = source
+        self.sourceId = sourceId
+        self.title = title
+        self.startTime = startTime
+        self.endTime = endTime
+        self.calendarName = calendarName
+    }
+}
+
 // MARK: - UserSettings
 
 @Model
@@ -252,9 +288,11 @@ final class UserSettings {
     var startBufferMinutes: Int = 15
     /// Max minutes of task blocks the scheduler may place on a single day. 0 = no limit.
     var dailyFocusMinutes: Int = 0
-    var canvasBaseURL: String?
     var exportToAppleCalendar: Bool
+    /// One-way import: Apple Calendar events become BusyEvents the scheduler avoids.
+    var importFromAppleCalendar: Bool = false
     var loomCalendarIdentifier: String?
+    var hasCompletedOnboarding: Bool = false
 
     init() {
         self.id = UUID()
@@ -267,9 +305,10 @@ final class UserSettings {
         self.deadlineBufferMinutes = 120
         self.startBufferMinutes = 15
         self.dailyFocusMinutes = 0
-        self.canvasBaseURL = nil
         self.exportToAppleCalendar = false
+        self.importFromAppleCalendar = false
         self.loomCalendarIdentifier = nil
+        self.hasCompletedOnboarding = false
     }
 
     var wakeTime: DateComponents {

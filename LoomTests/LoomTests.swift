@@ -11,7 +11,7 @@ final class LoomTests: XCTestCase {
     override func setUpWithError() throws {
         let schema = Schema([
             LoomTask.self, ScheduledBlock.self, WorkSession.self,
-            BlockedTime.self, UserSettings.self
+            BlockedTime.self, BusyEvent.self, UserSettings.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(for: schema, configurations: [config])
@@ -231,7 +231,7 @@ final class LoomTests: XCTestCase {
         context.insert(missed)
         try context.save()
 
-        let replanned = SchedulerService.catchUpMissedBlocks(
+        let summary = SchedulerService.catchUpMissedBlocks(
             tasks: [task],
             allBlocks: [missed],
             blockedTimes: [],
@@ -241,7 +241,8 @@ final class LoomTests: XCTestCase {
         )
         try context.save()
 
-        XCTAssertEqual(replanned, 1)
+        XCTAssertEqual(summary.replannedTasks, 1)
+        XCTAssertEqual(summary.unschedulableTasks, 0)
         let remaining = try context.fetch(FetchDescriptor<ScheduledBlock>())
         XCTAssertFalse(remaining.isEmpty, "replacement blocks should exist")
         for block in remaining {
@@ -260,7 +261,7 @@ final class LoomTests: XCTestCase {
         context.insert(future)
         try context.save()
 
-        let replanned = SchedulerService.catchUpMissedBlocks(
+        let summary = SchedulerService.catchUpMissedBlocks(
             tasks: [task],
             allBlocks: [done, future],
             blockedTimes: [],
@@ -270,7 +271,7 @@ final class LoomTests: XCTestCase {
         )
         try context.save()
 
-        XCTAssertEqual(replanned, 0, "nothing was missed, nothing should be replanned")
+        XCTAssertEqual(summary, CatchUpSummary(), "nothing was missed, nothing should be replanned")
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
         XCTAssertEqual(all.count, 2)
     }
@@ -361,7 +362,7 @@ final class LoomTests: XCTestCase {
         context.insert(blocked)
         try context.save()
 
-        let replanned = SchedulerService.replanBlockedTimeConflicts(
+        let replanned = SchedulerService.replanConflicts(
             tasks: [task],
             allBlocks: [block],
             blockedTimes: [blocked],
@@ -395,7 +396,7 @@ final class LoomTests: XCTestCase {
         context.insert(blocked)
         try context.save()
 
-        let replanned = SchedulerService.replanBlockedTimeConflicts(
+        let replanned = SchedulerService.replanConflicts(
             tasks: [task],
             allBlocks: [block],
             blockedTimes: [blocked],
@@ -407,5 +408,124 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(replanned, 0, "untouched schedules must stay untouched")
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
         XCTAssertEqual(all.count, 1)
+    }
+
+    // MARK: - Busy events (imported calendar)
+
+    func testScheduleAvoidsBusyEvents() {
+        let settings = makeSettings()
+        // Imported event 9:00–15:00 on the anchor day.
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "evt-1",
+            title: "Conference",
+            startTime: anchor,
+            endTime: anchor.addingTimeInterval(6 * 3600)
+        )
+        context.insert(busy)
+
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 24)
+        let result = SchedulerService.schedule(
+            task: task, allBlocks: [], busyEvents: [busy], settings: settings, from: anchor
+        )
+
+        let blocks = scheduledBlocks(from: result)
+        XCTAssertFalse(blocks.isEmpty)
+        for block in blocks {
+            let overlaps = block.startTime < busy.endTime && block.endTime > busy.startTime
+            XCTAssertFalse(overlaps, "block booked over an imported calendar event")
+        }
+    }
+
+    func testReplanConflictsMovesBlocksOffBusyEvents() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        // Booked 10:00–11:00, then an imported event lands right on top.
+        let block = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(3600), durationMinutes: 60)
+        context.insert(block)
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "evt-2",
+            title: "Dentist",
+            startTime: anchor.addingTimeInterval(3600),
+            endTime: anchor.addingTimeInterval(2 * 3600)
+        )
+        context.insert(busy)
+        try context.save()
+
+        let replanned = SchedulerService.replanConflicts(
+            tasks: [task],
+            allBlocks: [block],
+            blockedTimes: [],
+            busyEvents: [busy],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(replanned, 1)
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertFalse(all.isEmpty)
+        for b in all {
+            let overlaps = b.startTime < busy.endTime && b.endTime > busy.startTime
+            XCTAssertFalse(overlaps, "replanned block still overlaps the imported event")
+        }
+    }
+
+    // MARK: - Catch-up: no overbooking, clear surfacing
+
+    func testCatchUpDoesNotOverbookTasksWithFutureBlocks() throws {
+        let settings = makeSettings()
+        // 120m task: 60m missed + 60m still scheduled in the future. Catch-up
+        // must replan through the reschedule path so total coverage stays 120m.
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 72)
+        let missed = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(-3 * 3600), durationMinutes: 60)
+        let future = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(6 * 3600), durationMinutes: 60)
+        context.insert(missed)
+        context.insert(future)
+        try context.save()
+
+        let summary = SchedulerService.catchUpMissedBlocks(
+            tasks: [task],
+            allBlocks: [missed, future],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary.replannedTasks, 1)
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        let totalMinutes = all.filter { !$0.isComplete }.reduce(0) { $0 + $1.durationMinutes }
+        XCTAssertEqual(totalMinutes, 120, "catch-up must not double-book remaining effort")
+        for block in all {
+            XCTAssertGreaterThanOrEqual(block.endTime, anchor, "no dangling past block may survive")
+        }
+    }
+
+    func testCatchUpSurfacesUnschedulableTasks() throws {
+        let settings = makeSettings() // deadline buffer 120
+        // Missed block, and the deadline is now too close for any replacement.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 1)
+        let missed = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(-2 * 3600), durationMinutes: 60)
+        context.insert(missed)
+        try context.save()
+
+        let summary = SchedulerService.catchUpMissedBlocks(
+            tasks: [task],
+            allBlocks: [missed],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary.replannedTasks, 1)
+        XCTAssertEqual(summary.unschedulableTasks, 1, "impossible fits must be surfaced, not silent")
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertTrue(all.isEmpty, "the dangling missed block must be removed either way")
     }
 }

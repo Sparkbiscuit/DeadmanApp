@@ -9,6 +9,15 @@ enum ScheduleResult {
     case noSlots
 }
 
+/// Outcome of a catch-up pass over missed blocks.
+struct CatchUpSummary: Equatable {
+    /// Tasks whose missed work was fed back through the scheduler.
+    var replannedTasks = 0
+    /// Of those, tasks whose remaining effort could not fully fit before the
+    /// deadline — surfaced to the user instead of leaving dangling blocks.
+    var unschedulableTasks = 0
+}
+
 // MARK: - Scheduler Service
 
 struct SchedulerService {
@@ -22,6 +31,7 @@ struct SchedulerService {
         task: LoomTask,
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
         settings: UserSettings,
         from startDate: Date = Date(),
         allowOvernight: Bool = false
@@ -47,6 +57,11 @@ struct SchedulerService {
             occupied.append(contentsOf: blocked
                 .occurrences(from: startDate, to: windowEnd)
                 .map { Interval(start: $0.start, end: $0.end) })
+        }
+
+        // …as are imported calendar events
+        for event in busyEvents where event.endTime > startDate && event.startTime < windowEnd {
+            occupied.append(Interval(start: event.startTime, end: event.endTime))
         }
         occupied.sort { $0.start < $1.start }
 
@@ -130,14 +145,18 @@ struct SchedulerService {
         }
     }
 
-    /// Reschedule remaining effort for a task from the current time.
-    /// Removes the task's unlocked, incomplete blocks and inserts the replacements.
+    /// Reschedule remaining effort for a task — the single invalidation path,
+    /// used for manual reschedules, blocked-time/busy-event conflicts, and
+    /// missed-block catch-up alike. Removes the task's unlocked, incomplete
+    /// blocks and inserts the replacements.
     @discardableResult
     static func reschedule(
         task: LoomTask,
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
         settings: UserSettings,
+        from startDate: Date? = nil,
         context: ModelContext
     ) -> ScheduleResult {
         // Remove unlocked, incomplete blocks for this task
@@ -154,8 +173,10 @@ struct SchedulerService {
             task: task,
             allBlocks: remainingBlocks,
             blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
             settings: settings,
-            from: Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+            from: startDate
+                ?? Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
         )
         insert(result: result, into: context)
         return result
@@ -171,67 +192,77 @@ struct SchedulerService {
         }
     }
 
-    /// Catch-up pass: blocks whose time came and went unfinished are dropped and
-    /// their effort is replanned from now. Returns the number of tasks replanned.
-    /// Run on launch / return to foreground.
+    /// Catch-up pass: a block whose window passed unfinished means the plan is
+    /// stale, so the task's remaining effort goes back through `reschedule` —
+    /// the same path a task edit uses — rather than sitting in limbo. Run on
+    /// launch / return to foreground.
     @discardableResult
     static func catchUpMissedBlocks(
         tasks: [LoomTask],
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent] = [],
         settings: UserSettings,
         now: Date = Date(),
         context: ModelContext
-    ) -> Int {
-        var replannedTasks = 0
+    ) -> CatchUpSummary {
+        var summary = CatchUpSummary()
         var currentBlocks = allBlocks
         let replanStart = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
 
         for task in tasks where !task.isComplete && task.deadline > now {
-            let missed = task.scheduledBlocks.filter {
+            let missed = task.scheduledBlocks.contains {
                 !$0.isComplete && !$0.isLocked && $0.endTime <= now
             }
-            guard !missed.isEmpty else { continue }
+            guard missed else { continue }
 
-            let missedIds = Set(missed.map(\.id))
-            for block in missed {
-                context.delete(block)
-            }
-            currentBlocks.removeAll { missedIds.contains($0.id) }
-
-            let result = schedule(
+            // reschedule wipes ALL of the task's unlocked incomplete blocks
+            // (missed and future) and replans exactly the remaining effort, so
+            // the task never ends up double-booked.
+            let removedIds = Set(
+                task.scheduledBlocks
+                    .filter { !$0.isComplete && !$0.isLocked }
+                    .map(\.id)
+            )
+            let result = reschedule(
                 task: task,
                 allBlocks: currentBlocks,
                 blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
                 settings: settings,
-                from: replanStart
+                from: replanStart,
+                context: context
             )
+            currentBlocks.removeAll { removedIds.contains($0.id) }
+
+            summary.replannedTasks += 1
             switch result {
-            case .success(let blocks), .partialFit(let blocks, _):
-                for block in blocks { context.insert(block) }
+            case .success(let blocks):
                 currentBlocks.append(contentsOf: blocks)
-                replannedTasks += 1
+            case .partialFit(let blocks, _):
+                currentBlocks.append(contentsOf: blocks)
+                summary.unschedulableTasks += 1
             case .noSlots:
-                // Deadline pressure without room; the task shows as "Not blocked".
-                replannedTasks += 1
+                summary.unschedulableTasks += 1
             }
         }
-        return replannedTasks
+        return summary
     }
 
-    /// Replan tasks whose upcoming blocks collide with a blocked time — run after
-    /// blocked times are added or edited, so existing schedules move out of the way.
-    /// Returns the number of tasks replanned.
+    /// Replan tasks whose upcoming blocks collide with a blocked time or an
+    /// imported calendar event — run after either changes, so existing
+    /// schedules move out of the way. Returns the number of tasks replanned.
     @discardableResult
-    static func replanBlockedTimeConflicts(
+    static func replanConflicts(
         tasks: [LoomTask],
         allBlocks: [ScheduledBlock],
         blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent] = [],
         settings: UserSettings,
         now: Date = Date(),
         context: ModelContext
     ) -> Int {
-        guard !blockedTimes.isEmpty else { return 0 }
+        guard !blockedTimes.isEmpty || !busyEvents.isEmpty else { return 0 }
 
         var replanned = 0
         var currentBlocks = allBlocks
@@ -243,10 +274,14 @@ struct SchedulerService {
             guard !upcoming.isEmpty else { continue }
 
             let conflicted = upcoming.contains { block in
-                blockedTimes.contains { blocked in
+                let hitsBlockedTime = blockedTimes.contains { blocked in
                     // occurrences(from:to:) already returns only overlapping windows
                     !blocked.occurrences(from: block.startTime, to: block.endTime).isEmpty
                 }
+                let hitsBusyEvent = busyEvents.contains {
+                    $0.startTime < block.endTime && $0.endTime > block.startTime
+                }
+                return hitsBlockedTime || hitsBusyEvent
             }
             guard conflicted else { continue }
 
@@ -255,6 +290,7 @@ struct SchedulerService {
                 task: task,
                 allBlocks: currentBlocks,
                 blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
                 settings: settings,
                 context: context
             )

@@ -287,6 +287,7 @@ struct CaptureSheetView: View {
         let settings = UserSettings.fetchOrCreate(in: modelContext)
         let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
         let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         // Build without inserting — a cancelled warning must leave no trace.
         let task = LoomTask(
@@ -306,6 +307,7 @@ struct CaptureSheetView: View {
             task: task,
             allBlocks: allBlocks,
             blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
             settings: settings,
             from: earliestStart
         )

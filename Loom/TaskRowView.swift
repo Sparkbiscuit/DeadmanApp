@@ -152,11 +152,13 @@ struct TaskRowView: View {
         let settings = UserSettings.fetchOrCreate(in: modelContext)
         let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
         let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         SchedulerService.reschedule(
             task: task,
             allBlocks: allBlocks,
             blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
             settings: settings,
             context: modelContext
         )

@@ -24,7 +24,12 @@ enum CalendarExportService {
         let settings = UserSettings.fetchOrCreate(in: context)
         guard settings.exportToAppleCalendar else { return }
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return }
+        syncNow(context: context, settings: settings)
+    }
 
+    /// Unconditional one-time push, regardless of the ongoing-export toggle —
+    /// caller has verified access.
+    static func syncNow(context: ModelContext, settings: UserSettings) {
         guard let calendar = loomCalendar(settings: settings) else { return }
 
         let blockDescriptor = FetchDescriptor<ScheduledBlock>()

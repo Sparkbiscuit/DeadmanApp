@@ -40,6 +40,8 @@
 		0CA003132C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */; };
 		0CA003142C6D3EF700D079F0 /* LoomWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0CA004012C6D3EF700D079F0 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0CA004002C6D3EF700D079F0 /* AppIcon.icon */; };
+		0CA005012C6D3EF700D079F0 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA005002C6D3EF700D079F0 /* OnboardingView.swift */; };
+		0CA005032C6D3EF700D079F0 /* CalendarImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -118,6 +120,8 @@
 		0CA003032C6D3EF700D079F0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionAttributes.swift; sourceTree = "<group>"; };
 		0CA004002C6D3EF700D079F0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer; path = AppIcon.icon; sourceTree = "<group>"; };
+		0CA005002C6D3EF700D079F0 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarImportService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -192,6 +196,8 @@
 				0CA002022C6D3EF700D079F0 /* BlockedTimeView.swift */,
 				0CA002042C6D3EF700D079F0 /* ConfettiView.swift */,
 				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
+				0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */,
+				0CA005002C6D3EF700D079F0 /* OnboardingView.swift */,
 				0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */,
 				0CA002082C6D3EF700D079F0 /* Info.plist */,
 				0CA002102C6D3EF700D079F0 /* Fonts */,
@@ -435,6 +441,8 @@
 				0CA002052C6D3EF700D079F0 /* ConfettiView.swift in Sources */,
 				0CA002072C6D3EF700D079F0 /* CalendarExportService.swift in Sources */,
 				0CA003102C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
+				0CA005012C6D3EF700D079F0 /* OnboardingView.swift in Sources */,
+				0CA005032C6D3EF700D079F0 /* CalendarImportService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -606,7 +614,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Loom/Preview Content\"";
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -628,7 +636,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -645,7 +653,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"Loom/Preview Content\"";
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -667,7 +675,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -684,12 +692,12 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -707,12 +715,12 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -729,12 +737,12 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -751,12 +759,12 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -772,14 +780,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Loom;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -795,14 +803,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Loom;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
