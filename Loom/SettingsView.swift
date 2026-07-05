@@ -76,7 +76,7 @@ struct SettingsView: View {
         } header: {
             Text("Daily Schedule")
         } footer: {
-            Text("Tasks are scheduled between these hours. A sleep time past midnight is fine — Loom treats it as the next day.")
+            Text("Tasks are scheduled between these hours. A sleep time past midnight is fine; Loom treats it as the next day.")
         }
         .listRowBackground(Color.loomSurface)
     }
@@ -125,7 +125,7 @@ struct SettingsView: View {
         } header: {
             Text("Calendar Blocking")
         } footer: {
-            Text("Recurring events — classes, meetings, commutes — that Loom schedules around.")
+            Text("Recurring events like classes, meetings, and commutes that Loom schedules around.")
         }
         .listRowBackground(Color.loomSurface)
     }
@@ -262,6 +262,21 @@ struct SettingsView: View {
             }
             .tint(Color.brand500)
 
+            if settings.importFromAppleCalendar {
+                NavigationLink {
+                    CalendarPickerView(settings: settings)
+                } label: {
+                    HStack {
+                        Label("Calendars", systemImage: "list.bullet")
+                            .font(AppFont.body(15))
+                        Spacer()
+                        Text(includedCalendarsLabel(settings))
+                            .font(AppFont.body(13))
+                            .foregroundStyle(Color.loomSubtle)
+                    }
+                }
+            }
+
             Button {
                 pushBlocksNow(settings: settings)
             } label: {
@@ -280,7 +295,7 @@ struct SettingsView: View {
         } header: {
             Text("Apple Calendar")
         } footer: {
-            Text("Export mirrors your blocks into a dedicated \u{201C}Loom\u{201D} calendar. Import treats your other calendars' events as busy time the scheduler works around — they never become tasks.")
+            Text("Export mirrors your blocks into a dedicated \u{201C}Loom\u{201D} calendar. Import treats your other calendars' events as busy time the scheduler works around. They never become tasks.")
         }
         .listRowBackground(Color.loomSurface)
     }
@@ -323,6 +338,16 @@ struct SettingsView: View {
         }
     }
 
+    private func includedCalendarsLabel(_ settings: UserSettings) -> String {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return "" }
+        let total = CalendarImportService.availableCalendars(settings: settings).count
+        let excluded = Set(settings.excludedCalendarIds)
+        let included = CalendarImportService.availableCalendars(settings: settings)
+            .filter { !excluded.contains($0.calendarIdentifier) }
+            .count
+        return included == total ? "All" : "\(included) of \(total)"
+    }
+
     private func pushBlocksNow(settings: UserSettings) {
         Task { @MainActor in
             let granted = await CalendarExportService.requestAccess()
@@ -360,5 +385,80 @@ struct SettingsView: View {
         let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0"
         let build = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "1"
         return "\(version) (\(build))"
+    }
+}
+
+// MARK: - Calendar picker
+
+/// Per-calendar include/exclude for Apple Calendar import. Toggling off a
+/// calendar (say, a family calendar full of events that shouldn't block work
+/// time) removes its imported events and frees those slots.
+private struct CalendarPickerView: View {
+    @Environment(\.modelContext) private var modelContext
+    let settings: UserSettings
+
+    @State private var calendarsBySource: [(source: String, calendars: [EKCalendar])] = []
+
+    var body: some View {
+        List {
+            ForEach(calendarsBySource, id: \.source) { group in
+                Section {
+                    ForEach(group.calendars, id: \.calendarIdentifier) { calendar in
+                        Toggle(isOn: inclusionBinding(for: calendar)) {
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(calendarDotColor(calendar))
+                                    .frame(width: 10, height: 10)
+                                Text(calendar.title)
+                                    .font(AppFont.body(15))
+                                    .foregroundStyle(Color.loomText)
+                            }
+                        }
+                        .tint(Color.brand500)
+                    }
+                } header: {
+                    Text(group.source)
+                }
+                .listRowBackground(Color.loomSurface)
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(Color.loomBackground)
+        .navigationTitle("Calendars")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: loadCalendars)
+        .onDisappear {
+            // One re-sync when leaving, instead of one per toggle flip.
+            CalendarImportService.syncNow(context: modelContext, settings: settings)
+            replanAfterBusyChange(context: modelContext)
+        }
+    }
+
+    private func calendarDotColor(_ calendar: EKCalendar) -> Color {
+        if let cgColor = calendar.cgColor {
+            return Color(cgColor: cgColor)
+        }
+        return .loomFaint
+    }
+
+    private func loadCalendars() {
+        let all = CalendarImportService.availableCalendars(settings: settings)
+        let grouped = Dictionary(grouping: all) { $0.source?.title ?? "Other" }
+        calendarsBySource = grouped
+            .map { (source: $0.key, calendars: $0.value) }
+            .sorted { $0.source < $1.source }
+    }
+
+    private func inclusionBinding(for calendar: EKCalendar) -> Binding<Bool> {
+        Binding(
+            get: { !settings.excludedCalendarIds.contains(calendar.calendarIdentifier) },
+            set: { included in
+                if included {
+                    settings.excludedCalendarIds.removeAll { $0 == calendar.calendarIdentifier }
+                } else if !settings.excludedCalendarIds.contains(calendar.calendarIdentifier) {
+                    settings.excludedCalendarIds.append(calendar.calendarIdentifier)
+                }
+            }
+        )
     }
 }

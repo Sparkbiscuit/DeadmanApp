@@ -9,6 +9,7 @@ struct TaskListView: View {
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
     @State private var workSessionTask: LoomTask?
     @State private var celebrationTask: LoomTask?
+    @State private var editingTask: LoomTask?
 
     var body: some View {
         NavigationStack {
@@ -45,6 +46,9 @@ struct TaskListView: View {
                 TaskCompletionView(task: task) {
                     celebrationTask = nil
                 }
+            }
+            .sheet(item: $editingTask) { task in
+                TaskEditView(task: task)
             }
         }
     }
@@ -118,8 +122,8 @@ struct TaskListView: View {
                     InfoBanner(
                         icon: "exclamationmark.triangle.fill",
                         text: replanSummary.unschedulableTasks == 1
-                            ? "1 task no longer fits before its deadline — extend it or trim the estimate"
-                            : "\(replanSummary.unschedulableTasks) tasks no longer fit before their deadlines — extend them or trim the estimates",
+                            ? "1 task no longer fits before its deadline. Extend it or trim the estimate"
+                            : "\(replanSummary.unschedulableTasks) tasks no longer fit before their deadlines. Extend them or trim the estimates",
                         tint: .loomRed
                     )
                 }
@@ -202,7 +206,8 @@ struct TaskListView: View {
                         TaskRowView(
                             task: task,
                             onStartSession: { workSessionTask = task },
-                            onComplete: { completeTask(task) }
+                            onComplete: { completeTask(task) },
+                            onEdit: { editingTask = task }
                         )
                         .padding(.horizontal, 20)
                     }
@@ -226,6 +231,7 @@ struct TaskListView: View {
         }
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
     }
 
     // MARK: - Capture FAB

@@ -27,19 +27,28 @@ enum CalendarImportService {
         let now = Date()
         guard let horizon = Calendar.current.date(byAdding: .day, value: horizonDays, to: now) else { return }
 
-        // Every calendar except Loom's own export calendar (feedback-loop guard).
+        // Every calendar except Loom's own export calendar (feedback-loop guard)
+        // and any calendar the user excluded.
+        let excluded = Set(settings.excludedCalendarIds)
         let calendars = store.calendars(for: .event).filter { calendar in
             calendar.calendarIdentifier != settings.loomCalendarIdentifier
                 && calendar.title != "Loom"
+                && !excluded.contains(calendar.calendarIdentifier)
         }
-        guard !calendars.isEmpty else { return }
-
-        let predicate = store.predicateForEvents(withStart: now, end: horizon, calendars: calendars)
-        let events = store.events(matching: predicate).filter { !$0.isAllDay }
 
         let descriptor = FetchDescriptor<BusyEvent>()
         let existing = ((try? context.fetch(descriptor)) ?? [])
             .filter { $0.source == .appleCalendar }
+
+        guard !calendars.isEmpty else {
+            // Everything excluded: clear whatever was imported before.
+            for event in existing { context.delete(event) }
+            return
+        }
+
+        let predicate = store.predicateForEvents(withStart: now, end: horizon, calendars: calendars)
+        let events = store.events(matching: predicate).filter { !$0.isAllDay }
+
         var existingById = Dictionary(
             existing.map { ($0.sourceId, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -76,6 +85,19 @@ enum CalendarImportService {
         for (_, orphan) in existingById {
             context.delete(orphan)
         }
+    }
+
+    /// Calendars available for import (excluding Loom's own export calendar),
+    /// for the selection UI. Requires calendar access.
+    static func availableCalendars(settings: UserSettings) -> [EKCalendar] {
+        store.calendars(for: .event)
+            .filter {
+                $0.calendarIdentifier != settings.loomCalendarIdentifier
+                    && $0.title != "Loom"
+            }
+            .sorted {
+                ($0.source?.title ?? "", $0.title) < ($1.source?.title ?? "", $1.title)
+            }
     }
 
     /// Drop all imported Apple Calendar busy events (import switched off).

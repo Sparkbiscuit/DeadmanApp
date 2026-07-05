@@ -71,12 +71,12 @@ struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: 0) {
-            stepBadge(icon: "mic.fill")
+            stepBadge(icon: "square.and.pencil")
             Text("Capture in seconds")
                 .font(AppFont.title(24))
                 .foregroundStyle(Color.loomText)
                 .padding(.bottom, 10)
-            Text("Speak or type a task with a deadline and a rough effort estimate — Loom takes it from there.")
+            Text("Add a task with a deadline and a rough effort estimate. Loom plans the work for you.")
                 .font(AppFont.body(15))
                 .foregroundStyle(Color.loomSubtle)
                 .multilineTextAlignment(.center)

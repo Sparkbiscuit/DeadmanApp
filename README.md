@@ -21,8 +21,11 @@ daily focus limit if you set one.
   of the task is actually done is always yours to say.
 - **Schedule views** — a day timeline and a compact week grid, including recurring
   blocked times the scheduler works around.
-- **Apple Calendar export** — optional one-way export of your work blocks into a
-  dedicated "Loom" calendar.
+- **Apple Calendar sync** — optional one-way export of your work blocks into a
+  dedicated "Loom" calendar, and optional import that treats events from the
+  calendars you choose as busy time the scheduler works around.
+- **Widgets** — an Up Next widget for the Home Screen and Lock Screen, plus a
+  Live Activity while a work session timer is running.
 
 ## Project
 

@@ -291,6 +291,8 @@ final class UserSettings {
     var exportToAppleCalendar: Bool
     /// One-way import: Apple Calendar events become BusyEvents the scheduler avoids.
     var importFromAppleCalendar: Bool = false
+    /// Calendars the user opted out of importing (EKCalendar identifiers).
+    var excludedCalendarIds: [String] = []
     var loomCalendarIdentifier: String?
     var hasCompletedOnboarding: Bool = false
 
@@ -307,6 +309,7 @@ final class UserSettings {
         self.dailyFocusMinutes = 0
         self.exportToAppleCalendar = false
         self.importFromAppleCalendar = false
+        self.excludedCalendarIds = []
         self.loomCalendarIdentifier = nil
         self.hasCompletedOnboarding = false
     }

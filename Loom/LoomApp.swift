@@ -3,18 +3,24 @@ import SwiftData
 
 @main
 struct LoomApp: App {
+    /// Store lives in the App Group so the widget can read it (SharedStore
+    /// migrates any pre-1.2 sandbox store on first launch).
+    private let container: ModelContainer = {
+        do {
+            return try SharedStore.makeContainer()
+        } catch {
+            // Last resort: an in-memory store beats a crash loop, and the
+            // on-disk data stays untouched for the next launch to retry.
+            let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
+            return try! ModelContainer(for: SharedStore.schema, configurations: [fallback])
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             MainTabView()
         }
-        .modelContainer(for: [
-            LoomTask.self,
-            ScheduledBlock.self,
-            WorkSession.self,
-            BlockedTime.self,
-            BusyEvent.self,
-            UserSettings.self
-        ])
+        .modelContainer(container)
     }
 }
 
@@ -109,5 +115,6 @@ struct MainTabView: View {
             replanSummary = summary
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
     }
 }

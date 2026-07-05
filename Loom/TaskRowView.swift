@@ -6,6 +6,7 @@ struct TaskRowView: View {
     let task: LoomTask
     var onStartSession: () -> Void = {}
     var onComplete: () -> Void = {}
+    var onEdit: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -121,7 +122,16 @@ struct TaskRowView: View {
             }
         }
         .cardStyle()
+        .contentShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .onTapGesture {
+            onEdit()
+        }
         .contextMenu {
+            Button {
+                onEdit()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
             Button {
                 onComplete()
             } label: {
@@ -135,6 +145,7 @@ struct TaskRowView: View {
             Button(role: .destructive) {
                 modelContext.delete(task)
                 CalendarExportService.syncIfEnabled(context: modelContext)
+                SharedStore.reloadWidgets()
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -163,5 +174,6 @@ struct TaskRowView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
     }
 }

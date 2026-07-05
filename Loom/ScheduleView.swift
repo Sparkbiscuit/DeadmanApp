@@ -379,6 +379,7 @@ struct ScheduleView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
     }
 
     private func completeTask(_ task: LoomTask) {
@@ -389,6 +390,7 @@ struct ScheduleView: View {
         }
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
     }
 }
 
