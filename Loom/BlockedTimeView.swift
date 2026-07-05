@@ -60,7 +60,28 @@ struct BlockedTimeView: View {
         for index in offsets {
             modelContext.delete(blockedTimes[index])
         }
+        // Freed-up windows don't require moving anything, but the calendar
+        // mirror may reference stale state.
+        CalendarExportService.syncIfEnabled(context: modelContext)
     }
+}
+
+/// Move any already-scheduled work out of the way of the current blocked times.
+@MainActor
+func replanAfterBlockedTimeChange(context: ModelContext) {
+    let settings = UserSettings.fetchOrCreate(in: context)
+    let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+    let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+    let blockedTimes = (try? context.fetch(FetchDescriptor<BlockedTime>())) ?? []
+
+    SchedulerService.replanBlockedTimeConflicts(
+        tasks: tasks,
+        allBlocks: allBlocks,
+        blockedTimes: blockedTimes,
+        settings: settings,
+        context: context
+    )
+    CalendarExportService.syncIfEnabled(context: context)
 }
 
 // MARK: - Row
@@ -207,6 +228,8 @@ private struct AddBlockedTimeSheet: View {
             durationMinutes: durationMinutes
         )
         modelContext.insert(blocked)
+        // Anything already booked inside this window gets moved out of the way.
+        replanAfterBlockedTimeChange(context: modelContext)
         dismiss()
     }
 

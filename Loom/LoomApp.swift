@@ -46,6 +46,9 @@ struct MainTabView: View {
         .tint(Color.brand500)
         .onAppear {
             _ = UserSettings.fetchOrCreate(in: modelContext)
+            // Sessions don't survive the app dying; clear any orphaned
+            // Live Activity left on the Lock Screen.
+            WorkSessionActivityController.endAll()
             catchUp()
         }
         .onChange(of: scenePhase) { _, newPhase in

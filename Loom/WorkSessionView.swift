@@ -208,12 +208,20 @@ struct WorkSessionView: View {
     // MARK: - Actions
 
     private func startTapped() {
-        sessionStart = Date()
+        let now = Date()
+        sessionStart = now
         elapsedSeconds = 0
         withAnimation { isRunning = true }
+        WorkSessionActivityController.start(
+            taskTitle: task.title,
+            contextName: task.context.rawValue,
+            effortMinutes: task.effortMinutes,
+            startedAt: now
+        )
     }
 
     private func stopTapped() {
+        WorkSessionActivityController.end()
         withAnimation {
             isRunning = false
             progressValue = Double(task.progressPercent)
@@ -222,6 +230,7 @@ struct WorkSessionView: View {
     }
 
     private func recordSession() {
+        WorkSessionActivityController.end()
         guard elapsedSeconds > 0 else { return }
         let session = WorkSession(
             task: task,

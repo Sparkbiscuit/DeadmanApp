@@ -14,6 +14,8 @@ struct CaptureSheetView: View {
     @State private var customEffort = 180
     @State private var showCustomEffort = false
     @State private var showBulk = false
+    @State private var useCustomStart = false
+    @State private var customStart = Date().addingTimeInterval(15 * 60)
 
     // Scheduling result — nothing is committed until the user confirms.
     @State private var scheduleWarning: String?
@@ -43,6 +45,7 @@ struct CaptureSheetView: View {
                         contextPicker
                         deadlinePicker
                         effortPicker
+                        startPicker
                         scheduleButton
                     }
                     .padding(.horizontal, 20)
@@ -220,6 +223,47 @@ struct CaptureSheetView: View {
         }
     }
 
+    // MARK: - Earliest start
+
+    private var startPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Earliest start")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            HStack(spacing: 8) {
+                EffortChip(label: "Soon", isSelected: !useCustomStart) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        useCustomStart = false
+                    }
+                }
+                EffortChip(label: "Pick a time", isSelected: useCustomStart) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        useCustomStart = true
+                        customStart = max(customStart, Date())
+                    }
+                }
+            }
+
+            if useCustomStart {
+                DatePicker(
+                    "",
+                    selection: $customStart,
+                    in: Date()...,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .tint(Color.brand500)
+                .padding(.top, 4)
+            } else {
+                Text("Leaves a short gap before your first block so you can settle in.")
+                    .font(AppFont.body(11))
+                    .foregroundStyle(Color.loomFaint)
+            }
+        }
+    }
+
     // MARK: - Schedule Button
 
     private var scheduleButton: some View {
@@ -252,11 +296,18 @@ struct CaptureSheetView: View {
             effortMinutes: effortMinutes
         )
 
+        // Never book work to start "right now" — leave the configured buffer,
+        // unless the user picked an explicit earliest start.
+        let earliestStart = useCustomStart
+            ? max(customStart, Date())
+            : Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+
         let result = SchedulerService.schedule(
             task: task,
             allBlocks: allBlocks,
             blockedTimes: blockedTimes,
-            settings: settings
+            settings: settings,
+            from: earliestStart
         )
 
         switch result {

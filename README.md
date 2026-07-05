@@ -15,7 +15,10 @@ daily focus limit if you set one.
 - **Catch-up replanning** — blocks you miss are automatically replanned from now, so
   the schedule never quietly rots.
 - **Work sessions** — a focused timer per task with self-reported progress; finish at
-  100% and the task completes with a small celebration.
+  100% and the task completes with a small celebration. A Live Activity mirrors the
+  running timer on the Lock Screen and in the Dynamic Island.
+- **Honest progress** — checking off a time block logs the time you worked; how much
+  of the task is actually done is always yours to say.
 - **Schedule views** — a day timeline and a compact week grid, including recurring
   blocked times the scheduler works around.
 - **Apple Calendar export** — optional one-way export of your work blocks into a

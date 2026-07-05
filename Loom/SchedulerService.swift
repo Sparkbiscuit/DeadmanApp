@@ -32,6 +32,9 @@ struct SchedulerService {
         let bufferSeconds = TimeInterval(settings.deadlineBufferMinutes * 60)
         let windowEnd = task.deadline.addingTimeInterval(-bufferSeconds)
 
+        // Blocks start on tidy 5-minute boundaries, never at "9:47:33".
+        let startDate = roundUpToFiveMinutes(startDate)
+
         guard startDate < windowEnd else { return .noSlots }
 
         // Gather existing occupied intervals (exclude completed blocks)
@@ -151,7 +154,8 @@ struct SchedulerService {
             task: task,
             allBlocks: remainingBlocks,
             blockedTimes: blockedTimes,
-            settings: settings
+            settings: settings,
+            from: Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
         )
         insert(result: result, into: context)
         return result
@@ -181,6 +185,7 @@ struct SchedulerService {
     ) -> Int {
         var replannedTasks = 0
         var currentBlocks = allBlocks
+        let replanStart = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
 
         for task in tasks where !task.isComplete && task.deadline > now {
             let missed = task.scheduledBlocks.filter {
@@ -199,7 +204,7 @@ struct SchedulerService {
                 allBlocks: currentBlocks,
                 blockedTimes: blockedTimes,
                 settings: settings,
-                from: now
+                from: replanStart
             )
             switch result {
             case .success(let blocks), .partialFit(let blocks, _):
@@ -212,6 +217,64 @@ struct SchedulerService {
             }
         }
         return replannedTasks
+    }
+
+    /// Replan tasks whose upcoming blocks collide with a blocked time — run after
+    /// blocked times are added or edited, so existing schedules move out of the way.
+    /// Returns the number of tasks replanned.
+    @discardableResult
+    static func replanBlockedTimeConflicts(
+        tasks: [LoomTask],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        settings: UserSettings,
+        now: Date = Date(),
+        context: ModelContext
+    ) -> Int {
+        guard !blockedTimes.isEmpty else { return 0 }
+
+        var replanned = 0
+        var currentBlocks = allBlocks
+
+        for task in tasks where !task.isComplete && task.deadline > now {
+            let upcoming = task.scheduledBlocks.filter {
+                !$0.isComplete && !$0.isLocked && $0.endTime > now
+            }
+            guard !upcoming.isEmpty else { continue }
+
+            let conflicted = upcoming.contains { block in
+                blockedTimes.contains { blocked in
+                    // occurrences(from:to:) already returns only overlapping windows
+                    !blocked.occurrences(from: block.startTime, to: block.endTime).isEmpty
+                }
+            }
+            guard conflicted else { continue }
+
+            let removedIds = Set(upcoming.map(\.id))
+            let result = reschedule(
+                task: task,
+                allBlocks: currentBlocks,
+                blockedTimes: blockedTimes,
+                settings: settings,
+                context: context
+            )
+            currentBlocks.removeAll { removedIds.contains($0.id) }
+            switch result {
+            case .success(let blocks), .partialFit(let blocks, _):
+                currentBlocks.append(contentsOf: blocks)
+            case .noSlots:
+                break
+            }
+            replanned += 1
+        }
+        return replanned
+    }
+
+    /// Round a date up to the next 5-minute boundary.
+    static func roundUpToFiveMinutes(_ date: Date) -> Date {
+        let interval: TimeInterval = 5 * 60
+        let rounded = (date.timeIntervalSinceReferenceDate / interval).rounded(.up) * interval
+        return Date(timeIntervalSinceReferenceDate: rounded)
     }
 
     // MARK: - Internals

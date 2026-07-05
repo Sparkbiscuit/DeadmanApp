@@ -300,22 +300,112 @@ final class LoomTests: XCTestCase {
 
     // MARK: - Progress model
 
-    func testProgressCombinesBlocksAndSelfReport() {
+    func testBlockCompletionLogsTimeNotProgress() {
         let task = makeTask(effort: 100, deadlineHoursFromAnchor: 48)
         let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 40)
         block.isComplete = true
         context.insert(block)
 
-        XCTAssertEqual(task.progressPercent, 40)
-        XCTAssertEqual(task.remainingMinutes, 60)
+        // Checking a block means "I worked this time" — nothing more.
+        XCTAssertEqual(task.timeSpentMinutes, 40)
+        XCTAssertEqual(task.progressPercent, 0)
+        XCTAssertEqual(task.remainingMinutes, 100)
 
-        // Self-report further ahead wins…
+        // Progress moves only when the user says so.
         task.manualProgressPercent = 70
         XCTAssertEqual(task.progressPercent, 70)
         XCTAssertEqual(task.remainingMinutes, 30)
+    }
 
-        // …but can't move progress backwards below block-based progress.
-        task.manualProgressPercent = 10
-        XCTAssertEqual(task.progressPercent, 40)
+    // MARK: - Start rounding & buffer
+
+    func testRoundUpToFiveMinutes() {
+        let messy = anchor.addingTimeInterval(7 * 60 + 33) // 9:07:33
+        XCTAssertEqual(
+            SchedulerService.roundUpToFiveMinutes(messy),
+            anchor.addingTimeInterval(10 * 60)
+        )
+        // Exact boundaries stay put.
+        XCTAssertEqual(SchedulerService.roundUpToFiveMinutes(anchor), anchor)
+    }
+
+    func testScheduleStartsOnFiveMinuteBoundary() {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let messyStart = anchor.addingTimeInterval(2 * 60 + 41) // 9:02:41
+
+        let result = SchedulerService.schedule(
+            task: task, allBlocks: [], settings: settings, from: messyStart
+        )
+        let blocks = scheduledBlocks(from: result)
+        XCTAssertFalse(blocks.isEmpty)
+        for block in blocks {
+            XCTAssertGreaterThanOrEqual(block.startTime, messyStart)
+            let seconds = Int(block.startTime.timeIntervalSinceReferenceDate)
+            XCTAssertEqual(seconds % 300, 0, "block should start on a 5-minute boundary")
+        }
+    }
+
+    // MARK: - Blocked-time conflict replanning
+
+    func testReplanBlockedTimeConflictsMovesOverlappingBlocks() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        // Booked 10:00–11:00, then a class lands on 10:00–12:00 every day.
+        let block = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(3600), durationMinutes: 60)
+        context.insert(block)
+        let blocked = BlockedTime(
+            label: "Class", weekdays: Array(1...7),
+            startHour: 10, startMinute: 0, durationMinutes: 120
+        )
+        context.insert(blocked)
+        try context.save()
+
+        let replanned = SchedulerService.replanBlockedTimeConflicts(
+            tasks: [task],
+            allBlocks: [block],
+            blockedTimes: [blocked],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(replanned, 1)
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertFalse(all.isEmpty, "the conflicting block should be replaced, not just deleted")
+        for b in all {
+            XCTAssertTrue(
+                blocked.occurrences(from: b.startTime, to: b.endTime).isEmpty,
+                "replanned block still overlaps the blocked time"
+            )
+        }
+    }
+
+    func testReplanBlockedTimeConflictsIgnoresNonConflictingTasks() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        // Booked 13:00–14:00; the class is 10:00–11:00 — no overlap.
+        let block = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(4 * 3600), durationMinutes: 60)
+        context.insert(block)
+        let blocked = BlockedTime(
+            label: "Class", weekdays: Array(1...7),
+            startHour: 10, startMinute: 0, durationMinutes: 60
+        )
+        context.insert(blocked)
+        try context.save()
+
+        let replanned = SchedulerService.replanBlockedTimeConflicts(
+            tasks: [task],
+            allBlocks: [block],
+            blockedTimes: [blocked],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+
+        XCTAssertEqual(replanned, 0, "untouched schedules must stay untouched")
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertEqual(all.count, 1)
     }
 }

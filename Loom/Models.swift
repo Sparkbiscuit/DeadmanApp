@@ -69,25 +69,27 @@ final class LoomTask {
         self.workSessions = []
     }
 
-    var completedMinutes: Int {
+    /// Minutes of blocks the user checked off. Checking a block means "I worked
+    /// this time" — it feeds time-spent, never task progress. Productivity varies;
+    /// progress is only what the user self-reports.
+    var workedBlockMinutes: Int {
         scheduledBlocks
             .filter { $0.isComplete }
             .reduce(0) { $0 + $1.durationMinutes }
     }
 
-    /// Actual minutes worked, from timed work sessions.
+    /// Actual minutes worked: timed sessions plus checked-off blocks.
     var timeSpentMinutes: Int {
-        workSessions.reduce(0) { $0 + ($1.durationSeconds + 30) / 60 }
+        workSessions.reduce(0) { $0 + ($1.durationSeconds + 30) / 60 } + workedBlockMinutes
     }
 
     var isOverBudget: Bool {
         timeSpentMinutes > effortMinutes
     }
 
-    /// Effort considered done: block-based or self-reported, whichever is greater.
+    /// Effort considered done — self-reported progress only.
     var effectiveCompletedMinutes: Int {
-        let manual = effortMinutes * min(100, max(0, manualProgressPercent)) / 100
-        return min(effortMinutes, max(completedMinutes, manual))
+        effortMinutes * min(100, max(0, manualProgressPercent)) / 100
     }
 
     /// 0.0–1.0 for progress bars.
@@ -245,6 +247,9 @@ final class UserSettings {
     var minBlockMinutes: Int
     var maxBlockMinutes: Int
     var deadlineBufferMinutes: Int
+    /// Breathing room before the first block of newly scheduled work — nothing
+    /// gets booked to start "right now" unless the user explicitly asks.
+    var startBufferMinutes: Int = 15
     /// Max minutes of task blocks the scheduler may place on a single day. 0 = no limit.
     var dailyFocusMinutes: Int = 0
     var canvasBaseURL: String?
@@ -260,6 +265,7 @@ final class UserSettings {
         self.minBlockMinutes = 30
         self.maxBlockMinutes = 90
         self.deadlineBufferMinutes = 120
+        self.startBufferMinutes = 15
         self.dailyFocusMinutes = 0
         self.canvasBaseURL = nil
         self.exportToAppleCalendar = false

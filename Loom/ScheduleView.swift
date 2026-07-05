@@ -13,6 +13,7 @@ struct ScheduleView: View {
     @State private var selectedDate = Date()
     @State private var viewMode: ViewMode = .day
     @State private var celebrationTask: LoomTask?
+    @State private var progressPromptBlock: ScheduledBlock?
 
     private let calendar = Calendar.current
 
@@ -35,6 +36,19 @@ struct ScheduleView: View {
             .fullScreenCover(item: $celebrationTask) { task in
                 TaskCompletionView(task: task) {
                     celebrationTask = nil
+                }
+            }
+            .sheet(item: $progressPromptBlock) { block in
+                if let task = block.task {
+                    BlockProgressPrompt(task: task, workedMinutes: block.durationMinutes) { finished in
+                        progressPromptBlock = nil
+                        if finished {
+                            // Let the sheet dismiss before presenting the cover.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                completeTask(task)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -346,19 +360,22 @@ struct ScheduleView: View {
             block.isComplete.toggle()
         }
 
-        // Finishing the last block finishes the task.
-        if block.isComplete,
-           let task = block.task,
-           !task.isComplete,
-           task.remainingMinutes == 0 {
-            task.isComplete = true
-            task.manualProgressPercent = 100
-            for extra in task.scheduledBlocks where !extra.isComplete && !extra.isLocked {
-                modelContext.delete(extra)
-            }
-            celebrationTask = task
+        // Checking a block records worked time only — progress is whatever the
+        // user says it is, so ask (they can skip).
+        if block.isComplete, let task = block.task, !task.isComplete {
+            progressPromptBlock = block
         }
 
+        CalendarExportService.syncIfEnabled(context: modelContext)
+    }
+
+    private func completeTask(_ task: LoomTask) {
+        task.isComplete = true
+        task.manualProgressPercent = 100
+        for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
+            modelContext.delete(block)
+        }
+        celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
     }
 }
@@ -512,5 +529,74 @@ private struct BlockedTimeCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.loomFaint, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
         )
+    }
+}
+
+// MARK: - Block progress prompt
+
+/// After checking off a block: the time is logged, but only the user knows how
+/// far the task actually moved. Saving 100% completes the task; skipping keeps
+/// progress untouched.
+private struct BlockProgressPrompt: View {
+    let task: LoomTask
+    let workedMinutes: Int
+    /// Called with `true` when the user reported the task finished.
+    var onDismiss: (Bool) -> Void
+
+    @State private var progressValue: Double = 0
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Time logged")
+                .font(AppFont.display(20))
+                .foregroundStyle(Color.loomText)
+                .padding(.top, 28)
+            Text("\(CountdownFormatter.effortString(minutes: workedMinutes)) on \u{201C}\(task.title)\u{201D}")
+                .font(AppFont.body(14))
+                .foregroundStyle(Color.loomSubtle)
+                .multilineTextAlignment(.center)
+
+            VStack(spacing: 10) {
+                Text("How much of this task is done overall?")
+                    .font(AppFont.body(13))
+                    .foregroundStyle(Color.loomSubtle)
+                Text("\(Int(progressValue))%")
+                    .font(AppFont.display(32))
+                    .foregroundStyle(task.context.color)
+                    .contentTransition(.numericText())
+                Slider(value: $progressValue, in: sliderRange, step: 5)
+                    .tint(task.context.color)
+            }
+            .padding(.top, 6)
+
+            Button {
+                task.manualProgressPercent = max(task.manualProgressPercent, Int(progressValue))
+                onDismiss(Int(progressValue) >= 100)
+            } label: {
+                Text("Save Progress")
+                    .primaryButtonStyle(fill: task.context.color)
+            }
+
+            Button("Skip") {
+                onDismiss(false)
+            }
+            .font(AppFont.caption(14))
+            .foregroundStyle(Color.loomSubtle)
+            .padding(.bottom, 16)
+        }
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.loomBackground)
+        .presentationDetents([.fraction(0.5)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(LoomRadius.sheet)
+        .onAppear {
+            progressValue = Double(task.progressPercent)
+        }
+    }
+
+    private var sliderRange: ClosedRange<Double> {
+        let minimum = Double(min(task.progressPercent, 95))
+        return minimum...100
     }
 }

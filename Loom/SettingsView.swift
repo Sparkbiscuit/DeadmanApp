@@ -212,10 +212,25 @@ struct SettingsView: View {
                         .foregroundStyle(Color.loomSubtle)
                 }
             }
+            Stepper(value: Binding(
+                get: { settings.startBufferMinutes },
+                set: { settings.startBufferMinutes = $0 }
+            ), in: 0...60, step: 5) {
+                HStack {
+                    Label("Start buffer", systemImage: "hourglass.bottomhalf.filled")
+                        .font(AppFont.body(15))
+                    Spacer()
+                    Text(settings.startBufferMinutes == 0
+                         ? "None"
+                         : CountdownFormatter.effortString(minutes: settings.startBufferMinutes))
+                        .font(AppFont.mono(14))
+                        .foregroundStyle(Color.loomSubtle)
+                }
+            }
         } header: {
             Text("Safety Buffer")
         } footer: {
-            Text("Work blocks are scheduled to finish this long before the actual deadline.")
+            Text("Work blocks finish at least the deadline buffer before the due time, and newly scheduled work starts no sooner than the start buffer from now.")
         }
         .listRowBackground(Color.loomSurface)
     }

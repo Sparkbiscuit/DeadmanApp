@@ -34,7 +34,26 @@
 		0CA002262C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */; };
 		0CA002272C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */; };
 		0CA002282C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */; };
+		0CA003102C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */; };
+		0CA003112C6D3EF700D079F0 /* LoomWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003012C6D3EF700D079F0 /* LoomWidgetsBundle.swift */; };
+		0CA003122C6D3EF700D079F0 /* WorkSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */; };
+		0CA003132C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */; };
+		0CA003142C6D3EF700D079F0 /* LoomWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		0CA003332C6D3EF700D079F0 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0CA003142C6D3EF700D079F0 /* LoomWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXContainerItemProxy section */
 		021ED3112C6D3EF800D079F0 /* PBXContainerItemProxy */ = {
@@ -50,6 +69,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 021ED2FC2C6D3EF700D079F0;
 			remoteInfo = Loom;
+		};
+		0CA003422C6D3EF700D079F0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 021ED2F52C6D3EF700D079F0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0CA003402C6D3EF700D079F0;
+			remoteInfo = LoomWidgets;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -85,6 +111,11 @@
 		0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Medium.ttf"; sourceTree = "<group>"; };
 		0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-SemiBold.ttf"; sourceTree = "<group>"; };
 		0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Bold.ttf"; sourceTree = "<group>"; };
+		0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LoomWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CA003012C6D3EF700D079F0 /* LoomWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomWidgetsBundle.swift; sourceTree = "<group>"; };
+		0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionLiveActivity.swift; sourceTree = "<group>"; };
+		0CA003032C6D3EF700D079F0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionAttributes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +140,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0CA003312C6D3EF700D079F0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -118,6 +156,7 @@
 				021ED2FF2C6D3EF700D079F0 /* Loom */,
 				021ED3132C6D3EF800D079F0 /* LoomTests */,
 				021ED31D2C6D3EF800D079F0 /* LoomUITests */,
+				0CA003202C6D3EF700D079F0 /* LoomWidgets */,
 				021ED2FE2C6D3EF700D079F0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -128,6 +167,7 @@
 				021ED2FD2C6D3EF700D079F0 /* Loom.app */,
 				021ED3102C6D3EF800D079F0 /* LoomTests.xctest */,
 				021ED31A2C6D3EF800D079F0 /* LoomUITests.xctest */,
+				0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -149,6 +189,7 @@
 				0CA002022C6D3EF700D079F0 /* BlockedTimeView.swift */,
 				0CA002042C6D3EF700D079F0 /* ConfettiView.swift */,
 				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
+				0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */,
 				0CA002082C6D3EF700D079F0 /* Info.plist */,
 				0CA002102C6D3EF700D079F0 /* Fonts */,
 				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
@@ -197,6 +238,16 @@
 			path = Fonts;
 			sourceTree = "<group>";
 		};
+		0CA003202C6D3EF700D079F0 /* LoomWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				0CA003012C6D3EF700D079F0 /* LoomWidgetsBundle.swift */,
+				0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */,
+				0CA003032C6D3EF700D079F0 /* Info.plist */,
+			);
+			path = LoomWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -207,10 +258,12 @@
 				021ED2F92C6D3EF700D079F0 /* Sources */,
 				021ED2FA2C6D3EF700D079F0 /* Frameworks */,
 				021ED2FB2C6D3EF700D079F0 /* Resources */,
+				0CA003332C6D3EF700D079F0 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				0CA003432C6D3EF700D079F0 /* PBXTargetDependency */,
 			);
 			name = Loom;
 			productName = Loom;
@@ -253,6 +306,23 @@
 			productReference = 021ED31A2C6D3EF800D079F0 /* LoomUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		0CA003402C6D3EF700D079F0 /* LoomWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CA003412C6D3EF700D079F0 /* Build configuration list for PBXNativeTarget "LoomWidgets" */;
+			buildPhases = (
+				0CA003302C6D3EF700D079F0 /* Sources */,
+				0CA003312C6D3EF700D079F0 /* Frameworks */,
+				0CA003322C6D3EF700D079F0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LoomWidgets;
+			productName = LoomWidgets;
+			productReference = 0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -274,6 +344,9 @@
 						CreatedOnToolsVersion = 15.4;
 						TestTargetID = 021ED2FC2C6D3EF700D079F0;
 					};
+					0CA003402C6D3EF700D079F0 = {
+						CreatedOnToolsVersion = 15.4;
+					};
 				};
 			};
 			buildConfigurationList = 021ED2F82C6D3EF700D079F0 /* Build configuration list for PBXProject "Loom" */;
@@ -292,6 +365,7 @@
 				021ED2FC2C6D3EF700D079F0 /* Loom */,
 				021ED30F2C6D3EF800D079F0 /* LoomTests */,
 				021ED3192C6D3EF800D079F0 /* LoomUITests */,
+				0CA003402C6D3EF700D079F0 /* LoomWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -328,6 +402,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0CA003322C6D3EF700D079F0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -349,6 +430,7 @@
 				0CA002032C6D3EF700D079F0 /* BlockedTimeView.swift in Sources */,
 				0CA002052C6D3EF700D079F0 /* ConfettiView.swift in Sources */,
 				0CA002072C6D3EF700D079F0 /* CalendarExportService.swift in Sources */,
+				0CA003102C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,6 +451,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0CA003302C6D3EF700D079F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0CA003112C6D3EF700D079F0 /* LoomWidgetsBundle.swift in Sources */,
+				0CA003122C6D3EF700D079F0 /* WorkSessionLiveActivity.swift in Sources */,
+				0CA003132C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -381,6 +473,11 @@
 			isa = PBXTargetDependency;
 			target = 021ED2FC2C6D3EF700D079F0 /* Loom */;
 			targetProxy = 021ED31B2C6D3EF800D079F0 /* PBXContainerItemProxy */;
+		};
+		0CA003432C6D3EF700D079F0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0CA003402C6D3EF700D079F0 /* LoomWidgets */;
+			targetProxy = 0CA003422C6D3EF700D079F0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -667,6 +764,52 @@
 			};
 			name = Release;
 		};
+		0CA003502C6D3EF700D079F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LoomWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loom;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0CA003512C6D3EF700D079F0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8G2SF9YU87;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LoomWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Loom;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -702,6 +845,15 @@
 			buildConfigurations = (
 				021ED32B2C6D3EF800D079F0 /* Debug */,
 				021ED32C2C6D3EF800D079F0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0CA003412C6D3EF700D079F0 /* Build configuration list for PBXNativeTarget "LoomWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CA003502C6D3EF700D079F0 /* Debug */,
+				0CA003512C6D3EF700D079F0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -174,7 +174,8 @@ struct BulkEntryView: View {
                 task: task,
                 allBlocks: allBlocks,
                 blockedTimes: blockedTimes,
-                settings: settings
+                settings: settings,
+                from: Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
             )
 
             switch result {
