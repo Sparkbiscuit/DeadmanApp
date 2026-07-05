@@ -39,7 +39,7 @@
 		0CA003122C6D3EF700D079F0 /* WorkSessionLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */; };
 		0CA003132C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */; };
 		0CA003142C6D3EF700D079F0 /* LoomWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0CA003002C6D3EF700D079F0 /* LoomWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		0CA004012C6D3EF700D079F0 /* Loom.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0CA004002C6D3EF700D079F0 /* Loom.icon */; };
+		0CA004012C6D3EF700D079F0 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 0CA004002C6D3EF700D079F0 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -117,7 +117,7 @@
 		0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionLiveActivity.swift; sourceTree = "<group>"; };
 		0CA003032C6D3EF700D079F0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSessionAttributes.swift; sourceTree = "<group>"; };
-		0CA004002C6D3EF700D079F0 /* Loom.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer; path = Loom.icon; sourceTree = "<group>"; };
+		0CA004002C6D3EF700D079F0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer; path = AppIcon.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,7 +155,7 @@
 		021ED2F42C6D3EF700D079F0 = {
 			isa = PBXGroup;
 			children = (
-				0CA004002C6D3EF700D079F0 /* Loom.icon */,
+				0CA004002C6D3EF700D079F0 /* AppIcon.icon */,
 				021ED2FF2C6D3EF700D079F0 /* Loom */,
 				021ED3132C6D3EF800D079F0 /* LoomTests */,
 				021ED31D2C6D3EF800D079F0 /* LoomUITests */,
@@ -380,7 +380,7 @@
 			files = (
 				021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */,
 				021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */,
-				0CA004012C6D3EF700D079F0 /* Loom.icon in Resources */,
+				0CA004012C6D3EF700D079F0 /* AppIcon.icon in Resources */,
 				0CA002212C6D3EF700D079F0 /* Nunito-Regular.ttf in Resources */,
 				0CA002222C6D3EF700D079F0 /* Nunito-SemiBold.ttf in Resources */,
 				0CA002232C6D3EF700D079F0 /* Nunito-Bold.ttf in Resources */,
@@ -603,7 +603,7 @@
 		021ED3252C6D3EF800D079F0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = Loom;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -642,7 +642,7 @@
 		021ED3262C6D3EF800D079F0 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = Loom;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
