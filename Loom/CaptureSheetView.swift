@@ -17,6 +17,15 @@ struct CaptureSheetView: View {
     @State private var useCustomStart = false
     @State private var customStart = Date().addingTimeInterval(15 * 60)
 
+    // Capture mode: a scheduled task, or a one-off reminder
+    private enum CaptureMode: String, CaseIterable {
+        case task = "Task"
+        case reminder = "Reminder"
+    }
+    @State private var captureMode: CaptureMode = .task
+    @State private var reminderDate = Date().addingTimeInterval(3600)
+    @State private var showNotificationsDeniedNote = false
+
     // Scheduling result — nothing is committed until the user confirms.
     @State private var scheduleWarning: String?
     @State private var showWarning = false
@@ -41,12 +50,18 @@ struct CaptureSheetView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
+                        modePicker
                         titleField
-                        contextPicker
-                        deadlinePicker
-                        effortPicker
-                        startPicker
-                        scheduleButton
+                        if captureMode == .task {
+                            contextPicker
+                            deadlinePicker
+                            effortPicker
+                            startPicker
+                            scheduleButton
+                        } else {
+                            reminderDatePicker
+                            reminderButton
+                        }
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
@@ -60,6 +75,7 @@ struct CaptureSheetView: View {
                 }
             }
             .alert("Scheduling Warning", isPresented: $showWarning) {
+                Button("Make Room") { makeRoom() }
                 Button("Save Anyway") { commitPending() }
                 Button("Cancel", role: .cancel) { discardPending() }
             } message: {
@@ -90,6 +106,96 @@ struct CaptureSheetView: View {
         .padding(.horizontal, 20)
         .padding(.top, 18)
         .padding(.bottom, 18)
+    }
+
+    // MARK: - Mode picker
+
+    private var modePicker: some View {
+        HStack(spacing: 2) {
+            ForEach(CaptureMode.allCases, id: \.self) { mode in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        captureMode = mode
+                    }
+                } label: {
+                    Text(mode.rawValue)
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(captureMode == mode ? Color.loomText : Color.loomSubtle)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: LoomRadius.sm, style: .continuous)
+                                .fill(captureMode == mode ? Color.loomSurface : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.loomSurface2)
+        )
+    }
+
+    // MARK: - Reminder form
+
+    private var reminderDatePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Remind me at")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            DatePicker(
+                "",
+                selection: $reminderDate,
+                in: Date()...,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            .tint(Color.brand500)
+
+            if showNotificationsDeniedNote {
+                Text("Notifications are off for Loom. The reminder is saved, but no alert will fire; enable notifications in Settings.")
+                    .font(AppFont.body(12))
+                    .foregroundStyle(Color.loomRed)
+            }
+        }
+    }
+
+    private var reminderButton: some View {
+        Button {
+            saveReminder()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "bell.badge")
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Set Reminder")
+            }
+            .primaryButtonStyle(enabled: !title.isEmpty)
+        }
+        .disabled(title.isEmpty)
+        .padding(.top, 6)
+    }
+
+    private func saveReminder() {
+        let reminder = Reminder(
+            title: title.trimmingCharacters(in: .whitespaces),
+            dueDate: reminderDate
+        )
+        modelContext.insert(reminder)
+
+        Task { @MainActor in
+            let granted = await NotificationService.requestAuthorization()
+            if granted {
+                NotificationService.schedule(for: reminder)
+                dismiss()
+            } else {
+                showNotificationsDeniedNote = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { dismiss() }
+            }
+        }
     }
 
     // MARK: - Title Field
@@ -322,13 +428,13 @@ struct CaptureSheetView: View {
             pendingTask = task
             pendingBlocks = blocks
             let timeStr = CountdownFormatter.effortString(minutes: unscheduledMinutes)
-            scheduleWarning = "\(timeStr) of effort couldn't be scheduled before your deadline. Consider extending your deadline or reducing the estimate."
+            scheduleWarning = "\(timeStr) of effort couldn't fit in the open gaps before your deadline. Make Room moves later-deadline work aside; Save Anyway keeps the partial plan."
             showWarning = true
 
         case .noSlots:
             pendingTask = task
             pendingBlocks = []
-            scheduleWarning = "No available time slots found before your deadline. Try extending the deadline or reducing the estimate."
+            scheduleWarning = "No open gaps before your deadline. Make Room moves later-deadline work aside, or extend the deadline."
             showWarning = true
         }
     }
@@ -341,6 +447,33 @@ struct CaptureSheetView: View {
         }
         pendingTask = nil
         pendingBlocks = []
+        CalendarExportService.syncIfEnabled(context: modelContext)
+        SharedStore.reloadWidgets()
+        dismiss()
+    }
+
+    /// The new task doesn't fit in the gaps: commit it and rebuild the whole
+    /// plan by deadline, letting it bump later-deadline work.
+    private func makeRoom() {
+        guard let task = pendingTask else { return }
+        modelContext.insert(task)
+        pendingTask = nil
+        pendingBlocks = []
+
+        let settings = UserSettings.fetchOrCreate(in: modelContext)
+        let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
+        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
+
+        SchedulerService.rebalance(
+            tasks: tasks,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            context: modelContext
+        )
         CalendarExportService.syncIfEnabled(context: modelContext)
         SharedStore.reloadWidgets()
         dismiss()

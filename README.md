@@ -12,8 +12,11 @@ daily focus limit if you set one.
   Personal), a deadline, and an effort estimate. Bulk entry handles a whole syllabus.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
-- **Catch-up replanning** — blocks you miss are automatically replanned from now, so
-  the schedule never quietly rots.
+- **Catch-up replanning** — blocks you miss are automatically replanned, and the
+  whole schedule rebalances earliest-deadline-first, so an urgent task claims
+  near slots from work that can wait.
+- **Reminders** — one-off reminders with local notifications, alongside the
+  scheduled tasks.
 - **Work sessions** — a focused timer per task with self-reported progress; finish at
   100% and the task completes with a small celebration. A Live Activity mirrors the
   running timer on the Lock Screen and in the Dynamic Island.

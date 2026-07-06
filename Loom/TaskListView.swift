@@ -4,6 +4,7 @@ import SwiftData
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
+    @Query(sort: \Reminder.dueDate) private var reminders: [Reminder]
     @Binding var replanSummary: CatchUpSummary
     @State private var showingCapture = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
@@ -19,6 +20,7 @@ struct TaskListView: View {
                         headerSection
                         statsBar
                         replanBanner
+                        remindersSection
                         taskSections
                     }
                     .padding(.bottom, 100)
@@ -133,6 +135,57 @@ struct TaskListView: View {
             .onTapGesture {
                 withAnimation { replanSummary = CatchUpSummary() }
             }
+        }
+    }
+
+    // MARK: - Reminders
+
+    @ViewBuilder
+    private var remindersSection: some View {
+        let pending = reminders.filter { !$0.isComplete }
+        if !pending.isEmpty {
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.brand500)
+                    Text("Reminders")
+                        .font(AppFont.heading(15))
+                        .foregroundStyle(Color.loomText)
+                    Text("\(pending.count)")
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(Color.loomFaint)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+
+                VStack(spacing: 10) {
+                    ForEach(pending) { reminder in
+                        ReminderRow(reminder: reminder) {
+                            completeReminder(reminder)
+                        } onDelete: {
+                            deleteReminder(reminder)
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func completeReminder(_ reminder: Reminder) {
+        withAnimation {
+            reminder.isComplete = true
+        }
+        NotificationService.cancel(reminder)
+    }
+
+    private func deleteReminder(_ reminder: Reminder) {
+        NotificationService.cancel(reminder)
+        withAnimation {
+            modelContext.delete(reminder)
         }
     }
 
@@ -271,5 +324,69 @@ private struct StatPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color.loomSurface2, in: Capsule())
+    }
+}
+
+
+// MARK: - Reminder Row
+
+private struct ReminderRow: View {
+    let reminder: Reminder
+    var onComplete: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 13))
+                .foregroundStyle(isOverdue ? Color.loomRed : Color.brand500)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reminder.title)
+                    .font(AppFont.bodySemibold(15))
+                    .foregroundStyle(Color.loomText)
+                    .lineLimit(1)
+                Text(dueLabel)
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(isOverdue ? Color.loomRed : Color.loomSubtle)
+            }
+
+            Spacer()
+
+            Button(action: onComplete) {
+                Image(systemName: "circle")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(Color.loomFaint)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .contextMenu {
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private var isOverdue: Bool {
+        reminder.dueDate < Date()
+    }
+
+    private var dueLabel: String {
+        let calendar = Calendar.current
+        let time = TimeFormatter.clock.string(from: reminder.dueDate)
+        if calendar.isDateInToday(reminder.dueDate) {
+            return time
+        } else if calendar.isDateInTomorrow(reminder.dueDate) {
+            return "Tomorrow \(time)"
+        } else if calendar.isDateInYesterday(reminder.dueDate) {
+            return "Yesterday \(time)"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return "\(formatter.string(from: reminder.dueDate)), \(time)"
     }
 }

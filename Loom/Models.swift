@@ -232,6 +232,28 @@ final class BlockedTime {
     }
 }
 
+// MARK: - Reminder
+
+/// A one-off, point-in-time reminder with a local notification. Deliberately
+/// not a task: no effort, no blocks, no scheduling; just a nudge at a time.
+@Model
+final class Reminder {
+    var id: UUID
+    var title: String
+    var dueDate: Date
+    var isComplete: Bool
+    /// Identifier of the pending local notification, for cancellation.
+    var notificationId: String
+
+    init(title: String, dueDate: Date) {
+        self.id = UUID()
+        self.title = title
+        self.dueDate = dueDate
+        self.isComplete = false
+        self.notificationId = UUID().uuidString
+    }
+}
+
 // MARK: - BusyEvent
 
 enum BusySource: String, Codable {

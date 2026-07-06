@@ -11,7 +11,7 @@ final class LoomTests: XCTestCase {
     override func setUpWithError() throws {
         let schema = Schema([
             LoomTask.self, ScheduledBlock.self, WorkSession.self,
-            BlockedTime.self, BusyEvent.self, UserSettings.self
+            BlockedTime.self, BusyEvent.self, Reminder.self, UserSettings.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(for: schema, configurations: [config])
@@ -250,8 +250,10 @@ final class LoomTests: XCTestCase {
         }
     }
 
-    func testCatchUpLeavesCompletedAndFutureBlocksAlone() throws {
+    func testCatchUpTopsUpUnderScheduledTasks() throws {
         let settings = makeSettings()
+        // 120m task with only 60m of future coverage: nothing was missed, but
+        // the plan is short, so catch-up rebalances and books the difference.
         let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
 
         let done = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(-5 * 3600), durationMinutes: 60)
@@ -271,9 +273,36 @@ final class LoomTests: XCTestCase {
         )
         try context.save()
 
-        XCTAssertEqual(summary, CatchUpSummary(), "nothing was missed, nothing should be replanned")
+        XCTAssertEqual(summary.replannedTasks, 0, "no blocks were missed")
+        XCTAssertEqual(summary.unschedulableTasks, 0)
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
-        XCTAssertEqual(all.count, 2)
+        let futureMinutes = all.filter { !$0.isComplete }.reduce(0) { $0 + $1.durationMinutes }
+        XCTAssertEqual(futureMinutes, 120, "coverage should be topped up to the full remaining effort")
+        XCTAssertTrue(all.contains { $0.isComplete }, "completed blocks stay untouched")
+    }
+
+    func testCatchUpDoesNothingWhenPlanIsHealthy() throws {
+        let settings = makeSettings()
+        // 60m task fully covered by one future block: catch-up must not touch it.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let future = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(3600), durationMinutes: 60)
+        let futureId = future.id
+        context.insert(future)
+        try context.save()
+
+        let summary = SchedulerService.catchUpMissedBlocks(
+            tasks: [task],
+            allBlocks: [future],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary, CatchUpSummary())
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertEqual(all.map(\.id), [futureId], "a healthy plan must not be rearranged")
     }
 
     // MARK: - Reschedule
@@ -527,5 +556,59 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(summary.unschedulableTasks, 1, "impossible fits must be surfaced, not silent")
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
         XCTAssertTrue(all.isEmpty, "the dangling missed block must be removed either way")
+    }
+
+    // MARK: - Rebalance (earliest deadline first)
+
+    func testRebalanceBumpsFartherDeadlineForUrgentTask() throws {
+        let settings = makeSettings() // buffer 120, start buffer 15
+        // A relaxed task holds the only slot an urgent task could use:
+        // its block sits 9:00-11:00, and the urgent task is due in 3 hours
+        // (usable window ends 10:00).
+        let relaxed = makeTask(effort: 120, deadlineHoursFromAnchor: 30)
+        let occupying = ScheduledBlock(task: relaxed, startTime: anchor, durationMinutes: 120)
+        context.insert(occupying)
+
+        let urgent = makeTask(effort: 30, deadlineHoursFromAnchor: 3)
+        try context.save()
+
+        // Gap-fill alone fails: the near window is taken.
+        let gapFill = SchedulerService.schedule(
+            task: urgent, allBlocks: [occupying], settings: settings,
+            from: anchor.addingTimeInterval(15 * 60)
+        )
+        guard case .noSlots = gapFill else {
+            return XCTFail("expected the urgent task not to fit as-is, got \(gapFill)")
+        }
+
+        // Rebalance moves the relaxed work aside.
+        let summary = SchedulerService.rebalance(
+            tasks: [relaxed, urgent],
+            allBlocks: [occupying],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary.unschedulableTasks, 0, "both tasks should fit after rebalancing")
+
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        let urgentWindowEnd = urgent.deadline.addingTimeInterval(-Double(settings.deadlineBufferMinutes) * 60)
+        let urgentBlocks = all.filter { $0.task?.id == urgent.id }
+        let relaxedBlocks = all.filter { $0.task?.id == relaxed.id }
+
+        XCTAssertEqual(urgentBlocks.reduce(0) { $0 + $1.durationMinutes }, 30)
+        for block in urgentBlocks {
+            XCTAssertLessThanOrEqual(block.endTime, urgentWindowEnd, "urgent task must finish before its buffered deadline")
+        }
+        XCTAssertEqual(relaxedBlocks.reduce(0) { $0 + $1.durationMinutes }, 120, "bumped work is rescheduled, not dropped")
+
+        // No overlaps anywhere.
+        let sorted = all.sorted { $0.startTime < $1.startTime }
+        for (a, b) in zip(sorted, sorted.dropFirst()) {
+            XCTAssertLessThanOrEqual(a.endTime, b.startTime, "rebalanced blocks must not overlap")
+        }
     }
 }

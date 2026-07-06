@@ -11,8 +11,10 @@ struct ScheduleView: View {
     @Query(sort: \ScheduledBlock.startTime) private var allBlocks: [ScheduledBlock]
     @Query private var blockedTimes: [BlockedTime]
     @Query private var busyEvents: [BusyEvent]
+    @Query private var reminders: [Reminder]
     @State private var selectedDate = Date()
     @State private var viewMode: ViewMode = .day
+    @State private var weekOffset = 0
     @State private var celebrationTask: LoomTask?
     @State private var progressPromptBlock: ScheduledBlock?
 
@@ -70,6 +72,7 @@ struct ScheduleView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewMode = mode
+                            weekOffset = 0
                         }
                     } label: {
                         Text(mode.rawValue)
@@ -157,6 +160,10 @@ struct ScheduleView: View {
                             BlockedTimeCard(interval: interval, label: label)
                         case .busy(let event):
                             BusyEventCard(event: event)
+                        case .reminder(let reminder):
+                            ReminderScheduleCard(reminder: reminder) {
+                                toggleReminder(reminder)
+                            }
                         }
                     }
                 }
@@ -179,6 +186,26 @@ struct ScheduleView: View {
 
         return ScrollView {
             VStack(spacing: 6) {
+                // Week range + back-to-today
+                HStack {
+                    Text(weekRangeLabel)
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(Color.loomSubtle)
+                    Spacer()
+                    if weekOffset != 0 {
+                        Button("Today") {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                weekOffset = 0
+                                selectedDate = Date()
+                            }
+                        }
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(Color.brand500)
+                    }
+                }
+                .padding(.horizontal, 6)
+                .padding(.bottom, 2)
+
                 // Day headers
                 HStack(spacing: 0) {
                     Color.clear.frame(width: 28)
@@ -261,6 +288,18 @@ struct ScheduleView: View {
             .padding(.top, 8)
             .padding(.bottom, 30)
         }
+        // Swipe horizontally to page between weeks.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height),
+                          abs(value.translation.width) > 40 else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        weekOffset += value.translation.width < 0 ? 1 : -1
+                    }
+                }
+        )
+        .sensoryFeedback(.selection, trigger: weekOffset)
     }
 
     /// Solid, unlabeled block in the week grid — tapping jumps to that day.
@@ -282,6 +321,9 @@ struct ScheduleView: View {
                 return (interval, .loomSurface3)
             case .busy(let event):
                 return (DateInterval(start: event.startTime, end: event.endTime), .loomSurface3)
+            case .reminder(let reminder):
+                // Point-in-time: draw a thin tick at the due time.
+                return (DateInterval(start: reminder.dueDate, duration: 5 * 60), .brand500)
             }
         }()
 
@@ -306,17 +348,27 @@ struct ScheduleView: View {
     }
 
     private var weekDays: [Date] {
-        // Week containing the selected date, Monday first (matches the handoff).
+        // Week containing the selected date, Monday first, shifted by however
+        // many weeks the user has swiped.
         var cal = calendar
         cal.firstWeekday = 2
-        guard let interval = cal.dateInterval(of: .weekOfYear, for: selectedDate) else { return [] }
-        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: interval.start) }
+        guard let interval = cal.dateInterval(of: .weekOfYear, for: selectedDate),
+              let start = cal.date(byAdding: .weekOfYear, value: weekOffset, to: interval.start) else { return [] }
+        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+    }
+
+    private var weekRangeLabel: String {
+        guard let first = weekDays.first, let last = weekDays.last else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return "\(formatter.string(from: first)) – \(formatter.string(from: last))"
     }
 
     private func jumpToDay(_ day: Date) {
         withAnimation(.easeInOut(duration: 0.2)) {
             selectedDate = day
             viewMode = .day
+            weekOffset = 0
         }
     }
 
@@ -326,12 +378,14 @@ struct ScheduleView: View {
         case block(ScheduledBlock)
         case blocked(DateInterval, String)
         case busy(BusyEvent)
+        case reminder(Reminder)
 
         var id: String {
             switch self {
             case .block(let block): return block.id.uuidString
             case .blocked(let interval, let label): return "\(label)-\(interval.start.timeIntervalSince1970)"
             case .busy(let event): return event.id.uuidString
+            case .reminder(let reminder): return reminder.id.uuidString
             }
         }
 
@@ -340,6 +394,7 @@ struct ScheduleView: View {
             case .block(let block): return block.startTime
             case .blocked(let interval, _): return interval.start
             case .busy(let event): return event.startTime
+            case .reminder(let reminder): return reminder.dueDate
             }
         }
     }
@@ -362,6 +417,10 @@ struct ScheduleView: View {
             .filter { $0.startTime >= start && $0.startTime < end }
             .map { .busy($0) })
 
+        items.append(contentsOf: reminders
+            .filter { $0.dueDate >= start && $0.dueDate < end }
+            .map { .reminder($0) })
+
         return items.sorted { $0.start < $1.start }
     }
 
@@ -380,6 +439,17 @@ struct ScheduleView: View {
 
         CalendarExportService.syncIfEnabled(context: modelContext)
         SharedStore.reloadWidgets()
+    }
+
+    private func toggleReminder(_ reminder: Reminder) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            reminder.isComplete.toggle()
+        }
+        if reminder.isComplete {
+            NotificationService.cancel(reminder)
+        } else if reminder.dueDate > Date() {
+            NotificationService.schedule(for: reminder)
+        }
     }
 
     private func completeTask(_ task: LoomTask) {
@@ -590,6 +660,56 @@ private struct BusyEventCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.loomBorder, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Reminder card (point-in-time)
+
+private struct ReminderScheduleCard: View {
+    let reminder: Reminder
+    var onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(TimeFormatter.clock.string(from: reminder.dueDate))
+                    .font(AppFont.mono(13))
+                    .foregroundStyle(Color.loomText)
+            }
+            .frame(width: 56, alignment: .trailing)
+
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.brand500)
+                .frame(width: 4)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(reminder.title)
+                    .font(AppFont.bodySemibold(15))
+                    .strikethrough(reminder.isComplete)
+                    .foregroundStyle(reminder.isComplete ? Color.loomSubtle : Color.loomText)
+                HStack(spacing: 5) {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 9))
+                    Text("Reminder")
+                        .font(AppFont.caption(11))
+                }
+                .foregroundStyle(Color.brand500)
+            }
+
+            Spacer()
+
+            Button(action: onToggle) {
+                Image(systemName: reminder.isComplete ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 24, weight: .light))
+                    .foregroundStyle(reminder.isComplete ? Color.personalColor : Color.loomFaint)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.loomSurface2)
         )
     }
 }

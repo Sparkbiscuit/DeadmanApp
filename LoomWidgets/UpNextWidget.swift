@@ -82,7 +82,9 @@ struct UpNextProvider: TimelineProvider {
 
 // MARK: - Widget
 
-/// Home Screen / Lock Screen glance at the next scheduled blocks.
+/// Home Screen / Lock Screen glance at the next scheduled blocks. Styled with
+/// the app's own palette and type so it reads as Loom, and adapts to
+/// light/dark like a native widget.
 struct UpNextWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "UpNextWidget", provider: UpNextProvider()) { entry in
@@ -96,16 +98,9 @@ struct UpNextWidget: Widget {
 
 // MARK: - Views
 
-private func contextColor(_ name: String) -> Color {
-    switch name {
-    case "School": return Color(red: 0x5A / 255, green: 0x78 / 255, blue: 0xE0 / 255)
-    case "Work": return Color(red: 0xE0 / 255, green: 0xA0 / 255, blue: 0x20 / 255)
-    case "Personal": return Color(red: 0x3F / 255, green: 0xA3 / 255, blue: 0x72 / 255)
-    default: return Color(red: 0xC1 / 255, green: 0x57 / 255, blue: 0x1F / 255)
-    }
+private func widgetContextColor(_ name: String) -> Color {
+    TaskContext(rawValue: name)?.color ?? .brand500
 }
-
-private let widgetBackground = Color(red: 0.11, green: 0.11, blue: 0.12)
 
 private struct UpNextWidgetView: View {
     @Environment(\.widgetFamily) private var family
@@ -127,68 +122,89 @@ private struct UpNextWidgetView: View {
     private var next: UpNextEntry.BlockInfo? { entry.blocks.first }
 
     private func timeRange(_ block: UpNextEntry.BlockInfo) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return "\(formatter.string(from: block.start)) – \(formatter.string(from: block.end))"
-    }
-
-    private func statusLabel(_ block: UpNextEntry.BlockInfo) -> String {
-        block.isActive(at: entry.date) ? "Now" : "Up next"
+        "\(TimeFormatter.clock.string(from: block.start)) – \(TimeFormatter.clock.string(from: block.end))"
     }
 
     // MARK: Home Screen
 
     private var smallView: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             if let block = next {
-                Text(statusLabel(block).uppercased())
-                    .font(.system(size: 10, weight: .heavy, design: .rounded))
-                    .foregroundStyle(contextColor(block.contextName))
+                let color = widgetContextColor(block.contextName)
+                let active = block.isActive(at: entry.date)
+
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                    Text(active ? "NOW" : "UP NEXT")
+                        .font(AppFont.caption(10))
+                        .foregroundStyle(color)
+                        .kerning(0.5)
+                }
+                .padding(.bottom, 6)
+
                 Text(block.title)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(AppFont.heading(15))
+                    .foregroundStyle(Color.loomText)
                     .lineLimit(2)
+                    .padding(.bottom, 3)
+
                 Text(timeRange(block))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(AppFont.monoMedium(11))
+                    .foregroundStyle(Color.loomSubtle)
+
                 Spacer(minLength: 0)
+
                 if entry.blocks.count > 1 {
-                    Text("+\(entry.blocks.count - 1) more today")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
+                    Text("+\(entry.blocks.count - 1) more coming up")
+                        .font(AppFont.caption(10))
+                        .foregroundStyle(Color.loomFaint)
                 }
             } else {
                 emptyView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .containerBackground(widgetBackground, for: .widget)
+        .containerBackground(Color.loomSurface, for: .widget)
     }
 
     private var mediumView: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             if entry.blocks.isEmpty {
                 emptyView
             } else {
                 ForEach(entry.blocks.prefix(3)) { block in
+                    let color = widgetContextColor(block.contextName)
                     HStack(spacing: 10) {
+                        Text(TimeFormatter.clock.string(from: block.start))
+                            .font(AppFont.monoMedium(11))
+                            .foregroundStyle(Color.loomSubtle)
+                            .frame(width: 62, alignment: .trailing)
+
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(contextColor(block.contextName))
-                            .frame(width: 3, height: 28)
+                            .fill(color)
+                            .frame(width: 3, height: 26)
+
                         VStack(alignment: .leading, spacing: 1) {
                             Text(block.title)
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .font(AppFont.heading(13))
+                                .foregroundStyle(Color.loomText)
                                 .lineLimit(1)
-                            Text(timeRange(block))
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.55))
+                            Text(block.contextName)
+                                .font(AppFont.caption(10))
+                                .foregroundStyle(color)
                         }
-                        Spacer()
+
+                        Spacer(minLength: 0)
+
                         if block.isActive(at: entry.date) {
                             Text("NOW")
-                                .font(.system(size: 9, weight: .heavy, design: .rounded))
-                                .foregroundStyle(contextColor(block.contextName))
+                                .font(AppFont.caption(9))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(color, in: Capsule())
                         }
                     }
                 }
@@ -196,17 +212,18 @@ private struct UpNextWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .containerBackground(widgetBackground, for: .widget)
+        .containerBackground(Color.loomSurface, for: .widget)
     }
 
     private var emptyView: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("ALL CLEAR")
-                .font(.system(size: 10, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white.opacity(0.5))
+                .font(AppFont.caption(10))
+                .foregroundStyle(Color.loomFaint)
+                .kerning(0.5)
             Text("Nothing scheduled")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .font(AppFont.heading(14))
+                .foregroundStyle(Color.loomText)
             Spacer(minLength: 0)
         }
     }
@@ -217,19 +234,19 @@ private struct UpNextWidgetView: View {
         Group {
             if let block = next {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(statusLabel(block).uppercased())
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    Text(block.isActive(at: entry.date) ? "NOW" : "UP NEXT")
+                        .font(AppFont.caption(10))
                         .widgetAccentable()
                     Text(block.title)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(AppFont.heading(14))
                         .lineLimit(1)
                     Text(timeRange(block))
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(AppFont.monoMedium(11))
                         .opacity(0.7)
                 }
             } else {
                 Text("Loom: nothing scheduled")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(AppFont.bodySemibold(13))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,17 +256,11 @@ private struct UpNextWidgetView: View {
     private var inlineView: some View {
         Group {
             if let block = next {
-                Text("\(block.isActive(at: entry.date) ? "Now" : timeShort(block.start)): \(block.title)")
+                Text("\(block.isActive(at: entry.date) ? "Now" : TimeFormatter.clock.string(from: block.start)): \(block.title)")
             } else {
                 Text("Loom: all clear")
             }
         }
         .containerBackground(.clear, for: .widget)
-    }
-
-    private func timeShort(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
     }
 }

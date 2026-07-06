@@ -15,6 +15,7 @@ enum SharedStore {
         WorkSession.self,
         BlockedTime.self,
         BusyEvent.self,
+        Reminder.self,
         UserSettings.self
     ])
 

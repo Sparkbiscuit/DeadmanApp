@@ -192,10 +192,69 @@ struct SchedulerService {
         }
     }
 
-    /// Catch-up pass: a block whose window passed unfinished means the plan is
-    /// stale, so the task's remaining effort goes back through `reschedule` —
-    /// the same path a task edit uses — rather than sitting in limbo. Run on
-    /// launch / return to foreground.
+    /// Rebuild the whole plan, earliest deadline first. Every active task's
+    /// unlocked incomplete blocks are wiped and remaining effort is replanned
+    /// in deadline order, so an urgent task bumps later-deadline work out of
+    /// the near slots instead of going unblocked. Completed and locked blocks
+    /// stay where they are.
+    @discardableResult
+    static func rebalance(
+        tasks: [LoomTask],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date(),
+        context: ModelContext
+    ) -> CatchUpSummary {
+        var summary = CatchUpSummary()
+        let active = tasks
+            .filter { !$0.isComplete && $0.deadline > now }
+            .sorted { $0.deadline < $1.deadline }
+        guard !active.isEmpty else { return summary }
+
+        let activeIds = Set(active.map(\.id))
+        var kept: [ScheduledBlock] = []
+        for block in allBlocks {
+            let belongsToActive = block.task.map { activeIds.contains($0.id) } ?? false
+            if belongsToActive && !block.isComplete && !block.isLocked {
+                context.delete(block)
+            } else {
+                kept.append(block)
+            }
+        }
+
+        let start = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+        for task in active {
+            let result = schedule(
+                task: task,
+                allBlocks: kept,
+                blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
+                settings: settings,
+                from: start
+            )
+            switch result {
+            case .success(let blocks):
+                for block in blocks { context.insert(block) }
+                kept.append(contentsOf: blocks)
+            case .partialFit(let blocks, _):
+                for block in blocks { context.insert(block) }
+                kept.append(contentsOf: blocks)
+                summary.unschedulableTasks += 1
+            case .noSlots:
+                if task.remainingMinutes > 0 {
+                    summary.unschedulableTasks += 1
+                }
+            }
+        }
+        return summary
+    }
+
+    /// Foreground catch-up: if any block was missed, or any task is carrying
+    /// less future coverage than its remaining effort, the whole plan is
+    /// rebalanced by deadline. Missed blocks never sit in limbo, and urgent
+    /// unblocked tasks claim slots from later-deadline work automatically.
     @discardableResult
     static func catchUpMissedBlocks(
         tasks: [LoomTask],
@@ -207,45 +266,33 @@ struct SchedulerService {
         context: ModelContext
     ) -> CatchUpSummary {
         var summary = CatchUpSummary()
-        var currentBlocks = allBlocks
-        let replanStart = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+        let active = tasks.filter { !$0.isComplete && $0.deadline > now }
 
-        for task in tasks where !task.isComplete && task.deadline > now {
-            let missed = task.scheduledBlocks.contains {
+        summary.replannedTasks = active.filter { task in
+            task.scheduledBlocks.contains {
                 !$0.isComplete && !$0.isLocked && $0.endTime <= now
             }
-            guard missed else { continue }
+        }.count
 
-            // reschedule wipes ALL of the task's unlocked incomplete blocks
-            // (missed and future) and replans exactly the remaining effort, so
-            // the task never ends up double-booked.
-            let removedIds = Set(
-                task.scheduledBlocks
-                    .filter { !$0.isComplete && !$0.isLocked }
-                    .map(\.id)
-            )
-            let result = reschedule(
-                task: task,
-                allBlocks: currentBlocks,
-                blockedTimes: blockedTimes,
-                busyEvents: busyEvents,
-                settings: settings,
-                from: replanStart,
-                context: context
-            )
-            currentBlocks.removeAll { removedIds.contains($0.id) }
-
-            summary.replannedTasks += 1
-            switch result {
-            case .success(let blocks):
-                currentBlocks.append(contentsOf: blocks)
-            case .partialFit(let blocks, _):
-                currentBlocks.append(contentsOf: blocks)
-                summary.unschedulableTasks += 1
-            case .noSlots:
-                summary.unschedulableTasks += 1
-            }
+        let anyUnderScheduled = active.contains { task in
+            let futureMinutes = task.scheduledBlocks
+                .filter { !$0.isComplete && $0.endTime > now }
+                .reduce(0) { $0 + $1.durationMinutes }
+            return task.remainingMinutes > futureMinutes
         }
+
+        guard summary.replannedTasks > 0 || anyUnderScheduled else { return summary }
+
+        let rebalanced = rebalance(
+            tasks: tasks,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            now: now,
+            context: context
+        )
+        summary.unschedulableTasks = rebalanced.unschedulableTasks
         return summary
     }
 

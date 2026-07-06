@@ -19,14 +19,14 @@ struct WorkSessionLiveActivity: Widget {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(context.attributes.contextColor)
                         Text(context.attributes.contextName)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(.custom("Nunito-Bold", size: 12))
                             .foregroundStyle(.white.opacity(0.7))
                     }
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.startedAt, style: .timer)
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .font(.custom("JetBrainsMono-SemiBold", size: 15))
                         .foregroundStyle(context.attributes.contextColor)
                         .frame(maxWidth: 60, alignment: .trailing)
                         .padding(.trailing, 4)
@@ -34,11 +34,11 @@ struct WorkSessionLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(context.attributes.taskTitle)
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(.custom("Nunito-Bold", size: 16))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Text("Working · \(budgetLabel(context.attributes.effortMinutes)) budget")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.custom("Nunito-SemiBold", size: 12))
                             .foregroundStyle(.white.opacity(0.6))
                     }
                     .padding(.horizontal, 4)
@@ -49,7 +49,7 @@ struct WorkSessionLiveActivity: Widget {
                     .foregroundStyle(context.attributes.contextColor)
             } compactTrailing: {
                 Text(context.state.startedAt, style: .timer)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .font(.custom("JetBrainsMono-SemiBold", size: 13))
                     .foregroundStyle(context.attributes.contextColor)
                     .frame(maxWidth: 52)
                     .multilineTextAlignment(.trailing)
@@ -83,7 +83,7 @@ private struct LockScreenSessionView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(context.attributes.taskTitle)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.custom("Nunito-Bold", size: 16))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 5) {
@@ -91,7 +91,7 @@ private struct LockScreenSessionView: View {
                         .fill(context.attributes.contextColor)
                         .frame(width: 6, height: 6)
                     Text("Working · \(context.attributes.contextName)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.custom("Nunito-SemiBold", size: 12))
                         .foregroundStyle(.white.opacity(0.6))
                 }
             }
@@ -99,7 +99,7 @@ private struct LockScreenSessionView: View {
             Spacer()
 
             Text(context.state.startedAt, style: .timer)
-                .font(.system(size: 30, weight: .semibold, design: .monospaced))
+                .font(.custom("JetBrainsMono-SemiBold", size: 30))
                 .foregroundStyle(context.attributes.contextColor)
                 .frame(maxWidth: 110, alignment: .trailing)
                 .multilineTextAlignment(.trailing)
