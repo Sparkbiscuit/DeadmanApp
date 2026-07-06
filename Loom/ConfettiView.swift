@@ -5,6 +5,8 @@ import SwiftUI
 struct TaskCompletionView: View {
     let task: LoomTask
     var onDone: () -> Void
+    /// Escape hatch for mis-taps: un-completes the task.
+    var onUndo: (() -> Void)? = nil
 
     @State private var badgeScale: CGFloat = 0.4
 
@@ -64,6 +66,15 @@ struct TaskCompletionView: View {
                 } label: {
                     Text("Done")
                         .primaryButtonStyle(fill: task.context.color)
+                }
+
+                if let onUndo {
+                    Button("Undo") {
+                        onUndo()
+                    }
+                    .font(AppFont.caption(14))
+                    .foregroundStyle(Color.loomSubtle)
+                    .padding(.top, 14)
                 }
 
                 Spacer()

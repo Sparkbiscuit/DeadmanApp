@@ -39,6 +39,9 @@ struct ScheduleView: View {
             .fullScreenCover(item: $celebrationTask) { task in
                 TaskCompletionView(task: task) {
                     celebrationTask = nil
+                } onUndo: {
+                    restoreTask(task, context: modelContext)
+                    celebrationTask = nil
                 }
             }
             .sheet(item: $progressPromptBlock) { block in
@@ -454,7 +457,6 @@ struct ScheduleView: View {
 
     private func completeTask(_ task: LoomTask) {
         task.isComplete = true
-        task.manualProgressPercent = 100
         for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
             modelContext.delete(block)
         }

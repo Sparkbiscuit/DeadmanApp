@@ -11,6 +11,7 @@ struct TaskListView: View {
     @State private var workSessionTask: LoomTask?
     @State private var celebrationTask: LoomTask?
     @State private var editingTask: LoomTask?
+    @State private var showCompleted = false
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct TaskListView: View {
                         replanBanner
                         remindersSection
                         taskSections
+                        completedSection
                     }
                     .padding(.bottom, 100)
                 }
@@ -46,6 +48,9 @@ struct TaskListView: View {
             }
             .fullScreenCover(item: $celebrationTask) { task in
                 TaskCompletionView(task: task) {
+                    celebrationTask = nil
+                } onUndo: {
+                    restoreTask(task, context: modelContext)
                     celebrationTask = nil
                 }
             }
@@ -271,12 +276,67 @@ struct TaskListView: View {
         }
     }
 
+    // MARK: - Completed section
+
+    @ViewBuilder
+    private var completedSection: some View {
+        let completed = tasks.filter(\.isComplete)
+        if !completed.isEmpty {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showCompleted.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.personalColor)
+                        Text("Completed")
+                            .font(AppFont.heading(15))
+                            .foregroundStyle(Color.loomText)
+                        Text("\(completed.count)")
+                            .font(AppFont.caption(12))
+                            .foregroundStyle(Color.loomFaint)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.loomFaint)
+                            .rotationEffect(.degrees(showCompleted ? 90 : 0))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+
+                if showCompleted {
+                    VStack(spacing: 10) {
+                        ForEach(completed.sorted { $0.deadline > $1.deadline }) { task in
+                            CompletedTaskRow(task: task) {
+                                withAnimation {
+                                    restoreTask(task, context: modelContext)
+                                }
+                            } onDelete: {
+                                withAnimation {
+                                    modelContext.delete(task)
+                                }
+                                SharedStore.reloadWidgets()
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+
     // MARK: - Completion
 
     private func completeTask(_ task: LoomTask) {
         withAnimation {
             task.isComplete = true
-            task.manualProgressPercent = 100
             // Reserved future time is released back to the schedule.
             for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
                 modelContext.delete(block)
@@ -389,4 +449,90 @@ private struct ReminderRow: View {
         formatter.dateFormat = "MMM d"
         return "\(formatter.string(from: reminder.dueDate)), \(time)"
     }
+}
+
+// MARK: - Completed Task Row
+
+private struct CompletedTaskRow: View {
+    let task: LoomTask
+    var onRestore: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(Color.personalColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(AppFont.bodySemibold(15))
+                    .strikethrough()
+                    .foregroundStyle(Color.loomSubtle)
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(task.context.rawValue)
+                        .font(AppFont.caption(11))
+                        .foregroundStyle(task.context.color)
+                    if task.timeSpentMinutes > 0 {
+                        Text("· \(CountdownFormatter.effortString(minutes: task.timeSpentMinutes)) worked")
+                            .font(AppFont.caption(11))
+                            .foregroundStyle(Color.loomFaint)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button(action: onRestore) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(Color.loomSubtle)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.loomSurface.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .contextMenu {
+            Button(action: onRestore) {
+                Label("Restore", systemImage: "arrow.uturn.backward")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Permanently", systemImage: "trash")
+            }
+        }
+    }
+}
+
+// MARK: - Restore
+
+/// Bring a completed task back: un-complete it and put its remaining effort
+/// back on the schedule.
+@MainActor
+func restoreTask(_ task: LoomTask, context: ModelContext) {
+    task.isComplete = false
+    // A task completed from a 100% progress report has nothing left to
+    // schedule; nudge it back so the schedule reopens and progress stays
+    // adjustable.
+    if task.manualProgressPercent >= 100 {
+        task.manualProgressPercent = 90
+    }
+
+    let settings = UserSettings.fetchOrCreate(in: context)
+    let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+    let blockedTimes = (try? context.fetch(FetchDescriptor<BlockedTime>())) ?? []
+    let busyEvents = (try? context.fetch(FetchDescriptor<BusyEvent>())) ?? []
+
+    SchedulerService.reschedule(
+        task: task,
+        allBlocks: allBlocks,
+        blockedTimes: blockedTimes,
+        busyEvents: busyEvents,
+        settings: settings,
+        context: context
+    )
+    CalendarExportService.syncIfEnabled(context: context)
+    SharedStore.reloadWidgets()
 }
