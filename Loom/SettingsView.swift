@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsArray: [UserSettings]
     @State private var showCalendarDeniedAlert = false
+    @State private var showNotificationsDeniedAlert = false
     @State private var didPushNow = false
 
     var body: some View {
@@ -27,6 +28,7 @@ struct SettingsView: View {
     private func settingsList(_ settings: UserSettings) -> some View {
         List {
             scheduleSection(settings)
+            nudgeSection(settings)
             blockedTimesSection
             focusSection(settings)
             blockSizeSection(settings)
@@ -40,6 +42,11 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Enable calendar access for Loom in Settings to export your work blocks.")
+        }
+        .alert("Notifications are off", isPresented: $showNotificationsDeniedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Enable notifications for Loom in Settings to get block start nudges.")
         }
     }
 
@@ -109,6 +116,67 @@ struct SettingsView: View {
             Spacer()
             DatePicker("", selection: date, displayedComponents: .hourAndMinute)
                 .labelsHidden()
+        }
+    }
+
+    // MARK: - Block nudges
+
+    private func nudgeSection(_ settings: UserSettings) -> some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { settings.blockRemindersEnabled },
+                set: { enabled in
+                    setBlockReminders(enabled, settings: settings)
+                }
+            )) {
+                Label("Block start nudges", systemImage: "bell.badge.fill")
+                    .font(AppFont.body(15))
+            }
+            .tint(Color.brand500)
+
+            if settings.blockRemindersEnabled {
+                Stepper(value: Binding(
+                    get: { settings.blockReminderLeadMinutes },
+                    set: {
+                        settings.blockReminderLeadMinutes = $0
+                        BlockNotificationService.resync(context: modelContext)
+                    }
+                ), in: 0...15, step: 5) {
+                    HStack {
+                        Label("Early heads-up", systemImage: "clock.badge")
+                            .font(AppFont.body(15))
+                        Spacer()
+                        Text(settings.blockReminderLeadMinutes == 0
+                             ? "Off"
+                             : "\(settings.blockReminderLeadMinutes) min")
+                            .font(AppFont.mono(14))
+                            .foregroundStyle(Color.loomSubtle)
+                    }
+                }
+            }
+        } header: {
+            Text("Nudges")
+        } footer: {
+            Text("A notification when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. Start the session right from the Lock Screen, or snooze it 10 minutes.")
+        }
+        .listRowBackground(Color.loomSurface)
+    }
+
+    private func setBlockReminders(_ enabled: Bool, settings: UserSettings) {
+        if enabled {
+            Task { @MainActor in
+                let granted = await NotificationService.requestAuthorization()
+                if granted {
+                    settings.blockRemindersEnabled = true
+                    BlockNotificationService.resync(context: modelContext)
+                } else {
+                    settings.blockRemindersEnabled = false
+                    showNotificationsDeniedAlert = true
+                }
+            }
+        } else {
+            settings.blockRemindersEnabled = false
+            BlockNotificationService.resync(context: modelContext)
         }
     }
 

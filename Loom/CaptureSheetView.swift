@@ -448,7 +448,7 @@ struct CaptureSheetView: View {
         pendingTask = nil
         pendingBlocks = []
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
         dismiss()
     }
 
@@ -475,7 +475,7 @@ struct CaptureSheetView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
         dismiss()
     }
 

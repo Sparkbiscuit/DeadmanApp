@@ -441,7 +441,7 @@ struct ScheduleView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
     }
 
     private func toggleReminder(_ reminder: Reminder) {
@@ -462,7 +462,7 @@ struct ScheduleView: View {
         }
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
     }
 }
 

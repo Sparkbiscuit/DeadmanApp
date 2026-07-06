@@ -317,6 +317,10 @@ final class UserSettings {
     var excludedCalendarIds: [String] = []
     var loomCalendarIdentifier: String?
     var hasCompletedOnboarding: Bool = false
+    /// Nudge when a scheduled block begins (the anti-time-blindness alarm).
+    var blockRemindersEnabled: Bool = true
+    /// Extra heads-up this many minutes before a block starts. 0 = off.
+    var blockReminderLeadMinutes: Int = 0
 
     init() {
         self.id = UUID()
@@ -334,6 +338,8 @@ final class UserSettings {
         self.excludedCalendarIds = []
         self.loomCalendarIdentifier = nil
         self.hasCompletedOnboarding = false
+        self.blockRemindersEnabled = true
+        self.blockReminderLeadMinutes = 0
     }
 
     var wakeTime: DateComponents {

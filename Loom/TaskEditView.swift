@@ -176,7 +176,7 @@ struct TaskEditView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
 
         switch result {
         case .partialFit(_, let unscheduledMinutes):

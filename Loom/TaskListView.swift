@@ -6,6 +6,7 @@ struct TaskListView: View {
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @Query(sort: \Reminder.dueDate) private var reminders: [Reminder]
     @Binding var replanSummary: CatchUpSummary
+    @Binding var sessionRequestTaskId: UUID?
     @State private var showingCapture = false
     @State private var expandedContexts: Set<TaskContext> = Set(TaskContext.allCases)
     @State private var workSessionTask: LoomTask?
@@ -56,6 +57,13 @@ struct TaskListView: View {
             }
             .sheet(item: $editingTask) { task in
                 TaskEditView(task: task)
+            }
+            .onChange(of: sessionRequestTaskId) { _, newValue in
+                guard let taskId = newValue else { return }
+                sessionRequestTaskId = nil
+                if let task = tasks.first(where: { $0.id == taskId && !$0.isComplete }) {
+                    workSessionTask = task
+                }
             }
         }
     }
@@ -320,7 +328,7 @@ struct TaskListView: View {
                                 withAnimation {
                                     modelContext.delete(task)
                                 }
-                                SharedStore.reloadWidgets()
+                                scheduleDidChange(context: modelContext)
                             }
                             .padding(.horizontal, 20)
                         }
@@ -344,7 +352,7 @@ struct TaskListView: View {
         }
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
     }
 
     // MARK: - Capture FAB
@@ -534,5 +542,5 @@ func restoreTask(_ task: LoomTask, context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
-    SharedStore.reloadWidgets()
+    scheduleDidChange(context: context)
 }

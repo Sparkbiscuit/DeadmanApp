@@ -85,7 +85,7 @@ func replanAfterBusyChange(context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
-    SharedStore.reloadWidgets()
+    scheduleDidChange(context: context)
 }
 
 // MARK: - Row

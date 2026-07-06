@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct LoomApp: App {
+    @UIApplicationDelegateAdaptor(LoomAppDelegate.self) private var appDelegate
+
     /// Store lives in the App Group so the widget can read it (SharedStore
     /// migrates any pre-1.2 sandbox store on first launch).
     private let container: ModelContainer = {
@@ -30,6 +32,7 @@ struct MainTabView: View {
     @Query private var settingsArray: [UserSettings]
     @State private var selectedTab = 0
     @State private var replanSummary = CatchUpSummary()
+    @State private var sessionRequestTaskId: UUID?
 
     private var needsOnboarding: Bool {
         settingsArray.first.map { !$0.hasCompletedOnboarding } ?? false
@@ -37,7 +40,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            TaskListView(replanSummary: $replanSummary)
+            TaskListView(replanSummary: $replanSummary, sessionRequestTaskId: $sessionRequestTaskId)
                 .tabItem {
                     Label("Tasks", systemImage: "checklist")
                 }
@@ -66,12 +69,24 @@ struct MainTabView: View {
         }
         .onAppear {
             bootstrap()
+            consumePendingSessionRequest()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 refreshSchedule()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .loomOpenWorkSession)) { _ in
+            consumePendingSessionRequest()
+        }
+    }
+
+    /// A block-start notification was tapped: jump to Tasks and open the timer.
+    private func consumePendingSessionRequest() {
+        guard let taskId = LoomAppDelegate.pendingSessionTaskId else { return }
+        LoomAppDelegate.pendingSessionTaskId = nil
+        selectedTab = 0
+        sessionRequestTaskId = taskId
     }
 
     private func bootstrap() {
@@ -115,6 +130,7 @@ struct MainTabView: View {
             replanSummary = summary
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        // Not user-initiated: never trigger the permission prompt from here.
+        scheduleDidChange(context: modelContext, interactive: false)
     }
 }

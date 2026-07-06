@@ -57,6 +57,7 @@
 		0CA007162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002162C6D3EF700D079F0 /* JetBrainsMono-Medium.ttf */; };
 		0CA007172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */; };
 		0CA007182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */; };
+		0CA008012C6D3EF700D079F0 /* BlockNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -143,6 +144,7 @@
 		0CA006082C6D3EF700D079F0 /* Loom.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Loom.entitlements; sourceTree = "<group>"; };
 		0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgets.entitlements; sourceTree = "<group>"; };
 		0CA007002C6D3EF700D079F0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockNotificationService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -219,6 +221,7 @@
 				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
 				0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */,
 				0CA007002C6D3EF700D079F0 /* NotificationService.swift */,
+				0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */,
 				0CA005002C6D3EF700D079F0 /* OnboardingView.swift */,
 				0CA006002C6D3EF700D079F0 /* SharedStore.swift */,
 				0CA006032C6D3EF700D079F0 /* TaskEditView.swift */,
@@ -481,6 +484,7 @@
 				0CA006012C6D3EF700D079F0 /* SharedStore.swift in Sources */,
 				0CA006042C6D3EF700D079F0 /* TaskEditView.swift in Sources */,
 				0CA007012C6D3EF700D079F0 /* NotificationService.swift in Sources */,
+				0CA008012C6D3EF700D079F0 /* BlockNotificationService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

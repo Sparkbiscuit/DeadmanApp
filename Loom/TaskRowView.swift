@@ -145,7 +145,7 @@ struct TaskRowView: View {
             Button(role: .destructive) {
                 modelContext.delete(task)
                 CalendarExportService.syncIfEnabled(context: modelContext)
-                SharedStore.reloadWidgets()
+                scheduleDidChange(context: modelContext)
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -174,6 +174,6 @@ struct TaskRowView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
     }
 }

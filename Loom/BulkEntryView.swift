@@ -199,7 +199,7 @@ struct BulkEntryView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
-        SharedStore.reloadWidgets()
+        scheduleDidChange(context: modelContext)
 
         if warningCount > 0 {
             scheduleSummary = "\(successCount) tasks fully scheduled, \(warningCount) had scheduling warnings. Check the schedule view for details."
