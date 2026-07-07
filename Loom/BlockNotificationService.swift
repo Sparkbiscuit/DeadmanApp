@@ -21,7 +21,7 @@ enum BlockNotificationService {
     private static let maxBlocks = 20
     private static let horizonDays = 3
 
-    private struct BlockSnapshot {
+    private struct BlockSnapshot: Sendable {
         let id: UUID
         let taskId: UUID
         let title: String
@@ -79,19 +79,21 @@ enum BlockNotificationService {
                 )
             }
 
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { pending in
+        // Stay on MainActor and use the async APIs so the notification center is
+        // never captured into a @Sendable completion closure.
+        Task { @MainActor in
+            let center = UNUserNotificationCenter.current()
+            let pending = await center.pendingNotificationRequests()
             let stale = pending.map(\.identifier).filter { $0.hasPrefix(idPrefix) }
             center.removePendingNotificationRequests(withIdentifiers: stale)
 
             guard enabled else { return }
-            center.getNotificationSettings { notifSettings in
-                guard notifSettings.authorizationStatus == .authorized else { return }
-                for snapshot in snapshots {
-                    center.add(request(for: snapshot, leadMinutes: 0))
-                    if leadMinutes > 0 {
-                        center.add(request(for: snapshot, leadMinutes: leadMinutes))
-                    }
+            guard await center.notificationSettings().authorizationStatus == .authorized else { return }
+
+            for snapshot in snapshots {
+                center.add(request(for: snapshot, leadMinutes: 0))
+                if leadMinutes > 0 {
+                    center.add(request(for: snapshot, leadMinutes: leadMinutes))
                 }
             }
         }
