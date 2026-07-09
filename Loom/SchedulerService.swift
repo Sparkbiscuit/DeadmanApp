@@ -18,6 +18,70 @@ struct CatchUpSummary: Equatable {
     var unschedulableTasks = 0
 }
 
+// MARK: - Estimate Advisor
+
+/// Advice from the planned-vs-actual record: nobody with ADHD estimates well,
+/// and Loom silently trusting the guess makes every downstream schedule a lie.
+/// Completed tasks already carry both sides (`effortMinutes` vs
+/// `timeSpentMinutes`); at capture this surfaces the pattern as a gentle,
+/// one-tap suggestion instead of a lecture.
+struct EstimateAdvisor {
+
+    struct Advice: Equatable {
+        /// Median actual÷planned ratio across the sample (uncapped — shown to
+        /// the user honestly even when the suggestion below is capped).
+        let ratio: Double
+        let sampleCount: Int
+        /// The estimate to offer instead: capped at 2× the guess so one wild
+        /// outlier history can't balloon a plan, rounded to tidy 15s.
+        let suggestedMinutes: Int
+
+        var ratioLabel: String {
+            String(format: "%.1f×", ratio)
+        }
+    }
+
+    /// Below this the record says the guess is roughly honest — stay quiet.
+    private static let minRatio = 1.2
+    private static let minSamples = 3
+    private static let maxSamples = 5
+    private static let suggestionCap = 2.0
+
+    static func advice(
+        for taskContext: TaskContext,
+        effortMinutes: Int,
+        in modelContext: ModelContext
+    ) -> Advice? {
+        guard effortMinutes > 0 else { return nil }
+
+        // Only tasks with tracked work say anything about estimation; a task
+        // marked done with zero logged time is a shrug, not a data point.
+        let samples = ((try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? [])
+            .filter {
+                $0.isComplete && $0.context == taskContext
+                    && $0.effortMinutes > 0 && $0.timeSpentMinutes > 0
+            }
+            .sorted { ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline) }
+            .prefix(maxSamples)
+        guard samples.count >= minSamples else { return nil }
+
+        let ratios = samples
+            .map { Double($0.timeSpentMinutes) / Double($0.effortMinutes) }
+            .sorted()
+        let median = ratios.count.isMultiple(of: 2)
+            ? (ratios[ratios.count / 2 - 1] + ratios[ratios.count / 2]) / 2
+            : ratios[ratios.count / 2]
+        guard median >= minRatio else { return nil }
+
+        let raw = Double(effortMinutes) * min(median, suggestionCap)
+        // 720 is the app-wide effort ceiling (capture stepper, edit stepper).
+        let rounded = min(720, Int((raw / 15).rounded()) * 15)
+        guard rounded > effortMinutes else { return nil }
+
+        return Advice(ratio: median, sampleCount: samples.count, suggestedMinutes: rounded)
+    }
+}
+
 // MARK: - Scheduler Service
 
 struct SchedulerService {

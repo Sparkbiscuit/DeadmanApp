@@ -43,6 +43,9 @@ final class LoomTask {
     /// "Write lab report" is un-startable; the first physical action isn't.
     /// Cleared automatically after the first work session — its job is done.
     var firstStep: String? = nil
+    /// When the task was completed. Completed tasks are kept as history so the
+    /// planned-vs-actual record can inform future estimates (EstimateAdvisor).
+    var completedAt: Date? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
     var scheduledBlocks: [ScheduledBlock]

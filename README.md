@@ -19,6 +19,10 @@ daily focus limit if you set one.
 - **Overdue triage** — tasks that slip past their deadline move into a "Needs a
   decision" queue with three kind exits: new deadline, done actually, or let it go.
   No guilt pile.
+- **Estimate reality-check** — completed tasks keep their planned-vs-actual record,
+  and capture compares your guess against your recent history in that context:
+  "Your last 5 School tasks ran about 1.6× over. Plan for 2h 30m instead?" with a
+  one-tap accept. Needs at least 3 tracked completions; suggestions cap at 2×.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the

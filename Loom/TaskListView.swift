@@ -416,7 +416,9 @@ struct TaskListView: View {
 
                 if showCompleted {
                     VStack(spacing: 10) {
-                        ForEach(completed.sorted { $0.deadline > $1.deadline }) { task in
+                        ForEach(completed.sorted {
+                            ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
+                        }) { task in
                             CompletedTaskRow(task: task) {
                                 withAnimation {
                                     restoreTask(task, context: modelContext)
@@ -464,6 +466,7 @@ struct TaskListView: View {
     private func completeTask(_ task: LoomTask) {
         withAnimation {
             task.isComplete = true
+            task.completedAt = Date()
             // Reserved future time is released back to the schedule.
             for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
                 modelContext.delete(block)
@@ -914,6 +917,7 @@ private struct CompletedReminderRow: View {
 @MainActor
 func restoreTask(_ task: LoomTask, context: ModelContext) {
     task.isComplete = false
+    task.completedAt = nil
     // A task completed from a 100% progress report has nothing left to
     // schedule; nudge it back so the schedule reopens and progress stays
     // adjustable.

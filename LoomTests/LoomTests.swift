@@ -611,4 +611,119 @@ final class LoomTests: XCTestCase {
             XCTAssertLessThanOrEqual(a.endTime, b.startTime, "rebalanced blocks must not overlap")
         }
     }
+
+    // MARK: - Estimate advisor
+
+    /// A completed task with a real planned-vs-actual record: `spent` minutes
+    /// of tracked sessions against an `effort`-minute estimate.
+    @discardableResult
+    private func makeCompletedTask(
+        taskContext: TaskContext = .school,
+        effort: Int,
+        spent: Int,
+        completedDaysAgo: Int = 1
+    ) -> LoomTask {
+        let completedAt = anchor.addingTimeInterval(-Double(completedDaysAgo) * 86_400)
+        let task = LoomTask(
+            title: "Done task",
+            context: taskContext,
+            deadline: completedAt,
+            effortMinutes: effort
+        )
+        task.isComplete = true
+        task.completedAt = completedAt
+        context.insert(task)
+        let session = WorkSession(
+            task: task,
+            startedAt: completedAt.addingTimeInterval(-Double(spent) * 60),
+            durationSeconds: spent * 60
+        )
+        context.insert(session)
+        return task
+    }
+
+    func testEstimateAdvisorNeedsThreeSamples() throws {
+        makeCompletedTask(effort: 60, spent: 120)
+        makeCompletedTask(effort: 60, spent: 120)
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "two samples are an anecdote, not a pattern"
+        )
+    }
+
+    func testEstimateAdvisorSuggestsMedianOverrun() throws {
+        makeCompletedTask(effort: 60, spent: 90)   // 1.5×
+        makeCompletedTask(effort: 60, spent: 96)   // 1.6×
+        makeCompletedTask(effort: 60, spent: 102)  // 1.7×
+        try context.save()
+
+        let advice = try XCTUnwrap(EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context))
+        XCTAssertEqual(advice.sampleCount, 3)
+        XCTAssertEqual(advice.ratio, 1.6, accuracy: 0.01)
+        // 60 × 1.6 = 96, rounded to the nearest 15.
+        XCTAssertEqual(advice.suggestedMinutes, 90)
+    }
+
+    func testEstimateAdvisorCapsSuggestionAtDouble() throws {
+        makeCompletedTask(effort: 60, spent: 180)  // 3×
+        makeCompletedTask(effort: 60, spent: 180)
+        makeCompletedTask(effort: 60, spent: 180)
+        try context.save()
+
+        let advice = try XCTUnwrap(EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context))
+        XCTAssertEqual(advice.ratio, 3.0, accuracy: 0.01, "the shown ratio stays honest")
+        XCTAssertEqual(advice.suggestedMinutes, 120, "the suggestion is capped at 2× the guess")
+    }
+
+    func testEstimateAdvisorSilentWhenEstimatesAreHonest() throws {
+        makeCompletedTask(effort: 60, spent: 55)
+        makeCompletedTask(effort: 60, spent: 60)
+        makeCompletedTask(effort: 60, spent: 66)
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "roughly accurate history should not interrupt capture"
+        )
+    }
+
+    func testEstimateAdvisorIgnoresOtherContextsAndUntrackedTasks() throws {
+        // Chronic over-runs, but all in Work…
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        // …and School completions with no tracked time say nothing.
+        let untracked = makeTask(effort: 60, deadlineHoursFromAnchor: -24)
+        untracked.isComplete = true
+        untracked.completedAt = anchor
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "advice must come from the same context and only from tracked work"
+        )
+        XCTAssertNotNil(
+            EstimateAdvisor.advice(for: .work, effortMinutes: 60, in: context),
+            "the Work record itself should still advise Work captures"
+        )
+    }
+
+    func testEstimateAdvisorUsesFiveMostRecentSamples() throws {
+        // Old habit: wild over-runs, further in the past.
+        for daysAgo in 10...14 {
+            makeCompletedTask(effort: 60, spent: 180, completedDaysAgo: daysAgo)
+        }
+        // Recent record: dead-on estimates.
+        for daysAgo in 1...5 {
+            makeCompletedTask(effort: 60, spent: 60, completedDaysAgo: daysAgo)
+        }
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "recent accuracy should outweigh an older over-run habit"
+        )
+    }
 }

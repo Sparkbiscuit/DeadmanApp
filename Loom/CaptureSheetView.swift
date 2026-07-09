@@ -27,6 +27,11 @@ struct CaptureSheetView: View {
     @State private var reminderDate = Date().addingTimeInterval(3600)
     @State private var showNotificationsDeniedNote = false
 
+    // Estimate reality-check: what the planned-vs-actual record says about
+    // the current guess, and whether the suggestion was taken.
+    @State private var estimateAdvice: EstimateAdvisor.Advice?
+    @State private var estimateAccepted = false
+
     // Scheduling result — nothing is committed until the user confirms.
     @State private var scheduleWarning: String?
     @State private var showWarning = false
@@ -58,6 +63,7 @@ struct CaptureSheetView: View {
                             contextPicker
                             deadlinePicker
                             effortPicker
+                            estimateAdviceRow
                             startPicker
                             scheduleButton
                         } else {
@@ -83,7 +89,21 @@ struct CaptureSheetView: View {
             } message: {
                 Text(scheduleWarning ?? "")
             }
-            .onAppear { titleFocused = true }
+            .onAppear {
+                titleFocused = true
+                refreshEstimateAdvice()
+            }
+            .onChange(of: context) { _, _ in
+                estimateAccepted = false
+                refreshEstimateAdvice()
+            }
+            .onChange(of: effortMinutes) { _, newValue in
+                // Accepting the suggestion changes the effort too — don't
+                // treat that as a fresh guess and immediately re-advise on it.
+                if estimateAccepted && newValue == estimateAdvice?.suggestedMinutes { return }
+                estimateAccepted = false
+                refreshEstimateAdvice()
+            }
             .onDisappear { if isListening { stopListening() } }
         }
         .presentationDetents([.large])
@@ -347,6 +367,81 @@ struct CaptureSheetView: View {
                 }
                 .padding(.top, 4)
             }
+        }
+    }
+
+    // MARK: - Estimate reality-check
+
+    /// A gentle line from the record, not a lecture: "your last N tasks like
+    /// this ran over — plan for X instead?" with a one-tap accept.
+    @ViewBuilder
+    private var estimateAdviceRow: some View {
+        if let advice = estimateAdvice {
+            if estimateAccepted {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.personalColor)
+                    Text("Planned for \(CountdownFormatter.effortString(minutes: effortMinutes)) — future you says thanks.")
+                        .font(AppFont.body(12))
+                        .foregroundStyle(Color.loomSubtle)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "hourglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.workColor)
+                            .padding(.top, 1)
+                        Text("Your last \(advice.sampleCount) \(context.rawValue) tasks ran about \(advice.ratioLabel) over their estimates.")
+                            .font(AppFont.body(13))
+                            .foregroundStyle(Color.loomText)
+                    }
+
+                    Button {
+                        acceptEstimateSuggestion()
+                    } label: {
+                        Text("Plan for \(CountdownFormatter.effortString(minutes: advice.suggestedMinutes)) instead")
+                            .font(AppFont.caption(13))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.workColor, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.workColor.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                        .stroke(Color.workColor.opacity(0.25), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func refreshEstimateAdvice() {
+        estimateAdvice = EstimateAdvisor.advice(
+            for: context,
+            effortMinutes: effortMinutes,
+            in: modelContext
+        )
+    }
+
+    private func acceptEstimateSuggestion() {
+        guard let advice = estimateAdvice else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if advice.suggestedMinutes >= 180 {
+                showCustomEffort = true
+                customEffort = advice.suggestedMinutes
+            } else {
+                showCustomEffort = false
+            }
+            effortMinutes = advice.suggestedMinutes
+            estimateAccepted = true
         }
     }
 
