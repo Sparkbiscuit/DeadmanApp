@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Loom uses the microphone so you can speak a task instead of typing it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Loom transcribes your voice to capture tasks hands-free.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Loom can export your scheduled work blocks to Apple Calendar so they appear alongside your other events.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Nunito-Regular.ttf</string>
+		<string>Nunito-SemiBold.ttf</string>
+		<string>Nunito-Bold.ttf</string>
+		<string>Nunito-ExtraBold.ttf</string>
+		<string>Nunito-Black.ttf</string>
+		<string>JetBrainsMono-Medium.ttf</string>
+		<string>JetBrainsMono-SemiBold.ttf</string>
+		<string>JetBrainsMono-Bold.ttf</string>
+	</array>
+</dict>
+</plist>
