@@ -39,6 +39,10 @@ final class LoomTask {
     /// Self-reported completion (0–100) from work sessions; combined with
     /// block-based progress, whichever is further along.
     var manualProgressPercent: Int = 0
+    /// The tiny concrete opening move ("open the doc, paste the data table").
+    /// "Write lab report" is un-startable; the first physical action isn't.
+    /// Cleared automatically after the first work session — its job is done.
+    var firstStep: String? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
     var scheduledBlocks: [ScheduledBlock]
@@ -51,7 +55,8 @@ final class LoomTask {
         context: TaskContext,
         deadline: Date,
         effortMinutes: Int,
-        source: TaskSource = .manual
+        source: TaskSource = .manual,
+        firstStep: String? = nil
     ) {
         self.id = UUID()
         self.title = title
@@ -62,6 +67,7 @@ final class LoomTask {
         self.userModified = false
         self.source = source
         self.manualProgressPercent = 0
+        self.firstStep = firstStep
         self.scheduledBlocks = []
         self.workSessions = []
     }

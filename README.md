@@ -10,13 +10,23 @@ daily focus limit if you set one.
 
 - **Capture in seconds** — type or dictate a task, pick a context (School / Work /
   Personal), a deadline, and an effort estimate. Bulk entry handles a whole syllabus.
+- **Right Now card** — the top of the Tasks tab always answers "what should I be
+  doing this minute?": the running block (with elapsed/remaining) or the next one
+  up, with a single big Start button. Opening the app never requires a decision.
+- **First step** — optionally capture the very first physical action ("open the doc,
+  paste the data table"). It shows in the Right Now card, the block-start
+  notification, and the session timer, then clears itself once you've started.
+- **Overdue triage** — tasks that slip past their deadline move into a "Needs a
+  decision" queue with three kind exits: new deadline, done actually, or let it go.
+  No guilt pile.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the
   whole schedule rebalances earliest-deadline-first, so an urgent task claims
   near slots from work that can wait.
 - **Reminders** — one-off reminders with local notifications, alongside the
-  scheduled tasks.
+  scheduled tasks. They appear in the Up Next widget with your work blocks, and
+  completed ones land in the Completed section where they can be restored.
 - **Work sessions** — a focused timer per task with self-reported progress; finish at
   100% and the task completes with a small celebration. A Live Activity mirrors the
   running timer on the Lock Screen and in the Dynamic Island.

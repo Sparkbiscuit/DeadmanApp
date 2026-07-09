@@ -92,6 +92,33 @@ struct WorkSessionView: View {
                 Text(budgetLabel)
                     .font(AppFont.monoMedium(13))
                     .foregroundStyle(isOverBudgetNow ? Color.workColor : Color.loomSubtle)
+
+                // The captured opening move, shown only while idle — once the
+                // timer runs the start problem is solved.
+                if !isRunning, let step = task.firstStep, !step.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.brand500)
+                            .padding(.top, 3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Just start here")
+                                .font(AppFont.caption(11))
+                                .foregroundStyle(Color.loomSubtle)
+                            Text(step)
+                                .font(AppFont.bodySemibold(14))
+                                .foregroundStyle(Color.loomText)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.loomSurface)
+                    )
+                    .padding(.top, 6)
+                }
             }
             .padding(.top, 10)
 
@@ -238,6 +265,9 @@ struct WorkSessionView: View {
             durationSeconds: elapsedSeconds
         )
         modelContext.insert(session)
+        // The first step's whole job is getting the first session started;
+        // once that's happened it would just be stale noise.
+        task.firstStep = nil
         isRunning = false
         elapsedSeconds = 0
     }

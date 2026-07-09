@@ -8,8 +8,12 @@ struct TaskEditView: View {
     @Environment(\.dismiss) private var dismiss
 
     let task: LoomTask
+    /// Overdue-triage entry point: preload a doable future deadline and draw
+    /// the eye to the date field.
+    var emphasizeDeadline: Bool = false
 
     @State private var title: String = ""
+    @State private var firstStep: String = ""
     @State private var context: TaskContext = .school
     @State private var deadline: Date = Date()
     @State private var effortMinutes: Int = 60
@@ -20,10 +24,19 @@ struct TaskEditView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    titleField
-                    contextPicker
-                    deadlinePicker
-                    effortPicker
+                    if emphasizeDeadline {
+                        deadlinePicker
+                        titleField
+                        firstStepField
+                        contextPicker
+                        effortPicker
+                    } else {
+                        titleField
+                        firstStepField
+                        contextPicker
+                        deadlinePicker
+                        effortPicker
+                    }
                     saveButton
                 }
                 .padding(.horizontal, 20)
@@ -53,9 +66,15 @@ struct TaskEditView: View {
 
     private func loadTask() {
         title = task.title
+        firstStep = task.firstStep ?? ""
         context = task.context
         deadline = task.deadline
         effortMinutes = task.effortMinutes
+        // A past deadline can't even be picked (the picker starts at now);
+        // triage entry starts from a fresh, doable suggestion instead.
+        if emphasizeDeadline && deadline <= Date() {
+            deadline = Date().addingTimeInterval(24 * 3600)
+        }
     }
 
     // MARK: - Fields
@@ -67,6 +86,17 @@ struct TaskEditView: View {
                 .foregroundStyle(Color.loomSubtle)
             TextField("Task title", text: $title)
                 .font(AppFont.heading(19))
+                .foregroundStyle(Color.loomText)
+        }
+    }
+
+    private var firstStepField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("First step (optional)")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+            TextField("The very first physical action", text: $firstStep)
+                .font(AppFont.body(15))
                 .foregroundStyle(Color.loomText)
         }
     }
@@ -102,9 +132,9 @@ struct TaskEditView: View {
 
     private var deadlinePicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Deadline")
+            Text(emphasizeDeadline ? "New deadline" : "Deadline")
                 .font(AppFont.caption(12))
-                .foregroundStyle(Color.loomSubtle)
+                .foregroundStyle(emphasizeDeadline ? Color.brand500 : Color.loomSubtle)
 
             DatePicker(
                 "",
@@ -115,7 +145,18 @@ struct TaskEditView: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(Color.brand500)
+
+            if emphasizeDeadline {
+                Text("Pick a time that feels genuinely doable — the schedule rebuilds around it when you save.")
+                    .font(AppFont.body(11))
+                    .foregroundStyle(Color.loomSubtle)
+            }
         }
+        .padding(emphasizeDeadline ? 14 : 0)
+        .background(
+            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                .stroke(emphasizeDeadline ? Color.brand500.opacity(0.4) : Color.clear, lineWidth: 1.5)
+        )
     }
 
     private var effortPicker: some View {
@@ -153,6 +194,8 @@ struct TaskEditView: View {
         let needsReplan = deadline != task.deadline || effortMinutes != task.effortMinutes
 
         task.title = title.trimmingCharacters(in: .whitespaces)
+        let trimmedStep = firstStep.trimmingCharacters(in: .whitespaces)
+        task.firstStep = trimmedStep.isEmpty ? nil : trimmedStep
         task.context = context
         task.deadline = deadline
         task.effortMinutes = effortMinutes

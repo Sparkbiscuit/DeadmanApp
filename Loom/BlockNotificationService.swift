@@ -27,6 +27,7 @@ enum BlockNotificationService {
         let title: String
         let start: Date
         let minutes: Int
+        let firstStep: String?
     }
 
     static func registerCategory() {
@@ -75,7 +76,8 @@ enum BlockNotificationService {
                     taskId: task.id,
                     title: task.title,
                     start: block.startTime,
-                    minutes: block.durationMinutes
+                    minutes: block.durationMinutes,
+                    firstStep: task.firstStep
                 )
             }
 
@@ -118,6 +120,10 @@ enum BlockNotificationService {
             : "\(snapshot.minutes / 60)h\(snapshot.minutes % 60 > 0 ? " \(snapshot.minutes % 60)m" : "")"
         if leadMinutes > 0 {
             content.body = "\(length) block starts in \(leadMinutes) min. Wrap up what you're doing."
+        } else if let step = snapshot.firstStep, !step.isEmpty {
+            // The captured opening move beats a platitude: name the exact
+            // physical action so the block is startable from the banner.
+            content.body = "\(length) block starting now. First step: \(step)"
         } else {
             content.body = "\(length) block starting now. One small start counts."
         }

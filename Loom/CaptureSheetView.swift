@@ -8,6 +8,7 @@ struct CaptureSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
+    @State private var firstStep = ""
     @State private var deadline = defaultDeadline()
     @State private var effortMinutes = 60
     @State private var context: TaskContext = .school
@@ -53,6 +54,7 @@ struct CaptureSheetView: View {
                         modePicker
                         titleField
                         if captureMode == .task {
+                            firstStepField
                             contextPicker
                             deadlinePicker
                             effortPicker
@@ -185,6 +187,7 @@ struct CaptureSheetView: View {
             dueDate: reminderDate
         )
         modelContext.insert(reminder)
+        SharedStore.reloadWidgets()
 
         Task { @MainActor in
             let granted = await NotificationService.requestAuthorization()
@@ -226,6 +229,24 @@ struct CaptureSheetView: View {
                         )
                 }
             }
+        }
+    }
+
+    // MARK: - First Step Field
+
+    /// Optional, never required — but a concrete opening move is what makes a
+    /// task startable later. Surfaces in the hero card, the block-start nudge,
+    /// and the work session timer.
+    private var firstStepField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What's the very first physical action? (optional)")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            TextField("e.g. Open the doc and paste the data", text: $firstStep)
+                .font(AppFont.body(15))
+                .foregroundStyle(Color.loomText)
+                .submitLabel(.done)
         }
     }
 
@@ -396,11 +417,13 @@ struct CaptureSheetView: View {
         let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         // Build without inserting — a cancelled warning must leave no trace.
+        let trimmedStep = firstStep.trimmingCharacters(in: .whitespaces)
         let task = LoomTask(
             title: title,
             context: context,
             deadline: deadline,
-            effortMinutes: effortMinutes
+            effortMinutes: effortMinutes,
+            firstStep: trimmedStep.isEmpty ? nil : trimmedStep
         )
 
         // Never book work to start "right now" — leave the configured buffer,

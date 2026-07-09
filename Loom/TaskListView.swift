@@ -12,6 +12,7 @@ struct TaskListView: View {
     @State private var workSessionTask: LoomTask?
     @State private var celebrationTask: LoomTask?
     @State private var editingTask: LoomTask?
+    @State private var triageEditTask: LoomTask?
     @State private var showCompleted = false
 
     var body: some View {
@@ -20,8 +21,10 @@ struct TaskListView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         headerSection
+                        heroSection
                         statsBar
                         replanBanner
+                        overdueTriageSection
                         remindersSection
                         taskSections
                         completedSection
@@ -58,6 +61,9 @@ struct TaskListView: View {
             .sheet(item: $editingTask) { task in
                 TaskEditView(task: task)
             }
+            .sheet(item: $triageEditTask) { task in
+                TaskEditView(task: task, emphasizeDeadline: true)
+            }
             .onChange(of: sessionRequestTaskId) { _, newValue in
                 guard let taskId = newValue else { return }
                 sessionRequestTaskId = nil
@@ -90,6 +96,90 @@ struct TaskListView: View {
         if hour < 12 { return "Good morning" }
         else if hour < 17 { return "Good afternoon" }
         else { return "Good evening" }
+    }
+
+    // MARK: - Right Now hero
+
+    /// The one-glance answer to "what should I be doing this minute?" — the
+    /// running block if there is one, else the next upcoming block, with a
+    /// single big Start button. Opening the app should never require a decision.
+    private var heroSection: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+            if let block = currentOrNextBlock(at: timeline.date), let task = block.task {
+                RightNowCard(
+                    task: task,
+                    block: block,
+                    now: timeline.date,
+                    onStart: { workSessionTask = task }
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func currentOrNextBlock(at now: Date) -> ScheduledBlock? {
+        tasks
+            .filter { !$0.isComplete }
+            .flatMap(\.scheduledBlocks)
+            .filter { !$0.isComplete && $0.endTime > now }
+            .min { $0.startTime < $1.startTime }
+    }
+
+    // MARK: - Overdue triage
+
+    /// Tasks whose deadline slipped by. Left alone they'd sit in the list
+    /// reading "Past due" forever — a guilt pile. Force one of three kind
+    /// exits instead: reschedule, mark done, or deliberately drop it.
+    @ViewBuilder
+    private var overdueTriageSection: some View {
+        let overdue = overdueTasks
+        if !overdue.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.loomRed)
+                    Text("Needs a decision")
+                        .font(AppFont.heading(15))
+                        .foregroundStyle(Color.loomText)
+                    Text("\(overdue.count)")
+                        .font(AppFont.caption(12))
+                        .foregroundStyle(Color.loomFaint)
+                    Spacer()
+                }
+
+                Text("These slipped past their deadline. It happens — pick a path for each and move on.")
+                    .font(AppFont.body(12))
+                    .foregroundStyle(Color.loomSubtle)
+
+                ForEach(overdue) { task in
+                    OverdueTriageRow(
+                        task: task,
+                        onNewDeadline: { triageEditTask = task },
+                        onComplete: { completeTask(task) },
+                        onLetGo: { letGo(task) }
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var overdueTasks: [LoomTask] {
+        tasks
+            .filter { !$0.isComplete && $0.deadline <= Date() }
+            .sorted { $0.deadline < $1.deadline }
+    }
+
+    /// Deliberately dropping a task is a decision, not a failure.
+    private func letGo(_ task: LoomTask) {
+        withAnimation {
+            modelContext.delete(task)
+        }
+        CalendarExportService.syncIfEnabled(context: modelContext)
+        scheduleDidChange(context: modelContext)
     }
 
     // MARK: - Stats Bar
@@ -193,6 +283,7 @@ struct TaskListView: View {
             reminder.isComplete = true
         }
         NotificationService.cancel(reminder)
+        SharedStore.reloadWidgets()
     }
 
     private func deleteReminder(_ reminder: Reminder) {
@@ -200,20 +291,25 @@ struct TaskListView: View {
         withAnimation {
             modelContext.delete(reminder)
         }
+        SharedStore.reloadWidgets()
     }
 
     // MARK: - Task Sections (grouped by context)
 
     @ViewBuilder
     private var taskSections: some View {
-        let incomplete = tasks.filter { !$0.isComplete }
+        // Overdue tasks live in the triage section above, not here — the whole
+        // point is that the pile can't silently accumulate in the regular list.
+        let now = Date()
+        let allIncomplete = tasks.filter { !$0.isComplete }
+        let incomplete = allIncomplete.filter { $0.deadline > now }
         let sorted = incomplete.sorted { lhs, rhs in
             let lhsNext = lhs.nextBlock?.startTime ?? Date.distantFuture
             let rhsNext = rhs.nextBlock?.startTime ?? Date.distantFuture
             return lhsNext < rhsNext
         }
 
-        if incomplete.isEmpty {
+        if allIncomplete.isEmpty {
             EmptyStateView(
                 icon: "tray",
                 title: "All clear",
@@ -289,7 +385,8 @@ struct TaskListView: View {
     @ViewBuilder
     private var completedSection: some View {
         let completed = tasks.filter(\.isComplete)
-        if !completed.isEmpty {
+        let completedReminders = reminders.filter(\.isComplete)
+        if !completed.isEmpty || !completedReminders.isEmpty {
             VStack(spacing: 0) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -303,7 +400,7 @@ struct TaskListView: View {
                         Text("Completed")
                             .font(AppFont.heading(15))
                             .foregroundStyle(Color.loomText)
-                        Text("\(completed.count)")
+                        Text("\(completed.count + completedReminders.count)")
                             .font(AppFont.caption(12))
                             .foregroundStyle(Color.loomFaint)
                         Spacer()
@@ -332,12 +429,34 @@ struct TaskListView: View {
                             }
                             .padding(.horizontal, 20)
                         }
+                        ForEach(completedReminders.sorted { $0.dueDate > $1.dueDate }) { reminder in
+                            CompletedReminderRow(reminder: reminder) {
+                                restoreReminder(reminder)
+                            } onDelete: {
+                                withAnimation {
+                                    modelContext.delete(reminder)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
                     }
                     .padding(.bottom, 16)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
+    }
+
+    private func restoreReminder(_ reminder: Reminder) {
+        withAnimation {
+            reminder.isComplete = false
+        }
+        // Re-arm the alert if it hasn't fired yet; a past-due restore just
+        // returns to the pending list.
+        if reminder.dueDate > Date() {
+            NotificationService.schedule(for: reminder)
+        }
+        SharedStore.reloadWidgets()
     }
 
     // MARK: - Completion
@@ -392,6 +511,219 @@ private struct StatPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color.loomSurface2, in: Capsule())
+    }
+}
+
+// MARK: - Right Now card
+
+/// The hero card at the top of the Tasks tab: what to do this minute, with
+/// one button. Deliberately louder than everything below it — the block nudge
+/// gets you to open the app; this removes the last decision.
+private struct RightNowCard: View {
+    let task: LoomTask
+    let block: ScheduledBlock
+    let now: Date
+    var onStart: () -> Void
+
+    private var isActive: Bool { block.startTime <= now }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isActive ? Color.loomRed : task.context.color)
+                    .frame(width: 8, height: 8)
+                Text(isActive ? "RIGHT NOW" : "UP NEXT")
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(isActive ? Color.loomRed : task.context.color)
+                    .kerning(0.8)
+                Spacer()
+                Text(task.context.rawValue)
+                    .contextTag(task.context)
+            }
+
+            Text(task.title)
+                .font(AppFont.title(22))
+                .foregroundStyle(Color.loomText)
+                .lineLimit(2)
+
+            Text(timelineLabel)
+                .font(AppFont.monoMedium(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            if isActive {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.loomSurface3)
+                            .frame(height: 4)
+                        Capsule()
+                            .fill(task.context.color)
+                            .frame(width: geo.size.width * elapsedFraction, height: 4)
+                    }
+                }
+                .frame(height: 4)
+            }
+
+            if let step = task.firstStep, !step.isEmpty {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.brand500)
+                        .padding(.top, 2)
+                    Text("First step: \(step)")
+                        .font(AppFont.bodySemibold(13))
+                        .foregroundStyle(Color.loomText)
+                }
+            }
+
+            Button(action: onStart) {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(isActive ? "Start Session" : "Start Early")
+                }
+                .primaryButtonStyle(fill: task.context.color)
+            }
+        }
+        .padding(18)
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                .stroke(task.context.color.opacity(0.35), lineWidth: 1.5)
+        )
+        .shadow(color: task.context.color.opacity(0.12), radius: 12, y: 8)
+    }
+
+    private var elapsedFraction: Double {
+        let total = block.endTime.timeIntervalSince(block.startTime)
+        guard total > 0 else { return 0 }
+        return min(1, max(0, now.timeIntervalSince(block.startTime) / total))
+    }
+
+    private var timelineLabel: String {
+        if isActive {
+            let elapsed = Int(now.timeIntervalSince(block.startTime)) / 60
+            let remaining = max(0, Int(block.endTime.timeIntervalSince(now)) / 60)
+            let elapsedPart = elapsed < 1
+                ? "Just started"
+                : "Started \(CountdownFormatter.effortString(minutes: elapsed)) ago"
+            return "\(elapsedPart) · \(CountdownFormatter.effortString(minutes: remaining)) left"
+        } else {
+            let start = CountdownFormatter.string(from: now, to: block.startTime)
+            let startPart = start == "now" ? "Starts now" : "Starts \(start)"
+            return "\(startPart) · \(CountdownFormatter.effortString(minutes: block.durationMinutes)) block"
+        }
+    }
+}
+
+// MARK: - Overdue triage row
+
+/// One overdue task, three kind exits. The framing matters: the pile is a
+/// decision queue, not a wall of shame.
+private struct OverdueTriageRow: View {
+    let task: LoomTask
+    var onNewDeadline: () -> Void
+    var onComplete: () -> Void
+    var onLetGo: () -> Void
+
+    @State private var confirmLetGo = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(task.title)
+                    .font(AppFont.heading(15))
+                    .foregroundStyle(Color.loomText)
+                    .lineLimit(2)
+                HStack(spacing: 5) {
+                    Text("Was due \(dueLabel)")
+                        .font(AppFont.caption(11))
+                        .foregroundStyle(Color.loomRed)
+                    Text("·")
+                        .foregroundStyle(Color.loomFaint)
+                    Text(task.context.rawValue)
+                        .font(AppFont.caption(11))
+                        .foregroundStyle(task.context.color)
+                }
+            }
+
+            HStack(spacing: 8) {
+                TriageButton(
+                    label: "New deadline",
+                    icon: "calendar.badge.clock",
+                    tint: .brand500,
+                    action: onNewDeadline
+                )
+                TriageButton(
+                    label: "Done actually",
+                    icon: "checkmark.circle",
+                    tint: .personalColor,
+                    action: onComplete
+                )
+                TriageButton(
+                    label: "Let it go",
+                    icon: "wind",
+                    tint: .loomSubtle
+                ) {
+                    confirmLetGo = true
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                .stroke(Color.loomRed.opacity(0.3), lineWidth: 1)
+        )
+        .confirmationDialog("Let it go?", isPresented: $confirmLetGo, titleVisibility: .visible) {
+            Button("Let it go", role: .destructive, action: onLetGo)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(task.title)\" disappears from your list. Dropping a task on purpose is a decision, not a failure.")
+        }
+    }
+
+    private var dueLabel: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(task.deadline) {
+            return "today at \(TimeFormatter.clock.string(from: task.deadline))"
+        } else if calendar.isDateInYesterday(task.deadline) {
+            return "yesterday"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: task.deadline)
+    }
+}
+
+private struct TriageButton: View {
+    let label: String
+    let icon: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(label)
+                    .font(AppFont.caption(11))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(tint.opacity(0.12))
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -511,6 +843,67 @@ private struct CompletedTaskRow: View {
                 Label("Delete Permanently", systemImage: "trash")
             }
         }
+    }
+}
+
+// MARK: - Completed Reminder Row
+
+private struct CompletedReminderRow: View {
+    let reminder: Reminder
+    var onRestore: () -> Void
+    var onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bell.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(Color.loomFaint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reminder.title)
+                    .font(AppFont.bodySemibold(15))
+                    .strikethrough()
+                    .foregroundStyle(Color.loomSubtle)
+                    .lineLimit(1)
+                Text("Reminder · \(dueLabel)")
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(Color.loomFaint)
+            }
+
+            Spacer()
+
+            Button(action: onRestore) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(Color.loomSubtle)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.loomSurface.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .contextMenu {
+            Button(action: onRestore) {
+                Label("Restore", systemImage: "arrow.uturn.backward")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Permanently", systemImage: "trash")
+            }
+        }
+    }
+
+    private var dueLabel: String {
+        let calendar = Calendar.current
+        let time = TimeFormatter.clock.string(from: reminder.dueDate)
+        if calendar.isDateInToday(reminder.dueDate) {
+            return time
+        } else if calendar.isDateInYesterday(reminder.dueDate) {
+            return "Yesterday \(time)"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return "\(formatter.string(from: reminder.dueDate)), \(time)"
     }
 }
 
