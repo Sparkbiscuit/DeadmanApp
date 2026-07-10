@@ -52,11 +52,17 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
+            WeaveView()
+                .tabItem {
+                    Label("Weave", systemImage: "chart.bar.fill")
+                }
+                .tag(2)
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
-                .tag(2)
+                .tag(3)
         }
         .tint(Color.brand500)
         .fullScreenCover(isPresented: Binding(

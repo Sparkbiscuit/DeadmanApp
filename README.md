@@ -43,6 +43,17 @@ daily focus limit if you set one.
   copies appear a rolling two weeks ahead, each scheduled around that week's
   reality. Missed weeks are skipped silently — recurrence never manufactures
   overdue guilt. Stop any recurrence from its task's context menu.
+- **The Weave** — a reflection tab that renders your last two weeks as a woven
+  tapestry: one column per day, threads colored by context and sized by time
+  actually worked, rest days shown as bare warp (they hold the cloth together).
+  With week totals, start counts, your streak, an estimate-heat reading, and
+  the week's finished tasks.
+- **Just 10 minutes** — a micro-start next to the session button: commit to ten
+  minutes, watch them count down, and get released at zero. Keep going or stop —
+  both count.
+- **Capture from anywhere** — "Add a task to Loom" via Siri, Shortcuts,
+  Spotlight, or the Action button. The task lands fully scheduled without the
+  app ever opening, and Siri tells you when its first block is.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the

@@ -988,4 +988,66 @@ final class LoomTests: XCTestCase {
         let remaining = try context.fetch(FetchDescriptor<TaskTemplate>())
         XCTAssertTrue(remaining.isEmpty, "an exhausted template deletes itself")
     }
+
+    // MARK: - Weave
+
+    func testWeaveAggregatesSessionsAndCheckedBlocksByDay() throws {
+        let school = makeTask(effort: 300, deadlineHoursFromAnchor: 48)
+        let personal = LoomTask(
+            title: "Chores", context: .personal,
+            deadline: anchor.addingTimeInterval(48 * 3600), effortMinutes: 120
+        )
+        context.insert(personal)
+
+        // Today: two school sessions and a checked personal block.
+        let s1 = WorkSession(task: school, startedAt: anchor, durationSeconds: 60 * 60)
+        let s2 = WorkSession(task: school, startedAt: anchor.addingTimeInterval(3 * 3600), durationSeconds: 30 * 60)
+        let checked = ScheduledBlock(task: personal, startTime: anchor.addingTimeInterval(3600), durationMinutes: 45)
+        checked.isComplete = true
+        // Yesterday: one personal session. An unchecked block must not count.
+        let s3 = WorkSession(task: personal, startedAt: anchor.addingTimeInterval(-24 * 3600), durationSeconds: 20 * 60)
+        let unchecked = ScheduledBlock(task: school, startTime: anchor.addingTimeInterval(-24 * 3600), durationMinutes: 90)
+        context.insert(s1)
+        context.insert(s2)
+        context.insert(checked)
+        context.insert(s3)
+        context.insert(unchecked)
+        try context.save()
+
+        let days = WeaveBuilder.days(
+            sessions: [s1, s2, s3],
+            blocks: [checked, unchecked],
+            daysBack: 7,
+            now: anchor
+        )
+
+        XCTAssertEqual(days.count, 7)
+        let today = try XCTUnwrap(days.last)
+        XCTAssertEqual(today.minutesByContext[.school], 90)
+        XCTAssertEqual(today.minutesByContext[.personal], 45)
+        XCTAssertEqual(today.sessionCount, 2, "checked blocks add minutes, not starts")
+
+        let yesterday = days[5]
+        XCTAssertEqual(yesterday.minutesByContext[.personal], 20)
+        XCTAssertNil(yesterday.minutesByContext[.school], "unchecked blocks contribute nothing")
+        XCTAssertEqual(yesterday.sessionCount, 1)
+
+        XCTAssertEqual(days[0].totalMinutes, 0, "untouched days stay empty")
+    }
+
+    func testWeaveEstimateHeatIsMedianAcrossContexts() {
+        makeCompletedTask(taskContext: .school, effort: 60, spent: 90)    // 1.5×
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 60)      // 1.0×
+        makeCompletedTask(taskContext: .personal, effort: 60, spent: 120) // 2.0×
+        let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+
+        let heat = WeaveBuilder.estimateHeat(tasks: tasks)
+        XCTAssertEqual(heat ?? 0, 1.5, accuracy: 0.01)
+    }
+
+    func testWeaveEstimateHeatNeedsThreeSamples() {
+        makeCompletedTask(effort: 60, spent: 120)
+        let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+        XCTAssertNil(WeaveBuilder.estimateHeat(tasks: tasks))
+    }
 }

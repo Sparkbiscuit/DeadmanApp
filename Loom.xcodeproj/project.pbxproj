@@ -16,6 +16,8 @@
 		0CA001012C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
 		0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001022C6D3EF700D079F0 /* SchedulerService.swift */; };
 		0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00002D6D3EF700D079F0 /* Insights.swift */; };
+		0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00102D6D3EF700D079F0 /* WeaveView.swift */; };
+		0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */; };
 		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
 		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
 		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
@@ -112,6 +114,8 @@
 		0CA001002C6D3EF700D079F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		0CA001022C6D3EF700D079F0 /* SchedulerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerService.swift; sourceTree = "<group>"; };
 		0CAF00002D6D3EF700D079F0 /* Insights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Insights.swift; sourceTree = "<group>"; };
+		0CAF00102D6D3EF700D079F0 /* WeaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeaveView.swift; sourceTree = "<group>"; };
+		0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomIntents.swift; sourceTree = "<group>"; };
 		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
@@ -211,6 +215,8 @@
 				0CA001002C6D3EF700D079F0 /* Models.swift */,
 				0CA001022C6D3EF700D079F0 /* SchedulerService.swift */,
 				0CAF00002D6D3EF700D079F0 /* Insights.swift */,
+				0CAF00102D6D3EF700D079F0 /* WeaveView.swift */,
+				0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */,
 				0CA001042C6D3EF700D079F0 /* AppTheme.swift */,
 				0CA001062C6D3EF700D079F0 /* TaskListView.swift */,
 				0CA001082C6D3EF700D079F0 /* TaskRowView.swift */,
@@ -471,6 +477,8 @@
 				0CA001012C6D3EF700D079F0 /* Models.swift in Sources */,
 				0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */,
 				0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */,
+				0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */,
+				0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */,
 				0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */,
 				0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */,
 				0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */,

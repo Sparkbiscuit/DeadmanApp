@@ -24,6 +24,11 @@ struct WorkSessionView: View {
     @State private var didMarkBlockEnd = false
     @State private var immersionMessage: String?
 
+    // Micro-start: a deliberately tiny commitment. "Work on the essay" is
+    // unstartable; "ten minutes" is a dare you can take.
+    @State private var microGoalSeconds: Int?
+    @State private var didHitMicroGoal = false
+
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -46,6 +51,7 @@ struct WorkSessionView: View {
             if isRunning {
                 elapsedSeconds += 1
                 checkBlockBoundary()
+                checkMicroGoal()
             }
         }
         .onDisappear {
@@ -151,8 +157,8 @@ struct WorkSessionView: View {
                     }
                 }
 
-                if isRunning, let message = immersionMessage {
-                    Text(message)
+                if isRunning, let subtext = runningSubtext {
+                    Text(subtext)
                         .font(AppFont.body(12))
                         .foregroundStyle(Color.loomSubtle)
                         .multilineTextAlignment(.center)
@@ -181,6 +187,22 @@ struct WorkSessionView: View {
                     }
                 }
                 .buttonStyle(.plain)
+
+                if !isRunning {
+                    Button {
+                        startTapped(microMinutes: 10)
+                    } label: {
+                        Text("Just 10 minutes")
+                            .font(AppFont.caption(13))
+                            .foregroundStyle(task.context.color)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .overlay(
+                                Capsule().stroke(task.context.color.opacity(0.35), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Spacer()
@@ -252,7 +274,7 @@ struct WorkSessionView: View {
 
     // MARK: - Actions
 
-    private func startTapped() {
+    private func startTapped(microMinutes: Int? = nil) {
         let now = Date()
         sessionStart = now
         elapsedSeconds = 0
@@ -267,6 +289,8 @@ struct WorkSessionView: View {
         didWarnNearEnd = false
         didMarkBlockEnd = false
         immersionMessage = nil
+        microGoalSeconds = microMinutes.map { $0 * 60 }
+        didHitMicroGoal = false
 
         WorkSessionActivityController.start(
             taskTitle: task.title,
@@ -274,6 +298,25 @@ struct WorkSessionView: View {
             effortMinutes: task.effortMinutes,
             startedAt: now
         )
+    }
+
+    /// While a micro-goal is pending it owns the subtext (a countdown reads
+    /// louder than any coaching); afterwards the immersion messages take over.
+    private var runningSubtext: String? {
+        if let goal = microGoalSeconds, !didHitMicroGoal {
+            let left = CountdownFormatter.timerString(seconds: max(0, goal - elapsedSeconds))
+            return "\(left) to your ten — that's the whole ask."
+        }
+        return immersionMessage
+    }
+
+    private func checkMicroGoal() {
+        guard let goal = microGoalSeconds, !didHitMicroGoal, elapsedSeconds >= goal else { return }
+        didHitMicroGoal = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation {
+            immersionMessage = "Ten minutes done — that was the hard part. Keep going or stop; both count."
+        }
     }
 
     /// Haptic + one-line nudge near and at the end of the running block. The
@@ -323,6 +366,7 @@ struct WorkSessionView: View {
         task.firstStep = nil
         isRunning = false
         elapsedSeconds = 0
+        microGoalSeconds = nil
     }
 
     private func saveProgress() {
