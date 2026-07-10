@@ -1050,4 +1050,82 @@ final class LoomTests: XCTestCase {
         let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
         XCTAssertNil(WeaveBuilder.estimateHeat(tasks: tasks))
     }
+
+    // MARK: - Block push ("can't right now")
+
+    func testRescheduleHonorsEarliestStart() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 72)
+        let soon = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(600), durationMinutes: 60)
+        context.insert(soon)
+        try context.save()
+
+        // "Push to tomorrow": nothing may land before the requested start.
+        let tomorrowWake = calendar.date(
+            bySettingHour: 8, minute: 0, second: 0,
+            of: calendar.date(byAdding: .day, value: 1, to: anchor)!
+        )!
+        let result = SchedulerService.reschedule(
+            task: task,
+            allBlocks: [soon],
+            settings: settings,
+            from: tomorrowWake,
+            context: context
+        )
+        try context.save()
+
+        guard case .success = result else {
+            return XCTFail("expected the pushed task to fit, got \(result)")
+        }
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertFalse(all.isEmpty)
+        for block in all {
+            XCTAssertGreaterThanOrEqual(
+                block.startTime, tomorrowWake,
+                "a pushed plan must not sneak work back before the chosen start"
+            )
+        }
+    }
+
+    // MARK: - Data export
+
+    func testDataExportRoundTrips() throws {
+        let task = makeTask(effort: 90, deadlineHoursFromAnchor: 48)
+        task.firstStep = "Open the doc"
+        let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 45)
+        context.insert(block)
+        let session = WorkSession(task: task, startedAt: anchor, durationSeconds: 1200)
+        context.insert(session)
+        let reminder = Reminder(title: "Take meds", dueDate: anchor.addingTimeInterval(3600))
+        context.insert(reminder)
+        let blocked = BlockedTime(label: "Class", weekdays: [2, 4], startHour: 10, startMinute: 30, durationMinutes: 90)
+        context.insert(blocked)
+        let template = TaskTemplate(
+            title: "Weekly set", context: .school, effortMinutes: 60,
+            nextDeadline: anchor.addingTimeInterval(7 * 86_400),
+            repeatUntil: anchor.addingTimeInterval(30 * 86_400)
+        )
+        context.insert(template)
+        try context.save()
+
+        let data = try DataExporter.exportJSON(context: context)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let export = try decoder.decode(DataExporter.Export.self, from: data)
+
+        XCTAssertEqual(export.version, 1)
+        XCTAssertEqual(export.tasks.count, 1)
+        XCTAssertEqual(export.blocks.count, 1)
+        XCTAssertEqual(export.workSessions.count, 1)
+        XCTAssertEqual(export.reminders.count, 1)
+        XCTAssertEqual(export.blockedTimes.count, 1)
+        XCTAssertEqual(export.templates.count, 1)
+
+        let exportedTask = try XCTUnwrap(export.tasks.first)
+        XCTAssertEqual(exportedTask.id, task.id)
+        XCTAssertEqual(exportedTask.firstStep, "Open the doc")
+        XCTAssertEqual(exportedTask.context, "School")
+        XCTAssertEqual(export.blocks.first?.taskId, task.id, "relations survive as id references")
+        XCTAssertEqual(export.blockedTimes.first?.weekdays, [2, 4])
+    }
 }

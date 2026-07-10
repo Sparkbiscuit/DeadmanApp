@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var showCalendarDeniedAlert = false
     @State private var showNotificationsDeniedAlert = false
     @State private var didPushNow = false
+    @State private var exportFileURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -511,8 +512,26 @@ struct SettingsView: View {
                     .font(AppFont.body(14))
                     .foregroundStyle(Color.loomSubtle)
             }
+
+            if let url = exportFileURL {
+                ShareLink(item: url) {
+                    Label("Share the export", systemImage: "square.and.arrow.up")
+                        .font(AppFont.body(15))
+                        .foregroundStyle(Color.brand500)
+                }
+            } else {
+                Button {
+                    exportFileURL = try? DataExporter.writeExportFile(context: modelContext)
+                } label: {
+                    Label("Export my data", systemImage: "shippingbox")
+                        .font(AppFont.body(15))
+                        .foregroundStyle(Color.brand500)
+                }
+            }
         } header: {
             Text("About")
+        } footer: {
+            Text("Export writes everything Loom knows — tasks, blocks, sessions, reminders, history — to a plain JSON file. Your data is yours.")
         }
         .listRowBackground(Color.loomSurface)
     }

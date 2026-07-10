@@ -5,6 +5,7 @@ import SwiftUI
 struct LoomWidgetsBundle: WidgetBundle {
     var body: some Widget {
         UpNextWidget()
+        TodayWidget()
         WorkSessionLiveActivity()
     }
 }

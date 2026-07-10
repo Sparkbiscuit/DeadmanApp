@@ -54,6 +54,15 @@ daily focus limit if you set one.
 - **Capture from anywhere** — "Add a task to Loom" via Siri, Shortcuts,
   Spotlight, or the Action button. The task lands fully scheduled without the
   app ever opening, and Siri tells you when its first block is.
+- **Can't right now** — one tap under the Right Now card pushes the plan 30
+  minutes, an hour, or to tomorrow morning. The whole task replans from the new
+  start, so nothing quietly rots and the deadline math stays honest.
+- **Today widget** — a Lock Screen ring of blocks done vs planned (and your
+  streak on quiet days), plus a Home Screen card with today's count, progress,
+  and what's next. Tapping jumps straight into the next block's timer.
+- **Data export** — Settings → Export my data writes everything Loom knows to
+  a plain, pretty-printed JSON file you can share, archive, or parse. Your
+  data is yours.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the

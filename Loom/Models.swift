@@ -345,6 +345,64 @@ final class BusyEvent {
     }
 }
 
+// MARK: - Start streak
+
+/// Streaks that count *initiation*, not completion — starting is the actual
+/// disorder-level challenge. A couple of free "mend" days per week keep one
+/// bad day from torching the whole thread (broken-streak despair is the
+/// classic ADHD streak-app failure). Lives here rather than in Insights so
+/// the widget target can compute it too.
+struct StreakCalculator {
+
+    /// Length in days of the current chain of "days with at least one work
+    /// session start", walking back from today. Rules:
+    /// - Today without a start yet neither counts nor breaks — the day isn't over.
+    /// - Up to `weeklyMends` startless days per calendar week are mended: they
+    ///   keep the chain alive and count toward its length, but only when they
+    ///   actually bridge to an earlier start day — mends that dead-end into a
+    ///   break must not inflate the count.
+    static func startStreak(
+        startDates: [Date],
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        weeklyMends: Int = 2
+    ) -> Int {
+        let startDays = Set(startDates.map { calendar.startOfDay(for: $0) })
+        guard let earliest = startDays.min() else { return 0 }
+
+        var cursor = calendar.startOfDay(for: now)
+        if !startDays.contains(cursor) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: cursor) else {
+                return 0
+            }
+            cursor = yesterday
+        }
+
+        var streak = 0
+        var pendingMends = 0
+        var mendsUsedByWeek: [Int: Int] = [:]
+
+        while cursor >= earliest {
+            if startDays.contains(cursor) {
+                streak += 1 + pendingMends
+                pendingMends = 0
+            } else {
+                let comps = calendar.dateComponents(
+                    [.weekOfYear, .yearForWeekOfYear], from: cursor
+                )
+                let weekKey = (comps.yearForWeekOfYear ?? 0) * 100 + (comps.weekOfYear ?? 0)
+                guard mendsUsedByWeek[weekKey, default: 0] < weeklyMends else { break }
+                mendsUsedByWeek[weekKey, default: 0] += 1
+                pendingMends += 1
+            }
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+
+        return streak
+    }
+}
+
 // MARK: - UserSettings
 
 @Model

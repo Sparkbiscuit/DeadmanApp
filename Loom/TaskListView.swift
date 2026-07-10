@@ -1,6 +1,14 @@
 import SwiftUI
 import SwiftData
 
+/// How far to push the current/next block when the honest answer to
+/// "starting now?" is no.
+enum BlockPushChoice {
+    case thirtyMinutes
+    case oneHour
+    case tomorrow
+}
+
 struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
@@ -15,6 +23,7 @@ struct TaskListView: View {
     @State private var editingTask: LoomTask?
     @State private var triageEditTask: LoomTask?
     @State private var showCompleted = false
+    @State private var pushNote: String?
 
     var body: some View {
         NavigationStack {
@@ -23,6 +32,7 @@ struct TaskListView: View {
                     VStack(spacing: 0) {
                         headerSection
                         heroSection
+                        pushBanner
                         statsBar
                         replanBanner
                         overdueTriageSection
@@ -123,12 +133,91 @@ struct TaskListView: View {
                     task: task,
                     block: block,
                     now: timeline.date,
-                    onStart: { workSessionTask = task }
+                    onStart: { workSessionTask = task },
+                    onPush: { choice in push(task: task, choice: choice) }
                 )
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
             }
         }
+    }
+
+    /// Transient confirmation after a block push — tap to dismiss.
+    @ViewBuilder
+    private var pushBanner: some View {
+        if let note = pushNote {
+            InfoBanner(icon: "arrow.uturn.forward", text: note)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                .onTapGesture {
+                    withAnimation { pushNote = nil }
+                }
+        }
+    }
+
+    /// "Can't right now" — move the task's plan without shame or ceremony.
+    /// The whole task replans from the chosen start, so the deadline math
+    /// stays honest instead of one orphaned block landing somewhere random.
+    private func push(task: LoomTask, choice: BlockPushChoice) {
+        let settings = UserSettings.fetchOrCreate(in: modelContext)
+        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
+        let calendar = Calendar.current
+
+        let start: Date
+        switch choice {
+        case .thirtyMinutes:
+            start = Date().addingTimeInterval(30 * 60)
+        case .oneHour:
+            start = Date().addingTimeInterval(3600)
+        case .tomorrow:
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))
+            start = tomorrow.flatMap {
+                calendar.date(
+                    bySettingHour: settings.wakeHour,
+                    minute: settings.wakeMinute,
+                    second: 0, of: $0
+                )
+            } ?? Date().addingTimeInterval(24 * 3600)
+        }
+
+        let result = SchedulerService.reschedule(
+            task: task,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            from: start,
+            context: modelContext
+        )
+        CalendarExportService.syncIfEnabled(context: modelContext)
+        scheduleDidChange(context: modelContext)
+
+        withAnimation {
+            switch result {
+            case .success(let blocks):
+                if let next = blocks.min(by: { $0.startTime < $1.startTime }) {
+                    pushNote = "Pushed. Next block \(relativeTime(next.startTime))."
+                } else {
+                    pushNote = "Pushed — nothing left to schedule."
+                }
+            case .partialFit:
+                pushNote = "Pushed, but not everything fits before the deadline now. Consider extending it."
+            case .noSlots:
+                pushNote = "Pushed, but no room remains before the deadline — extend it or trim the estimate."
+            }
+        }
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let time = TimeFormatter.clock.string(from: date)
+        if calendar.isDateInToday(date) { return "today at \(time)" }
+        if calendar.isDateInTomorrow(date) { return "tomorrow at \(time)" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE"
+        return "\(formatter.string(from: date)) at \(time)"
     }
 
     private func currentOrNextBlock(at now: Date) -> ScheduledBlock? {
@@ -603,6 +692,9 @@ private struct RightNowCard: View {
     let block: ScheduledBlock
     let now: Date
     var onStart: () -> Void
+    var onPush: (BlockPushChoice) -> Void
+
+    @State private var showPushOptions = false
 
     private var isActive: Bool { block.startTime <= now }
 
@@ -664,6 +756,16 @@ private struct RightNowCard: View {
                 }
                 .primaryButtonStyle(fill: task.context.color)
             }
+
+            Button {
+                showPushOptions = true
+            } label: {
+                Text("Can't right now?")
+                    .font(AppFont.caption(12))
+                    .foregroundStyle(Color.loomSubtle)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
         }
         .padding(18)
         .background(Color.loomSurface)
@@ -673,6 +775,14 @@ private struct RightNowCard: View {
                 .stroke(task.context.color.opacity(0.35), lineWidth: 1.5)
         )
         .shadow(color: task.context.color.opacity(0.12), radius: 12, y: 8)
+        .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
+            Button("Push 30 minutes") { onPush(.thirtyMinutes) }
+            Button("Push 1 hour") { onPush(.oneHour) }
+            Button("Push to tomorrow") { onPush(.tomorrow) }
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("Life happens. The plan moves and the deadline math stays honest — no blocks quietly rot.")
+        }
     }
 
     private var elapsedFraction: Double {
