@@ -11,6 +11,7 @@ enum SharedStore {
 
     static let schema = Schema([
         LoomTask.self,
+        TaskTemplate.self,
         ScheduledBlock.self,
         WorkSession.self,
         BlockedTime.self,

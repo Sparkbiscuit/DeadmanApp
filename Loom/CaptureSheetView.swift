@@ -17,6 +17,8 @@ struct CaptureSheetView: View {
     @State private var showBulk = false
     @State private var useCustomStart = false
     @State private var customStart = Date().addingTimeInterval(15 * 60)
+    @State private var repeatWeekly = false
+    @State private var repeatUntil = Date().addingTimeInterval(35 * 86_400)
 
     // Capture mode: a scheduled task, or a one-off reminder
     private enum CaptureMode: String, CaseIterable {
@@ -62,6 +64,7 @@ struct CaptureSheetView: View {
                             firstStepField
                             contextPicker
                             deadlinePicker
+                            repeatPicker
                             effortPicker
                             estimateAdviceRow
                             startPicker
@@ -370,6 +373,54 @@ struct CaptureSheetView: View {
         }
     }
 
+    // MARK: - Repeat picker
+
+    /// Weekly problem sets, readings, chores: capture once, and a fresh copy
+    /// with the same shape appears each week until the end date.
+    private var repeatPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Repeats")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            HStack(spacing: 8) {
+                EffortChip(label: "One-off", isSelected: !repeatWeekly) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        repeatWeekly = false
+                    }
+                }
+                EffortChip(label: "Weekly", isSelected: repeatWeekly) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        repeatWeekly = true
+                        repeatUntil = max(repeatUntil, deadline.addingTimeInterval(7 * 86_400))
+                    }
+                }
+            }
+
+            if repeatWeekly {
+                HStack {
+                    Text("Until")
+                        .font(AppFont.body(13))
+                        .foregroundStyle(Color.loomSubtle)
+                    DatePicker(
+                        "",
+                        selection: $repeatUntil,
+                        in: Date()...,
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .tint(Color.brand500)
+                    Spacer()
+                }
+                .padding(.top, 4)
+                Text("A fresh copy appears each week, scheduled around whatever that week holds.")
+                    .font(AppFont.body(11))
+                    .foregroundStyle(Color.loomFaint)
+            }
+        }
+    }
+
     // MARK: - Estimate reality-check
 
     /// A gentle line from the record, not a lecture: "your last N tasks like
@@ -563,6 +614,7 @@ struct CaptureSheetView: View {
         for block in pendingBlocks {
             modelContext.insert(block)
         }
+        insertTemplateIfRepeating(for: task)
         pendingTask = nil
         pendingBlocks = []
         CalendarExportService.syncIfEnabled(context: modelContext)
@@ -570,11 +622,30 @@ struct CaptureSheetView: View {
         dismiss()
     }
 
+    /// A weekly capture leaves a template behind; the foreground refresh
+    /// stamps out the future occurrences from it.
+    private func insertTemplateIfRepeating(for task: LoomTask) {
+        guard repeatWeekly,
+              let nextDeadline = Calendar.current.date(byAdding: .day, value: 7, to: task.deadline),
+              nextDeadline <= repeatUntil else { return }
+        let template = TaskTemplate(
+            title: task.title,
+            context: task.context,
+            effortMinutes: task.effortMinutes,
+            firstStep: task.firstStep,
+            nextDeadline: nextDeadline,
+            repeatUntil: repeatUntil
+        )
+        modelContext.insert(template)
+        task.templateId = template.id
+    }
+
     /// The new task doesn't fit in the gaps: commit it and rebuild the whole
     /// plan by deadline, letting it bump later-deadline work.
     private func makeRoom() {
         guard let task = pendingTask else { return }
         modelContext.insert(task)
+        insertTemplateIfRepeating(for: task)
         pendingTask = nil
         pendingBlocks = []
 

@@ -15,6 +15,7 @@
 		021ED3212C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */; };
 		0CA001012C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
 		0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001022C6D3EF700D079F0 /* SchedulerService.swift */; };
+		0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00002D6D3EF700D079F0 /* Insights.swift */; };
 		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
 		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
 		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
@@ -110,6 +111,7 @@
 		021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		0CA001002C6D3EF700D079F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		0CA001022C6D3EF700D079F0 /* SchedulerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerService.swift; sourceTree = "<group>"; };
+		0CAF00002D6D3EF700D079F0 /* Insights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Insights.swift; sourceTree = "<group>"; };
 		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
@@ -208,6 +210,7 @@
 				021ED3002C6D3EF700D079F0 /* LoomApp.swift */,
 				0CA001002C6D3EF700D079F0 /* Models.swift */,
 				0CA001022C6D3EF700D079F0 /* SchedulerService.swift */,
+				0CAF00002D6D3EF700D079F0 /* Insights.swift */,
 				0CA001042C6D3EF700D079F0 /* AppTheme.swift */,
 				0CA001062C6D3EF700D079F0 /* TaskListView.swift */,
 				0CA001082C6D3EF700D079F0 /* TaskRowView.swift */,
@@ -467,6 +470,7 @@
 				021ED3012C6D3EF700D079F0 /* LoomApp.swift in Sources */,
 				0CA001012C6D3EF700D079F0 /* Models.swift in Sources */,
 				0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */,
+				0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */,
 				0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */,
 				0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */,
 				0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */,

@@ -79,6 +79,21 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .loomOpenWorkSession)) { _ in
             consumePendingSessionRequest()
         }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+    }
+
+    /// Widget taps arrive here: loom://start-session/<taskId> drops straight
+    /// into the work session timer; anything else just opens the app.
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "loom" else { return }
+        selectedTab = 0
+        if url.host == "start-session",
+           let idString = url.pathComponents.dropFirst().first,
+           let taskId = UUID(uuidString: idString) {
+            sessionRequestTaskId = taskId
+        }
     }
 
     /// A block-start notification was tapped: jump to Tasks and open the timer.
@@ -107,16 +122,30 @@ struct MainTabView: View {
         refreshSchedule()
     }
 
-    /// Foreground refresh: pull fresh calendar busy times, replan missed
-    /// blocks around them, then mirror the result back out.
+    /// Foreground refresh: pull fresh calendar busy times, stamp out any due
+    /// recurring tasks, replan missed blocks around everything, then mirror
+    /// the result back out.
     private func refreshSchedule() {
         CalendarImportService.syncIfEnabled(context: modelContext)
 
         let settings = UserSettings.fetchOrCreate(in: modelContext)
-        let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
-        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        let templates = (try? modelContext.fetch(FetchDescriptor<TaskTemplate>())) ?? []
+        var allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
         let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
         let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
+
+        let created = SchedulerService.materializeRecurringTasks(
+            templates: templates,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            context: modelContext
+        )
+        if created > 0 {
+            allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        }
+        let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
 
         let summary = SchedulerService.catchUpMissedBlocks(
             tasks: tasks,

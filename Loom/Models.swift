@@ -22,6 +22,8 @@ enum TaskContext: String, Codable, CaseIterable, Identifiable {
 enum TaskSource: String, Codable {
     case manual
     case bulkEntry
+    /// Stamped out automatically from a TaskTemplate.
+    case recurring
 }
 
 // MARK: - Task
@@ -46,6 +48,9 @@ final class LoomTask {
     /// When the task was completed. Completed tasks are kept as history so the
     /// planned-vs-actual record can inform future estimates (EstimateAdvisor).
     var completedAt: Date? = nil
+    /// The recurring template this task was stamped from, when it was.
+    /// Lets "Stop repeating" find and end the recurrence from any occurrence.
+    var templateId: UUID? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
     var scheduledBlocks: [ScheduledBlock]
@@ -241,6 +246,44 @@ final class BlockedTime {
     }
 }
 
+// MARK: - TaskTemplate
+
+/// A weekly-recurring capture: problem sets, readings, chores. The template
+/// itself never appears in the task list — on foreground refresh it stamps
+/// out real LoomTasks a rolling two weeks ahead (see
+/// `SchedulerService.materializeRecurringTasks`), then deletes itself once
+/// `repeatUntil` passes.
+@Model
+final class TaskTemplate {
+    var id: UUID
+    var title: String
+    var context: TaskContext
+    var effortMinutes: Int
+    var firstStep: String?
+    /// Deadline of the next occurrence to materialize; advances by 7 days
+    /// per stamped task.
+    var nextDeadline: Date
+    /// The recurrence ends after this date (inclusive).
+    var repeatUntil: Date
+
+    init(
+        title: String,
+        context: TaskContext,
+        effortMinutes: Int,
+        firstStep: String? = nil,
+        nextDeadline: Date,
+        repeatUntil: Date
+    ) {
+        self.id = UUID()
+        self.title = title
+        self.context = context
+        self.effortMinutes = effortMinutes
+        self.firstStep = firstStep
+        self.nextDeadline = nextDeadline
+        self.repeatUntil = repeatUntil
+    }
+}
+
 // MARK: - Reminder
 
 /// A one-off, point-in-time reminder with a local notification. Deliberately
@@ -330,6 +373,13 @@ final class UserSettings {
     var blockRemindersEnabled: Bool = true
     /// Extra heads-up this many minutes before a block starts. 0 = off.
     var blockReminderLeadMinutes: Int = 0
+    /// Morning preview notification (wake time + 30 min): the day's shape,
+    /// pre-loaded before the day ambushes you.
+    var morningPreviewEnabled: Bool = true
+    /// Evening wrap-up notification: what got done, what tomorrow opens with.
+    var eveningReviewEnabled: Bool = true
+    var eveningReviewHour: Int = 21
+    var eveningReviewMinute: Int = 30
 
     init() {
         self.id = UUID()
@@ -349,6 +399,10 @@ final class UserSettings {
         self.hasCompletedOnboarding = false
         self.blockRemindersEnabled = true
         self.blockReminderLeadMinutes = 0
+        self.morningPreviewEnabled = true
+        self.eveningReviewEnabled = true
+        self.eveningReviewHour = 21
+        self.eveningReviewMinute = 30
     }
 
     var wakeTime: DateComponents {

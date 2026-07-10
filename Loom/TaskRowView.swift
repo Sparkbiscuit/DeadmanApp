@@ -18,9 +18,23 @@ struct TaskRowView: View {
                         .foregroundStyle(Color.loomText)
                         .lineLimit(2)
 
-                    Text(CountdownFormatter.deadlineString(from: Date(), to: task.deadline))
-                        .font(AppFont.caption(12))
-                        .foregroundStyle(deadlineColor)
+                    HStack(spacing: 5) {
+                        // Pace dot: how much of the free time left this task
+                        // would eat — the early warning, days before red.
+                        if let pace = PaceCache.entry(for: task.id, context: modelContext) {
+                            Circle()
+                                .fill(paceColor(pace.level))
+                                .frame(width: 7, height: 7)
+                        }
+                        Text(CountdownFormatter.deadlineString(from: Date(), to: task.deadline))
+                            .font(AppFont.caption(12))
+                            .foregroundStyle(deadlineColor)
+                        if task.templateId != nil {
+                            Image(systemName: "repeat")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Color.loomFaint)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -142,6 +156,13 @@ struct TaskRowView: View {
             } label: {
                 Label("Reschedule", systemImage: "arrow.clockwise")
             }
+            if task.templateId != nil {
+                Button {
+                    stopRepeating()
+                } label: {
+                    Label("Stop Repeating", systemImage: "repeat.circle")
+                }
+            }
             Button(role: .destructive) {
                 modelContext.delete(task)
                 CalendarExportService.syncIfEnabled(context: modelContext)
@@ -157,6 +178,31 @@ struct TaskRowView: View {
         if hours < 24 { return .loomRed }
         if hours < 72 { return .workColor }
         return .loomSubtle
+    }
+
+    private func paceColor(_ level: PaceLevel) -> Color {
+        switch level {
+        case .comfortable: return .personalColor
+        case .tightening: return .workColor
+        case .critical: return .loomRed
+        }
+    }
+
+    /// End the recurrence this task came from. Existing occurrences stay;
+    /// no new copies get stamped out.
+    private func stopRepeating() {
+        guard let templateId = task.templateId else { return }
+        let descriptor = FetchDescriptor<TaskTemplate>(
+            predicate: #Predicate { $0.id == templateId }
+        )
+        if let template = (try? modelContext.fetch(descriptor))?.first {
+            modelContext.delete(template)
+        }
+        // Clear the marker on every occurrence so their menus stop offering it.
+        let siblings = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
+        for sibling in siblings where sibling.templateId == templateId {
+            sibling.templateId = nil
+        }
     }
 
     private func rescheduleTask() {

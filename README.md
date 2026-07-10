@@ -23,6 +23,26 @@ daily focus limit if you set one.
   and capture compares your guess against your recent history in that context:
   "Your last 5 School tasks ran about 1.6× over. Plan for 2h 30m instead?" with a
   one-tap accept. Needs at least 3 tracked completions; suggestions cap at 2×.
+- **Pace dots** — every task carries a quiet pressure reading: remaining effort
+  versus the free time left before its buffered deadline. Green under 50%, amber
+  to 80%, red beyond — plus one honest sentence in the stats bar about the most
+  pressured task, days before anything turns into a crisis.
+- **Morning preview & evening wrap-up** — a notification 30 minutes after wake
+  time pre-loads the day's shape ("First block: 9:00 Lab report. 3 blocks total,
+  done by 4:30"), and a configurable evening one closes the day and names
+  tomorrow's opener. Both optional, in Settings → Nudges.
+- **Start streak** — a flame in the header counting days you *started* a session,
+  not days you finished things, with two free mend days a week so one bad day
+  can't torch the thread.
+- **Widget start** — tapping a block on the Up Next widget deep-links straight
+  into that task's work session timer; one tap from Home Screen to running timer.
+- **Session immersion** — the screen stays awake during a work session, a gentle
+  haptic warns ten minutes before the block ends, and another marks the boundary:
+  stopping on time is the win, not the interruption.
+- **Weekly repeats** — capture a problem set once with "Weekly until…" and fresh
+  copies appear a rolling two weeks ahead, each scheduled around that week's
+  reality. Missed weeks are skipped silently — recurrence never manufactures
+  overdue guilt. Stop any recurrence from its task's context menu.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the
@@ -49,3 +69,10 @@ daily focus limit if you set one.
 SwiftUI + SwiftData, iOS 17.5+. Open `Loom.xcodeproj` in Xcode and run the `Loom`
 scheme. The visual system (colors, type, spacing, per-screen specs) lives in
 `design-handoff/`.
+
+## Tests
+
+Unit tests live in `LoomTests` (scheduler, estimate advisor, streaks, pace,
+digests, recurrence). The shared `Loom` scheme includes both test bundles, so
+**Product → Test** (⌘U) runs everything; they also appear in Xcode's Test
+navigator (⌘6).

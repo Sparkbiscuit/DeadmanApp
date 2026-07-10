@@ -5,6 +5,7 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @Query(sort: \Reminder.dueDate) private var reminders: [Reminder]
+    @Query private var workSessions: [WorkSession]
     @Binding var replanSummary: CatchUpSummary
     @Binding var sessionRequestTaskId: UUID?
     @State private var showingCapture = false
@@ -77,18 +78,30 @@ struct TaskListView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(greeting)
-                .font(AppFont.caption(12))
-                .foregroundStyle(Color.loomSubtle)
-            Text("Your Tasks")
-                .font(AppFont.title(26))
-                .foregroundStyle(Color.loomText)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greeting)
+                    .font(AppFont.caption(12))
+                    .foregroundStyle(Color.loomSubtle)
+                Text("Your Tasks")
+                    .font(AppFont.title(26))
+                    .foregroundStyle(Color.loomText)
+            }
+            Spacer()
+            // Start-based streak: days you *began* — starting is the actual
+            // battle, so that's what earns the flame. A "1" is noise; the
+            // thread appears once there's something to protect.
+            if startStreak >= 2 {
+                StreakBadge(days: startStreak)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 8)
+    }
+
+    private var startStreak: Int {
+        StreakCalculator.startStreak(startDates: workSessions.map(\.startedAt))
     }
 
     private var greeting: String {
@@ -189,16 +202,50 @@ struct TaskListView: View {
         let unscheduled = incomplete.filter { !$0.isFullyScheduled }
         let todayBlocks = todayBlockCount
 
-        return HStack(spacing: 10) {
-            StatPill(value: "\(incomplete.count)", label: "active", color: .loomText)
-            StatPill(value: "\(todayBlocks)", label: "today", color: .schoolColor)
-            if !unscheduled.isEmpty {
-                StatPill(value: "\(unscheduled.count)", label: "unblocked", color: .loomRed)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                StatPill(value: "\(incomplete.count)", label: "active", color: .loomText)
+                StatPill(value: "\(todayBlocks)", label: "today", color: .schoolColor)
+                if !unscheduled.isEmpty {
+                    StatPill(value: "\(unscheduled.count)", label: "unblocked", color: .loomRed)
+                }
+                Spacer()
             }
-            Spacer()
+            paceSummary
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
+    }
+
+    /// One honest sentence about the most-pressured task — the early warning
+    /// that fires days before anything turns red.
+    @ViewBuilder
+    private var paceSummary: some View {
+        if let (taskId, entry) = PaceCache.worst(context: modelContext),
+           entry.pressure >= 0.5,
+           let task = tasks.first(where: { $0.id == taskId && !$0.isComplete }) {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "gauge.with.needle")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(entry.level == .critical ? Color.loomRed : Color.workColor)
+                    .padding(.top, 1)
+                Text(paceLine(task: task, entry: entry))
+                    .font(AppFont.body(12))
+                    .foregroundStyle(Color.loomSubtle)
+            }
+        }
+    }
+
+    private func paceLine(task: LoomTask, entry: PaceCache.Entry) -> String {
+        guard !entry.pressure.isInfinite, entry.availableMinutes > 0 else {
+            return "\(task.title) no longer fits before its deadline — extend it or trim the estimate."
+        }
+        let need = CountdownFormatter.effortString(minutes: entry.remainingMinutes)
+        let free = CountdownFormatter.effortString(minutes: entry.availableMinutes)
+        if entry.level == .critical {
+            return "\(task.title) needs \(need) of the \(free) you have free — start today."
+        }
+        return "\(task.title) needs \(need) of the \(free) free before its deadline."
     }
 
     private var todayBlockCount: Int {
@@ -514,6 +561,35 @@ private struct StatPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color.loomSurface2, in: Capsule())
+    }
+}
+
+// MARK: - Streak Badge
+
+/// Days-you-started counter with mend days built in (see StreakCalculator) —
+/// momentum without the shame mechanics of completion streaks.
+private struct StreakBadge: View {
+    let days: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.brand500)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("\(days)")
+                    .font(AppFont.heading(15))
+                    .foregroundStyle(Color.loomText)
+                Text("day streak")
+                    .font(AppFont.caption(9))
+                    .foregroundStyle(Color.loomSubtle)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.loomSurface, in: Capsule())
+        .overlay(Capsule().stroke(Color.brand500.opacity(0.25), lineWidth: 1))
+        .accessibilityLabel("\(days) day start streak")
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Focused timer sheet for a single task: start/stop a session, then
 /// self-report overall progress. Saving at 100% completes the task.
@@ -15,6 +16,13 @@ struct WorkSessionView: View {
     @State private var showProgressPrompt = false
     @State private var progressValue: Double = 0
     @State private var sessionStart: Date?
+
+    // Immersion: the end of the currently running scheduled block, if the
+    // session started inside one. Bounds the hyperfocus spurt from both sides.
+    @State private var blockEndTarget: Date?
+    @State private var didWarnNearEnd = false
+    @State private var didMarkBlockEnd = false
+    @State private var immersionMessage: String?
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -37,6 +45,7 @@ struct WorkSessionView: View {
         .onReceive(timer) { _ in
             if isRunning {
                 elapsedSeconds += 1
+                checkBlockBoundary()
             }
         }
         .onDisappear {
@@ -44,6 +53,7 @@ struct WorkSessionView: View {
             if isRunning {
                 recordSession()
             }
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 
@@ -139,6 +149,14 @@ struct WorkSessionView: View {
                             .font(AppFont.caption(13))
                             .foregroundStyle(Color.loomRed)
                     }
+                }
+
+                if isRunning, let message = immersionMessage {
+                    Text(message)
+                        .font(AppFont.body(12))
+                        .foregroundStyle(Color.loomSubtle)
+                        .multilineTextAlignment(.center)
+                        .transition(.opacity)
                 }
 
                 Button {
@@ -239,6 +257,17 @@ struct WorkSessionView: View {
         sessionStart = now
         elapsedSeconds = 0
         withAnimation { isRunning = true }
+
+        // Immersion: the screen stays awake for the whole session, and the
+        // running block's end becomes the gentle boundary chime.
+        UIApplication.shared.isIdleTimerDisabled = true
+        blockEndTarget = task.scheduledBlocks
+            .first { $0.startTime <= now && now < $0.endTime }?
+            .endTime
+        didWarnNearEnd = false
+        didMarkBlockEnd = false
+        immersionMessage = nil
+
         WorkSessionActivityController.start(
             taskTitle: task.title,
             contextName: task.context.rawValue,
@@ -247,8 +276,31 @@ struct WorkSessionView: View {
         )
     }
 
+    /// Haptic + one-line nudge near and at the end of the running block. The
+    /// near-end warning offers an off-ramp; the end marker bounds the
+    /// Herculean spurt the app exists to prevent.
+    private func checkBlockBoundary() {
+        guard let end = blockEndTarget else { return }
+        let remaining = end.timeIntervalSinceNow
+
+        if remaining <= 600 && remaining > 0 && !didWarnNearEnd {
+            didWarnNearEnd = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            withAnimation {
+                immersionMessage = "About 10 minutes left in this block — a good stopping point is coming."
+            }
+        } else if remaining <= 0 && !didMarkBlockEnd {
+            didMarkBlockEnd = true
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation {
+                immersionMessage = "Block done. Stopping now is a win — no heroics required."
+            }
+        }
+    }
+
     private func stopTapped() {
         WorkSessionActivityController.end()
+        UIApplication.shared.isIdleTimerDisabled = false
         withAnimation {
             isRunning = false
             progressValue = Double(task.progressPercent)
@@ -258,6 +310,7 @@ struct WorkSessionView: View {
 
     private func recordSession() {
         WorkSessionActivityController.end()
+        UIApplication.shared.isIdleTimerDisabled = false
         guard elapsedSeconds > 0 else { return }
         let session = WorkSession(
             task: task,

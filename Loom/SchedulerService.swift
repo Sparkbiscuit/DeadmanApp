@@ -417,6 +417,146 @@ struct SchedulerService {
         return replanned
     }
 
+    // MARK: - Pace (schedule pressure)
+
+    /// Total scheduleable free minutes between two dates, treating other
+    /// tasks' incomplete blocks, blocked times, and busy events as occupied.
+    /// A task's own blocks don't count against it — that time is already his.
+    static func availableMinutes(
+        from: Date,
+        to: Date,
+        excludingTaskId: UUID? = nil,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings
+    ) -> Int {
+        let from = roundUpToFiveMinutes(from)
+        guard from < to else { return 0 }
+
+        var occupied = allBlocks
+            .filter { !$0.isComplete && $0.endTime > from && $0.task?.id != excludingTaskId }
+            .map { Interval(start: $0.startTime, end: $0.endTime) }
+        for blocked in blockedTimes {
+            occupied.append(contentsOf: blocked
+                .occurrences(from: from, to: to)
+                .map { Interval(start: $0.start, end: $0.end) })
+        }
+        for event in busyEvents where event.endTime > from && event.startTime < to {
+            occupied.append(Interval(start: event.startTime, end: event.endTime))
+        }
+        occupied.sort { $0.start < $1.start }
+
+        let slots = findFreeSlots(
+            from: from,
+            to: to,
+            occupied: occupied,
+            settings: settings,
+            allowOvernight: false
+        )
+        return Int(slots.reduce(0.0) { $0 + $1.durationMinutes })
+    }
+
+    /// Schedule pressure for a task: remaining effort ÷ free minutes left
+    /// before its buffered deadline. 0.5 means half the free time is spoken
+    /// for; above 1 the task no longer fits. Infinity when there's no window
+    /// at all. Nil when the task carries no remaining effort.
+    static func pressure(
+        for task: LoomTask,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date()
+    ) -> Double? {
+        let remaining = task.remainingMinutes
+        guard !task.isComplete, remaining > 0 else { return nil }
+
+        let windowEnd = task.deadline.addingTimeInterval(
+            -Double(settings.deadlineBufferMinutes) * 60
+        )
+        guard windowEnd > now else { return .infinity }
+
+        let available = availableMinutes(
+            from: now,
+            to: windowEnd,
+            excludingTaskId: task.id,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings
+        )
+        guard available > 0 else { return .infinity }
+        return Double(remaining) / Double(available)
+    }
+
+    // MARK: - Recurring tasks
+
+    /// Stamp out upcoming occurrences of recurring templates, a rolling two
+    /// weeks ahead — run on foreground refresh. Occurrences whose deadline
+    /// already passed while the app was closed are skipped silently: a
+    /// recurrence must never spawn retroactive guilt. Exhausted templates
+    /// delete themselves. Returns the number of tasks created.
+    @discardableResult
+    static func materializeRecurringTasks(
+        templates: [TaskTemplate],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date(),
+        context: ModelContext
+    ) -> Int {
+        guard !templates.isEmpty else { return 0 }
+        let calendar = Calendar.current
+        guard let horizon = calendar.date(byAdding: .day, value: 14, to: now) else { return 0 }
+
+        var created = 0
+        var currentBlocks = allBlocks
+        let start = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+
+        for template in templates {
+            var next = template.nextDeadline
+            while next <= horizon && next <= template.repeatUntil {
+                if next > now {
+                    let task = LoomTask(
+                        title: template.title,
+                        context: template.context,
+                        deadline: next,
+                        effortMinutes: template.effortMinutes,
+                        source: .recurring,
+                        firstStep: template.firstStep
+                    )
+                    task.templateId = template.id
+                    context.insert(task)
+
+                    let result = schedule(
+                        task: task,
+                        allBlocks: currentBlocks,
+                        blockedTimes: blockedTimes,
+                        busyEvents: busyEvents,
+                        settings: settings,
+                        from: start
+                    )
+                    insert(result: result, into: context)
+                    if case .success(let blocks) = result {
+                        currentBlocks.append(contentsOf: blocks)
+                    } else if case .partialFit(let blocks, _) = result {
+                        currentBlocks.append(contentsOf: blocks)
+                    }
+                    created += 1
+                }
+                guard let following = calendar.date(byAdding: .day, value: 7, to: next) else { break }
+                next = following
+            }
+            template.nextDeadline = next
+            if next > template.repeatUntil {
+                context.delete(template)
+            }
+        }
+        return created
+    }
+
     /// Round a date up to the next 5-minute boundary.
     static func roundUpToFiveMinutes(_ date: Date) -> Date {
         let interval: TimeInterval = 5 * 60

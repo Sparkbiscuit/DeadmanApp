@@ -154,12 +154,80 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Toggle(isOn: notificationToggleBinding(
+                get: { settings.morningPreviewEnabled },
+                set: { settings.morningPreviewEnabled = $0 }
+            )) {
+                Label("Morning preview", systemImage: "sun.horizon.fill")
+                    .font(AppFont.body(15))
+            }
+            .tint(Color.brand500)
+
+            Toggle(isOn: notificationToggleBinding(
+                get: { settings.eveningReviewEnabled },
+                set: { settings.eveningReviewEnabled = $0 }
+            )) {
+                Label("Evening wrap-up", systemImage: "moon.stars.fill")
+                    .font(AppFont.body(15))
+            }
+            .tint(Color.brand500)
+
+            if settings.eveningReviewEnabled {
+                timePicker(
+                    label: "Wrap-up time",
+                    icon: "clock.fill",
+                    color: .loomSubtle,
+                    hour: Binding(
+                        get: { settings.eveningReviewHour },
+                        set: {
+                            settings.eveningReviewHour = $0
+                            BlockNotificationService.resync(context: modelContext)
+                        }
+                    ),
+                    minute: Binding(
+                        get: { settings.eveningReviewMinute },
+                        set: {
+                            settings.eveningReviewMinute = $0
+                            BlockNotificationService.resync(context: modelContext)
+                        }
+                    )
+                )
+            }
         } header: {
             Text("Nudges")
         } footer: {
-            Text("A notification when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. Start the session right from the Lock Screen, or snooze it 10 minutes.")
+            Text("Block nudges fire when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. The morning preview (30 minutes after wake time) pre-loads the day's shape; the evening wrap-up closes it out and names tomorrow's first block.")
         }
         .listRowBackground(Color.loomSurface)
+    }
+
+    /// A notification-backed toggle: turning it on asks for permission first
+    /// and re-syncs; turning it off just re-syncs.
+    private func notificationToggleBinding(
+        get: @escaping () -> Bool,
+        set: @escaping (Bool) -> Void
+    ) -> Binding<Bool> {
+        Binding(
+            get: get,
+            set: { enabled in
+                if enabled {
+                    Task { @MainActor in
+                        let granted = await NotificationService.requestAuthorization()
+                        if granted {
+                            set(true)
+                            BlockNotificationService.resync(context: modelContext)
+                        } else {
+                            set(false)
+                            showNotificationsDeniedAlert = true
+                        }
+                    }
+                } else {
+                    set(false)
+                    BlockNotificationService.resync(context: modelContext)
+                }
+            }
+        )
     }
 
     private func setBlockReminders(_ enabled: Bool, settings: UserSettings) {

@@ -19,9 +19,20 @@ struct UpNextEntry: TimelineEntry {
         let contextName: String
         let start: Date
         let end: Date
+        var taskId: UUID? = nil
 
         func isActive(at date: Date) -> Bool {
             kind == .block && start <= date && date < end
+        }
+
+        /// Tap target: blocks jump straight into the work session timer for
+        /// their task; reminders just open the app.
+        var deepLink: URL {
+            if kind == .block, let taskId {
+                return URL(string: "loom://start-session/\(taskId.uuidString)")
+                    ?? URL(string: "loom://open")!
+            }
+            return URL(string: "loom://open")!
         }
     }
 
@@ -80,7 +91,8 @@ struct UpNextProvider: TimelineProvider {
                     title: block.task?.title ?? "Task",
                     contextName: block.task?.context.rawValue ?? "",
                     start: block.startTime,
-                    end: block.endTime
+                    end: block.endTime,
+                    taskId: block.task?.id
                 )
             }
 
@@ -201,16 +213,29 @@ private struct UpNextWidgetView: View {
 
                 Spacer(minLength: 0)
 
-                if entry.items.count > 1 {
-                    Text("+\(entry.items.count - 1) more coming up")
-                        .font(AppFont.caption(10))
-                        .foregroundStyle(Color.loomFaint)
+                HStack(spacing: 4) {
+                    if item.kind == .block {
+                        // One tap from Home Screen to a running timer.
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(color)
+                        Text("Start")
+                            .font(AppFont.caption(11))
+                            .foregroundStyle(color)
+                    }
+                    Spacer(minLength: 0)
+                    if entry.items.count > 1 {
+                        Text("+\(entry.items.count - 1) more")
+                            .font(AppFont.caption(10))
+                            .foregroundStyle(Color.loomFaint)
+                    }
                 }
             } else {
                 emptyView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .widgetURL(next?.deepLink)
         .containerBackground(Color.loomSurface, for: .widget)
     }
 
@@ -221,45 +246,52 @@ private struct UpNextWidgetView: View {
             } else {
                 ForEach(entry.items.prefix(3)) { item in
                     let color = itemColor(item)
-                    HStack(spacing: 10) {
-                        Text(TimeFormatter.clock.string(from: item.start))
-                            .font(AppFont.monoMedium(11))
-                            .foregroundStyle(Color.loomSubtle)
-                            .frame(width: 62, alignment: .trailing)
+                    Link(destination: item.deepLink) {
+                        HStack(spacing: 10) {
+                            Text(TimeFormatter.clock.string(from: item.start))
+                                .font(AppFont.monoMedium(11))
+                                .foregroundStyle(Color.loomSubtle)
+                                .frame(width: 62, alignment: .trailing)
 
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(color)
-                            .frame(width: 3, height: 26)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(color)
+                                .frame(width: 3, height: 26)
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title)
-                                .font(AppFont.heading(13))
-                                .foregroundStyle(Color.loomText)
-                                .lineLimit(1)
-                            if item.kind == .reminder {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.system(size: 7, weight: .semibold))
-                                    Text("Reminder")
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.title)
+                                    .font(AppFont.heading(13))
+                                    .foregroundStyle(Color.loomText)
+                                    .lineLimit(1)
+                                if item.kind == .reminder {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "bell.fill")
+                                            .font(.system(size: 7, weight: .semibold))
+                                        Text("Reminder")
+                                            .font(AppFont.caption(10))
+                                    }
+                                    .foregroundStyle(color)
+                                } else {
+                                    Text(item.contextName)
                                         .font(AppFont.caption(10))
+                                        .foregroundStyle(color)
                                 }
-                                .foregroundStyle(color)
-                            } else {
-                                Text(item.contextName)
-                                    .font(AppFont.caption(10))
+                            }
+
+                            Spacer(minLength: 0)
+
+                            if item.isActive(at: entry.date) {
+                                Text("NOW")
+                                    .font(AppFont.caption(9))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(color, in: Capsule())
+                            }
+                            if item.kind == .block {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 17))
                                     .foregroundStyle(color)
                             }
-                        }
-
-                        Spacer(minLength: 0)
-
-                        if item.isActive(at: entry.date) {
-                            Text("NOW")
-                                .font(AppFont.caption(9))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(color, in: Capsule())
                         }
                     }
                 }
@@ -305,6 +337,7 @@ private struct UpNextWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .widgetURL(next?.deepLink)
         .containerBackground(.clear, for: .widget)
     }
 
@@ -316,6 +349,7 @@ private struct UpNextWidgetView: View {
                 Text("Loom: all clear")
             }
         }
+        .widgetURL(next?.deepLink)
         .containerBackground(.clear, for: .widget)
     }
 }
