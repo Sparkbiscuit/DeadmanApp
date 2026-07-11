@@ -553,28 +553,19 @@ struct TaskListView: View {
             }
             .buttonStyle(.plain)
 
-            // The stable clipping frame is what makes the collapse read as
-            // rows folding up into the header: without it the removed rows
-            // slide up across the whole screen instead of disappearing under
-            // the disclosure.
-            VStack(spacing: 0) {
-                if isExpanded {
-                    VStack(spacing: 10) {
-                        ForEach(tasks) { task in
-                            TaskRowView(
-                                task: task,
-                                onStartSession: { workSessionTask = task },
-                                onComplete: { completeTask(task) },
-                                onEdit: { editingTask = task }
-                            )
-                            .padding(.horizontal, 20)
-                        }
+            CollapsibleSectionBody(isExpanded: isExpanded) {
+                VStack(spacing: 10) {
+                    ForEach(tasks) { task in
+                        TaskRowView(
+                            task: task,
+                            onStartSession: { workSessionTask = task },
+                            onComplete: { completeTask(task) },
+                            onEdit: { editingTask = task }
+                        )
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .clipped()
         }
     }
 
@@ -612,43 +603,35 @@ struct TaskListView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Same stable clipping frame as the context sections, so the
-                // completed rows fold up into the disclosure instead of
-                // flying off the top of the screen.
-                VStack(spacing: 0) {
-                    if showCompleted {
-                        VStack(spacing: 10) {
-                            ForEach(completed.sorted {
-                                ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
-                            }) { task in
-                                CompletedTaskRow(task: task) {
-                                    withAnimation {
-                                        restoreTask(task, context: modelContext)
-                                    }
-                                } onDelete: {
-                                    withAnimation {
-                                        deleteTask(task, context: modelContext)
-                                    }
-                                    scheduleDidChange(context: modelContext)
+                CollapsibleSectionBody(isExpanded: showCompleted) {
+                    VStack(spacing: 10) {
+                        ForEach(completed.sorted {
+                            ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
+                        }) { task in
+                            CompletedTaskRow(task: task) {
+                                withAnimation {
+                                    restoreTask(task, context: modelContext)
                                 }
-                                .padding(.horizontal, 20)
-                            }
-                            ForEach(completedReminders.sorted { $0.dueDate > $1.dueDate }) { reminder in
-                                CompletedReminderRow(reminder: reminder) {
-                                    restoreReminder(reminder)
-                                } onDelete: {
-                                    withAnimation {
-                                        modelContext.delete(reminder)
-                                    }
+                            } onDelete: {
+                                withAnimation {
+                                    deleteTask(task, context: modelContext)
                                 }
-                                .padding(.horizontal, 20)
+                                scheduleDidChange(context: modelContext)
                             }
+                            .padding(.horizontal, 20)
                         }
-                        .padding(.bottom, 16)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        ForEach(completedReminders.sorted { $0.dueDate > $1.dueDate }) { reminder in
+                            CompletedReminderRow(reminder: reminder) {
+                                restoreReminder(reminder)
+                            } onDelete: {
+                                withAnimation {
+                                    modelContext.delete(reminder)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                        }
                     }
                 }
-                .clipped()
             }
         }
     }
@@ -685,6 +668,28 @@ struct TaskListView: View {
         scheduleDidChange(context: modelContext)
     }
 
+}
+
+// MARK: - Collapsible section body
+
+/// The stable clipping frame that makes a disclosure's rows fold up into the
+/// header when collapsed: without it, the removed rows slide up across the
+/// whole screen instead of disappearing under the disclosure. Every
+/// expandable section on this screen should collapse through this wrapper.
+private struct CollapsibleSectionBody<Content: View>: View {
+    let isExpanded: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                content
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .clipped()
+    }
 }
 
 // MARK: - Stat Pill

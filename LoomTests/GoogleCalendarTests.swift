@@ -202,6 +202,7 @@ final class GoogleCalendarTests: XCTestCase {
 
     // MARK: - Wire decoding
 
+    @MainActor
     func testEventPageDecodingHandlesGoogleDateFormats() throws {
         let json = """
         {

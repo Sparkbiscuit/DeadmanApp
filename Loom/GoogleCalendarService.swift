@@ -13,19 +13,25 @@ enum GoogleCalendarService {
     private static let eventsURL = URL(
         string: "https://www.googleapis.com/calendar/v3/calendars/primary/events"
     )!
-    /// Same horizons as the Apple import/export.
-    private static let importHorizonDays = 30
-    private static let exportHorizonDays = 60
+    /// Same horizons as the Apple import/export — shared so the two mirrors
+    /// can never drift apart.
+    nonisolated private static let importHorizonDays = CalendarImportService.horizonDays
+    nonisolated private static let exportHorizonDays = CalendarExportService.horizonDays
 
-    /// Loop guard marker on exported events.
-    static let loomMarkerKey = "loom"
-    static let loomMarkerValue = "1"
+    /// Loop guard marker on exported events. Nonisolated: read from the
+    /// nonisolated GEvent wire type and the test target.
+    nonisolated static let loomMarkerKey = "loom"
+    nonisolated static let loomMarkerValue = "1"
 
     /// Injection point for the URLProtocol-mocked test session.
     static var urlSession: URLSession = .shared
 
     private static var isImporting = false
     private static var isExporting = false
+    /// The pending debounced export, so a burst of scheduling changes (bulk
+    /// entry, a replan) coalesces into one network reconcile instead of one
+    /// per change — unlike the Apple export, this one leaves the device.
+    private static var pendingExport: Task<Void, Never>?
 
     enum GoogleCalendarError: Error {
         case syncTokenExpired // HTTP 410: fall back to a full window fetch
@@ -77,7 +83,9 @@ enum GoogleCalendarService {
                 await importNow(context: context, settings: settings)
             }
             if settings.exportToGoogleCalendar {
-                await exportNow(context: context, settings: settings)
+                // Debounced, so this coalesces with the export the import's
+                // replan may have already queued.
+                scheduleExport(context: context, settings: settings)
             }
         }
     }
@@ -87,7 +95,16 @@ enum GoogleCalendarService {
     static func exportIfEnabled(context: ModelContext) {
         let settings = UserSettings.fetchOrCreate(in: context)
         guard settings.exportToGoogleCalendar, settings.googleAccountEmail != nil else { return }
-        Task {
+        scheduleExport(context: context, settings: settings)
+    }
+
+    /// Trailing debounce: each call cancels the previous pending export and
+    /// arms a fresh one two seconds out, so the last change in a burst wins.
+    private static func scheduleExport(context: ModelContext, settings: UserSettings) {
+        pendingExport?.cancel()
+        pendingExport = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
             await exportNow(context: context, settings: settings)
         }
     }
@@ -267,12 +284,11 @@ enum GoogleCalendarService {
                         )
                     }
                 } else {
-                    let created = try await writeEvent(
+                    block.googleCalendarEventId = try await writeEvent(
                         path: nil, method: "POST",
                         title: title, start: block.startTime, end: block.endTime,
                         accessToken: accessToken
                     )
-                    block.googleCalendarEventId = created?.id
                 }
             }
 
@@ -292,6 +308,7 @@ enum GoogleCalendarService {
     /// (export switched off). Best effort — matching Apple's behavior of not
     /// blocking the toggle on network success.
     static func removeExportedEvents(context: ModelContext) {
+        pendingExport?.cancel()
         Task {
             if let accessToken = try? await GoogleOAuth.validAccessToken(urlSession: urlSession) {
                 let now = Date()
@@ -325,6 +342,7 @@ enum GoogleCalendarService {
     /// sync state. Exported events are left on the calendar (the user can
     /// switch export off first to clean those up).
     static func disconnect(context: ModelContext) {
+        pendingExport?.cancel()
         GoogleOAuth.disconnect()
         let settings = UserSettings.fetchOrCreate(in: context)
         settings.importFromGoogleCalendar = false
@@ -403,7 +421,14 @@ enum GoogleCalendarService {
         return (events, nextSyncToken)
     }
 
-    /// POST (insert) or PATCH (update) one event; returns the decoded event.
+    /// POST (insert) or PATCH (update) one event; returns the event's id.
+    /// The response is decoded id-only with a plain decoder, so a date-format
+    /// surprise elsewhere in the payload can't lose the id of an event that
+    /// was in fact created (which would duplicate it on the next reconcile).
+    private struct GEventIdOnly: Decodable {
+        let id: String
+    }
+
     @discardableResult
     private static func writeEvent(
         path: String?,
@@ -412,7 +437,7 @@ enum GoogleCalendarService {
         start: Date,
         end: Date,
         accessToken: String
-    ) async throws -> GEvent? {
+    ) async throws -> String? {
         var url = eventsURL
         if let path {
             url = eventsURL.appendingPathComponent(path)
@@ -435,7 +460,7 @@ enum GoogleCalendarService {
         guard (200..<300).contains(status) else {
             throw GoogleCalendarError.http(status)
         }
-        return try? decoder.decode(GEvent.self, from: data)
+        return (try? JSONDecoder().decode(GEventIdOnly.self, from: data))?.id
     }
 
     private static func deleteEvent(id: String, accessToken: String) async throws {

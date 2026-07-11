@@ -112,7 +112,10 @@ final class GoogleOAuth: NSObject {
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "scope", value: Self.scopes),
             URLQueryItem(name: "code_challenge", value: Self.codeChallenge(for: verifier)),
-            URLQueryItem(name: "code_challenge_method", value: "S256")
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            // Native clients get refresh tokens by default, but asking
+            // explicitly costs nothing and exchangeCode requires one.
+            URLQueryItem(name: "access_type", value: "offline")
         ]
 
         let code = try await authorizationCode(authURL: components.url!)

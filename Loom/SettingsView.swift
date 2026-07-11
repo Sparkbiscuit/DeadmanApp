@@ -575,13 +575,14 @@ struct SettingsView: View {
 
     private func setGoogleImport(_ enabled: Bool, settings: UserSettings) {
         settings.importFromGoogleCalendar = enabled
+        // Either direction invalidates the incremental cursor: re-enabling
+        // must start from a full window fetch.
+        settings.googleSyncToken = nil
         if enabled {
-            settings.googleSyncToken = nil
             Task { @MainActor in
                 await GoogleCalendarService.importNow(context: modelContext, settings: settings)
             }
         } else {
-            settings.googleSyncToken = nil
             GoogleCalendarService.removeImportedEvents(context: modelContext)
             replanAfterBusyChange(context: modelContext)
         }

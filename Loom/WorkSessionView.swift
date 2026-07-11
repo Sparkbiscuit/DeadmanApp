@@ -30,8 +30,10 @@ struct WorkSessionView: View {
     // Immersion: the end of the currently running scheduled block, if the
     // session started inside one. Bounds the hyperfocus spurt from both sides.
     @State private var blockEndTarget: Date?
-    /// Length of that block in seconds — the ring's denominator.
-    @State private var blockDurationSeconds: Int?
+    /// The ring's denominator, shared verbatim with the Live Activity ring:
+    /// the running block's duration, or the remaining budget when the
+    /// session floats outside any block.
+    @State private var ringWindowSeconds: Int?
     @State private var didWarnNearEnd = false
     @State private var didMarkBlockEnd = false
     @State private var immersionMessage: String?
@@ -391,17 +393,17 @@ struct WorkSessionView: View {
         return "WEAVING"
     }
 
-    /// How much of the flame is held: worked time as a fraction of the
-    /// scheduled block (same rule as the Live Activity ring), or budget
-    /// burned when the session floats outside any block. Either way the ring
-    /// starts empty and may exceed 1 — the ring loops a second lap over
-    /// itself rather than clamping.
+    /// How much of the flame is held: worked time as a fraction of the ring
+    /// window (block duration, or remaining budget outside a block) — the
+    /// same rule the Live Activity ring renders, so the two never disagree.
+    /// The ring starts empty and may exceed 1: it loops a second lap over
+    /// itself rather than clamping. Idle (pre-start) it shows budget burned.
     private var ringProgress: Double {
-        if isRunning, let duration = blockDurationSeconds, duration > 0 {
-            return Double(elapsedSeconds) / Double(duration)
+        if isRunning, let window = ringWindowSeconds, window > 0 {
+            return Double(elapsedSeconds) / Double(window)
         }
         guard task.effortMinutes > 0 else { return 0 }
-        return Double(spentTotalMinutes) / Double(task.effortMinutes)
+        return min(1, Double(spentTotalMinutes) / Double(task.effortMinutes))
     }
 
     /// While a micro-goal is pending it owns the pill (a countdown reads
@@ -435,7 +437,9 @@ struct WorkSessionView: View {
         let runningBlock = task.scheduledBlocks
             .first { $0.startTime <= now && now < $0.endTime }
         blockEndTarget = runningBlock?.endTime
-        blockDurationSeconds = runningBlock.map { $0.durationMinutes * 60 }
+        let window = runningBlock.map { $0.durationMinutes * 60 }
+            ?? max(task.effortMinutes - task.timeSpentMinutes, 1) * 60
+        ringWindowSeconds = window
         didWarnNearEnd = false
         didMarkBlockEnd = false
         immersionMessage = nil
@@ -448,17 +452,8 @@ struct WorkSessionView: View {
             effortMinutes: task.effortMinutes,
             startedAt: now,
             blockEndsAt: blockEndTarget,
-            ringEndsAt: now.addingTimeInterval(TimeInterval(ringWindowSeconds(from: runningBlock)))
+            ringEndsAt: now.addingTimeInterval(TimeInterval(window))
         )
-    }
-
-    /// How long the ring takes to fill: the scheduled block's duration, or
-    /// the remaining budget when working outside any block.
-    private func ringWindowSeconds(from block: ScheduledBlock?) -> Int {
-        if let block {
-            return block.durationMinutes * 60
-        }
-        return max(task.effortMinutes - task.timeSpentMinutes, 1) * 60
     }
 
     /// Worked time from the wall clock: start → now, minus paused stretches.

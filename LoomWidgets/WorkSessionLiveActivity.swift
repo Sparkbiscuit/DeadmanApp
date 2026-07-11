@@ -119,7 +119,9 @@ private struct LockScreenSessionView: View {
             // self-updating timer ring: empty at session start, full when the
             // scheduled block's worth of work is done — Live Activities can't
             // run code while locked, so only the system styles tick on their
-            // own. Past the block it holds full (the in-app ring loops).
+            // own. Two accepted limits follow: past the block it holds full
+            // (the in-app ring loops), and like the timer text beside it, it
+            // keeps advancing through a pause.
             ZStack {
                 // Static halo — Live Activities can't run continuous
                 // animations, so the flame is held at a warm moment.
