@@ -15,6 +15,9 @@ struct WorkSessionAttributes: ActivityAttributes {
     /// need the SwiftData models.
     var contextName: String
     var effortMinutes: Int
+    /// End of the scheduled block the session started inside, when there is
+    /// one — the Live Activity counts down to it ("held flame" style).
+    var blockEndsAt: Date? = nil
 }
 
 extension WorkSessionAttributes {
@@ -37,14 +40,21 @@ extension WorkSessionAttributes {
 @MainActor
 enum WorkSessionActivityController {
 
-    static func start(taskTitle: String, contextName: String, effortMinutes: Int, startedAt: Date) {
+    static func start(
+        taskTitle: String,
+        contextName: String,
+        effortMinutes: Int,
+        startedAt: Date,
+        blockEndsAt: Date? = nil
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         endAll()
 
         let attributes = WorkSessionAttributes(
             taskTitle: taskTitle,
             contextName: contextName,
-            effortMinutes: effortMinutes
+            effortMinutes: effortMinutes,
+            blockEndsAt: blockEndsAt
         )
         let content = ActivityContent(
             state: WorkSessionAttributes.ContentState(startedAt: startedAt),

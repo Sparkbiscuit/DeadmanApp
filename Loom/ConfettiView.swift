@@ -12,7 +12,7 @@ struct TaskCompletionView: View {
 
     var body: some View {
         ZStack {
-            Color.loomBackground.ignoresSafeArea()
+            HearthScreenBackground(glowOpacity: 0.2)
 
             ConfettiView(palette: [
                 .schoolColor, .workColor, .personalColor,
@@ -26,8 +26,15 @@ struct TaskCompletionView: View {
 
                 ZStack {
                     Circle()
-                        .fill(task.context.color)
+                        .fill(
+                            LinearGradient(
+                                colors: [task.context.displayColor, task.context.color],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(width: 72, height: 72)
+                        .hearthGlow(task.context.color, radius: 22, opacity: 0.55)
                     Image(systemName: "checkmark")
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(.white)
@@ -36,8 +43,8 @@ struct TaskCompletionView: View {
                 .padding(.bottom, 20)
 
                 Text("Task Complete!")
-                    .font(AppFont.title(24))
-                    .foregroundStyle(Color.loomText)
+                    .font(AppFont.title(26))
+                    .foregroundStyle(LinearGradient.hearthTitle)
                     .padding(.bottom, 8)
                 Text(task.title)
                     .font(AppFont.body(15))

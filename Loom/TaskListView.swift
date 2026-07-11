@@ -13,7 +13,6 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @Query(sort: \Reminder.dueDate) private var reminders: [Reminder]
-    @Query private var workSessions: [WorkSession]
     @Binding var replanSummary: CatchUpSummary
     @Binding var sessionRequestTaskId: UUID?
     @State private var showingCapture = false
@@ -32,6 +31,7 @@ struct TaskListView: View {
                     VStack(spacing: 0) {
                         headerSection
                         heroSection
+                        upNextThreadSection
                         pushBanner
                         statsBar
                         replanBanner
@@ -40,11 +40,9 @@ struct TaskListView: View {
                         taskSections
                         completedSection
                     }
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 110)
                 }
-                .background(Color.loomBackground)
-
-                captureButton
+                .hearthScreen()
             }
             .sheet(isPresented: $showingCapture) {
                 CaptureSheetView()
@@ -91,27 +89,20 @@ struct TaskListView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(greeting)
-                    .font(AppFont.caption(12))
-                    .foregroundStyle(Color.loomSubtle)
-                Text("Your Tasks")
-                    .font(AppFont.title(26))
-                    .foregroundStyle(Color.loomText)
+                    .font(AppFont.caption(13))
+                    .foregroundStyle(Color.brand300)
+                HearthTitle(text: "Your Tasks", size: 30)
             }
             Spacer()
-            // Start-based streak: days you *began* — starting is the actual
-            // battle, so that's what earns the flame. A "1" is noise; the
-            // thread appears once there's something to protect.
-            if startStreak >= 2 {
-                StreakBadge(days: startStreak)
+            // The flame pill counts what's alive on the loom right now.
+            let activeCount = tasks.filter { !$0.isComplete }.count
+            if activeCount > 0 {
+                ActiveCountPill(count: activeCount)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 8)
-    }
-
-    private var startStreak: Int {
-        StreakCalculator.startStreak(startDates: workSessions.map(\.startedAt))
     }
 
     private var greeting: String {
@@ -127,7 +118,8 @@ struct TaskListView: View {
     /// running block if there is one, else the next upcoming block, with a
     /// single big Start button. Opening the app should never require a decision.
     private var heroSection: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+        // One-second cadence: the hero ring carries a live mm:ss countdown.
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
             if let block = currentOrNextBlock(at: timeline.date), let task = block.task {
                 RightNowCard(
                     task: task,
@@ -137,8 +129,66 @@ struct TaskListView: View {
                     onPush: { choice in push(task: task, choice: choice) }
                 )
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.bottom, 4)
             }
+        }
+    }
+
+    // MARK: - Up next (the glowing thread)
+
+    /// The thread of light connecting "now" to what comes after: the next few
+    /// scheduled blocks beyond the hero, each row's context dot breaking
+    /// through the thread.
+    @ViewBuilder
+    private var upNextThreadSection: some View {
+        let now = Date()
+        let heroBlock = currentOrNextBlock(at: now)
+        let upcoming = tasks
+            .filter { !$0.isComplete }
+            .flatMap(\.scheduledBlocks)
+            .filter { !$0.isComplete && $0.endTime > now && $0.id != heroBlock?.id }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(3)
+
+        if !upcoming.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("UP NEXT")
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(Color.loomSubtle)
+                    .kerning(1.2)
+                    .padding(.leading, 34)
+                    .padding(.bottom, 10)
+
+                ZStack(alignment: .topLeading) {
+                    // The thread itself: accentSoft fading to nothing.
+                    LinearGradient(
+                        colors: [Color.brand300.opacity(0.75), Color.brand300.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .hearthGlow(.brand500, radius: 5, opacity: 0.5)
+                    .padding(.leading, 6)
+                    .padding(.vertical, 10)
+
+                    VStack(spacing: 10) {
+                        ForEach(Array(upcoming)) { block in
+                            if let task = block.task {
+                                UpNextThreadRow(task: task, block: block) {
+                                    workSessionTask = task
+                                } onEdit: {
+                                    editingTask = task
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 16)
         }
     }
 
@@ -613,22 +663,6 @@ struct TaskListView: View {
         scheduleDidChange(context: modelContext)
     }
 
-    // MARK: - Capture FAB
-
-    private var captureButton: some View {
-        Button {
-            showingCapture = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Color.brand500, in: Circle())
-                .shadow(color: Color.brand500.opacity(0.33), radius: 10, y: 10)
-        }
-        .padding(.trailing, 20)
-        .padding(.bottom, 24)
-    }
 }
 
 // MARK: - Stat Pill
@@ -653,32 +687,100 @@ private struct StatPill: View {
     }
 }
 
-// MARK: - Streak Badge
+// MARK: - Active count pill
 
-/// Days-you-started counter with mend days built in (see StreakCalculator) —
-/// momentum without the shame mechanics of completion streaks.
-private struct StreakBadge: View {
-    let days: Int
+/// Flame-and-count capsule in the header: how many tasks are on the loom.
+private struct ActiveCountPill: View {
+    let count: Int
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.brand500)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("\(days)")
-                    .font(AppFont.heading(15))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.brand300)
+            Text("\(count)")
+                .font(AppFont.mono(14))
+                .foregroundStyle(Color.brand100)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background(Color.brand500.opacity(0.12), in: Capsule())
+        .overlay(Capsule().stroke(Color.brand500.opacity(0.35), lineWidth: 1))
+        .hearthGlow(.brand500, radius: 12, opacity: 0.3)
+        .accessibilityLabel("\(count) active tasks")
+    }
+}
+
+// MARK: - Up next thread row
+
+/// One bead on the thread of light: context dot breaking through the line,
+/// task title, meta line, and a mono start-time badge.
+private struct UpNextThreadRow: View {
+    let task: LoomTask
+    let block: ScheduledBlock
+    var onStart: () -> Void
+    var onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(task.title)
+                    .font(AppFont.cardTitle(14))
                     .foregroundStyle(Color.loomText)
-                Text("day streak")
-                    .font(AppFont.caption(9))
-                    .foregroundStyle(Color.loomSubtle)
+                    .lineLimit(1)
+                Text(metaLine)
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(isUrgent ? Color.loomRed : Color.loomSubtle)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(TimeFormatter.clock.string(from: block.startTime))
+                .font(AppFont.mono(12))
+                .foregroundStyle(task.context.displayColor)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                .stroke(Color.loomBorder, lineWidth: 1)
+        )
+        // The context dot breaks through the thread at the row's heart line.
+        .overlay(alignment: .leading) {
+            Circle()
+                .fill(task.context.color)
+                .frame(width: 10, height: 10)
+                .hearthGlow(task.context.color, radius: 7, opacity: 0.8)
+                .offset(x: -18)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+        .onTapGesture(perform: onEdit)
+        .contextMenu {
+            Button(action: onStart) {
+                Label("Start Session", systemImage: "play.fill")
+            }
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.loomSurface, in: Capsule())
-        .overlay(Capsule().stroke(Color.brand500.opacity(0.25), lineWidth: 1))
-        .accessibilityLabel("\(days) day start streak")
+    }
+
+    private var isUrgent: Bool {
+        task.deadline.timeIntervalSinceNow < 24 * 3600
+    }
+
+    private var metaLine: String {
+        var parts = [task.context.rawValue]
+        let due = CountdownFormatter.deadlineString(from: Date(), to: task.deadline)
+            .replacingOccurrences(of: "Due", with: "due")
+        parts.append(due)
+        if task.progressPercent > 0 {
+            parts.append("\(task.progressPercent)%")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -699,62 +801,55 @@ private struct RightNowCard: View {
     private var isActive: Bool { block.startTime <= now }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isActive ? Color.loomRed : task.context.color)
-                    .frame(width: 8, height: 8)
-                Text(isActive ? "RIGHT NOW" : "UP NEXT")
-                    .font(AppFont.caption(11))
-                    .foregroundStyle(isActive ? Color.loomRed : task.context.color)
-                    .kerning(0.8)
-                Spacer()
-                Text(task.context.rawValue)
-                    .contextTag(task.context)
-            }
-
-            Text(task.title)
-                .font(AppFont.title(22))
-                .foregroundStyle(Color.loomText)
-                .lineLimit(2)
-
-            Text(timelineLabel)
-                .font(AppFont.monoMedium(12))
-                .foregroundStyle(Color.loomSubtle)
-
-            if isActive {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.loomSurface3)
-                            .frame(height: 4)
-                        Capsule()
-                            .fill(task.context.color)
-                            .frame(width: geo.size.width * elapsedFraction, height: 4)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                // The held flame in miniature: ring + live countdown.
+                ZStack {
+                    HearthProgressRing(progress: ringProgress, size: 74, lineWidth: 7)
+                    VStack(spacing: 0) {
+                        Text(ringCountdown)
+                            .font(AppFont.mono(15))
+                            .foregroundStyle(Color.loomText)
+                            .contentTransition(.numericText())
+                        Text(isActive ? "LEFT" : "UNTIL")
+                            .font(AppFont.caption(8))
+                            .foregroundStyle(Color.brand300)
+                            .kerning(1)
                     }
                 }
-                .frame(height: 4)
-            }
+                .frame(width: 88, height: 88)
 
-            if let step = task.firstStep, !step.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.brand500)
-                        .padding(.top, 2)
-                    Text("First step: \(step)")
-                        .font(AppFont.bodySemibold(13))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(isActive ? "RIGHT NOW" : "UP NEXT")
+                        .font(AppFont.caption(11))
+                        .foregroundStyle(Color.brand300)
+                        .kerning(1.4)
+                    Text(task.title)
+                        .font(AppFont.cardTitle(18))
                         .foregroundStyle(Color.loomText)
+                        .lineLimit(2)
+                    if let step = task.firstStep, !step.isEmpty {
+                        Text("First step: \(step)")
+                            .font(AppFont.bodySemibold(12))
+                            .foregroundStyle(Color.loomSubtle)
+                            .lineLimit(2)
+                    } else {
+                        Text(timelineLabel)
+                            .font(AppFont.monoMedium(11))
+                            .foregroundStyle(Color.loomSubtle)
+                    }
                 }
+
+                Spacer(minLength: 0)
             }
 
             Button(action: onStart) {
                 HStack(spacing: 8) {
                     Image(systemName: "play.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text(isActive ? "Start Session" : "Start Early")
+                    Text(isActive ? "Continue session" : "Start early")
                 }
-                .primaryButtonStyle(fill: task.context.color)
+                .primaryButtonStyle()
             }
 
             Button {
@@ -768,13 +863,23 @@ private struct RightNowCard: View {
             .buttonStyle(.plain)
         }
         .padding(18)
-        .background(Color.loomSurface)
-        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
-                .stroke(task.context.color.opacity(0.35), lineWidth: 1.5)
+        .background(
+            // Accent light banked into the card's top-left corner.
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand500.opacity(0.22), location: 0),
+                    .init(color: Color(hex: 0x1A1A1E), location: 0.58)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         )
-        .shadow(color: task.context.color.opacity(0.12), radius: 12, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous)
+                .stroke(Color.brand500.opacity(0.28), lineWidth: 1)
+        )
+        .hearthGlow(.brand500, radius: 26, opacity: 0.22)
         .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
             Button("Push 30 minutes") { onPush(.thirtyMinutes) }
             Button("Push 1 hour") { onPush(.oneHour) }
@@ -789,6 +894,23 @@ private struct RightNowCard: View {
         let total = block.endTime.timeIntervalSince(block.startTime)
         guard total > 0 else { return 0 }
         return min(1, max(0, now.timeIntervalSince(block.startTime) / total))
+    }
+
+    /// Active: how far through the block the flame has burned. Upcoming: a
+    /// faint spark so the ring never reads as empty.
+    private var ringProgress: Double {
+        isActive ? elapsedFraction : 0.03
+    }
+
+    /// mm:ss (or h:mm:ss) left in the block when active, or until it starts.
+    private var ringCountdown: String {
+        let target = isActive ? block.endTime : block.startTime
+        let seconds = max(0, Int(target.timeIntervalSince(now)))
+        if seconds >= 3600 * 10 {
+            // Far-future block: mm:ss would be absurd, show hours.
+            return "\(seconds / 3600)h"
+        }
+        return CountdownFormatter.timerString(seconds: seconds)
     }
 
     private var timelineLabel: String {

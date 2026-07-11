@@ -20,7 +20,7 @@ struct BlockedTimeView: View {
                     )
                     .padding(.top, 60)
                 }
-                .background(Color.loomBackground)
+                .hearthScreen(glowOpacity: 0.1)
             } else {
                 List {
                     Section {

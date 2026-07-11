@@ -78,7 +78,7 @@ struct CaptureSheetView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .background(Color.loomBackground)
+            .hearthScreen(glowOpacity: 0.1)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showBulk) {
                 BulkEntryView {
@@ -126,7 +126,7 @@ struct CaptureSheetView: View {
 
             Button("Bulk add") { showBulk = true }
                 .font(AppFont.caption(14))
-                .foregroundStyle(Color.brand500)
+                .foregroundStyle(Color.brand300)
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
@@ -144,23 +144,21 @@ struct CaptureSheetView: View {
                     }
                 } label: {
                     Text(mode.rawValue)
-                        .font(AppFont.caption(12))
-                        .foregroundStyle(captureMode == mode ? Color.loomText : Color.loomSubtle)
+                        .font(AppFont.caption(13))
+                        .foregroundStyle(captureMode == mode ? Color.brand100 : Color.loomSubtle)
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 7)
                         .background(
-                            RoundedRectangle(cornerRadius: LoomRadius.sm, style: .continuous)
-                                .fill(captureMode == mode ? Color.loomSurface : Color.clear)
+                            Capsule()
+                                .fill(captureMode == mode ? Color.brand500.opacity(0.28) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
+        .padding(3)
+        .background(Capsule().fill(Color.loomSurface))
+        .overlay(Capsule().stroke(Color.loomBorder, lineWidth: 1))
     }
 
     // MARK: - Reminder form

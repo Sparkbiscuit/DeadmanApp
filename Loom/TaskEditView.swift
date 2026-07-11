@@ -43,7 +43,7 @@ struct TaskEditView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 40)
             }
-            .background(Color.loomBackground)
+            .hearthScreen(glowOpacity: 0.1)
             .navigationTitle("Edit Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

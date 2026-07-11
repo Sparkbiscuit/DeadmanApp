@@ -33,38 +33,40 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var replanSummary = CatchUpSummary()
     @State private var sessionRequestTaskId: UUID?
+    @State private var showingCapture = false
 
     private var needsOnboarding: Bool {
         settingsArray.first.map { !$0.hasCompletedOnboarding } ?? false
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TaskListView(replanSummary: $replanSummary, sessionRequestTaskId: $sessionRequestTaskId)
-                .tabItem {
-                    Label("Tasks", systemImage: "checklist")
+        ZStack(alignment: .bottom) {
+            // Custom shell (not TabView): the Hearthlight bar is a floating
+            // blurred capsule with a proud FAB, which the system bar can't do.
+            Group {
+                switch selectedTab {
+                case 0:
+                    TaskListView(replanSummary: $replanSummary, sessionRequestTaskId: $sessionRequestTaskId)
+                case 1:
+                    ScheduleView()
+                case 2:
+                    WeaveView()
+                default:
+                    SettingsView()
                 }
-                .tag(0)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            ScheduleView()
-                .tabItem {
-                    Label("Schedule", systemImage: "calendar")
-                }
-                .tag(1)
-
-            WeaveView()
-                .tabItem {
-                    Label("Weave", systemImage: "chart.bar.fill")
-                }
-                .tag(2)
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .tag(3)
+            HearthTabBar(selectedTab: $selectedTab) {
+                showingCapture = true
+            }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .preferredColorScheme(.dark)
         .tint(Color.brand500)
+        .sheet(isPresented: $showingCapture) {
+            CaptureSheetView()
+        }
         .fullScreenCover(isPresented: Binding(
             get: { needsOnboarding },
             set: { _ in } // dismissal only happens by completing the flow
@@ -167,5 +169,102 @@ struct MainTabView: View {
         CalendarExportService.syncIfEnabled(context: modelContext)
         // Not user-initiated: never trigger the permission prompt from here.
         scheduleDidChange(context: modelContext, interactive: false)
+    }
+}
+
+// MARK: - Hearthlight tab bar
+
+/// The floating hearth bar: a blurred capsule inset from the screen edges,
+/// with an accent pill behind the active tab, a glowing dot beneath it, and
+/// the capture FAB sitting slightly proud at the trailing end.
+private struct HearthTabBar: View {
+    @Binding var selectedTab: Int
+    var onCapture: () -> Void
+
+    private struct TabSpec {
+        let index: Int
+        let label: String
+        let icon: String
+    }
+
+    private let tabs: [TabSpec] = [
+        .init(index: 0, label: "Tasks", icon: "line.3.horizontal"),
+        .init(index: 1, label: "Schedule", icon: "calendar"),
+        .init(index: 2, label: "Weave", icon: "squareshape.split.3x3"),
+        .init(index: 3, label: "Settings", icon: "gearshape")
+    ]
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(tabs, id: \.index) { tab in
+                tabButton(tab)
+            }
+
+            fab
+                .padding(.leading, 4)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color(hex: 0x19191D).opacity(0.72)))
+        )
+        .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 4)
+    }
+
+    private func tabButton(_ tab: TabSpec) -> some View {
+        let isActive = selectedTab == tab.index
+
+        return Button {
+            guard selectedTab != tab.index else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                selectedTab = tab.index
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(tab.label)
+                    .font(AppFont.caption(9))
+            }
+            .foregroundStyle(isActive ? Color.brand300 : Color.loomSubtle)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isActive ? Color.brand500.opacity(0.16) : .clear)
+            )
+            .overlay(alignment: .bottom) {
+                if isActive {
+                    Circle()
+                        .fill(Color.brand500)
+                        .frame(width: 4, height: 4)
+                        .hearthGlow(.brand500, radius: 6, opacity: 0.9)
+                        .offset(y: 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tab.label)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private var fab: some View {
+        Button(action: onCapture) {
+            Image(systemName: "plus")
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(LinearGradient.hearth, in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 1))
+                .shadow(color: Color.brand500.opacity(0.5), radius: 14, y: 6)
+        }
+        .buttonStyle(.plain)
+        .offset(y: -6)
+        .accessibilityLabel("Capture a task")
     }
 }

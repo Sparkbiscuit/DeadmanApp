@@ -235,71 +235,85 @@ private struct UpNextWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .environment(\.colorScheme, .dark)
         .widgetURL(next?.deepLink)
-        .containerBackground(Color.loomSurface, for: .widget)
+        .containerBackground(for: .widget) {
+            HearthWidgetBackground()
+        }
     }
 
+    /// The home screen's glowing-thread list, widget-sized: a fading thread
+    /// down the left edge, context dots breaking through it, the active item
+    /// in accent with "Now" instead of a time.
     private var mediumView: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 7) {
             if entry.items.isEmpty {
                 emptyView
             } else {
-                ForEach(entry.items.prefix(3)) { item in
-                    let color = itemColor(item)
-                    Link(destination: item.deepLink) {
-                        HStack(spacing: 10) {
-                            Text(TimeFormatter.clock.string(from: item.start))
-                                .font(AppFont.monoMedium(11))
-                                .foregroundStyle(Color.loomSubtle)
-                                .frame(width: 62, alignment: .trailing)
+                Text("UP NEXT")
+                    .font(AppFont.caption(9))
+                    .foregroundStyle(Color.loomSubtle)
+                    .kerning(1.2)
+                    .padding(.leading, 18)
 
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(color)
-                                .frame(width: 3, height: 26)
+                ZStack(alignment: .topLeading) {
+                    LinearGradient(
+                        colors: [Color.brand300.opacity(0.8), Color.brand300.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .padding(.leading, 3)
+                    .padding(.vertical, 4)
 
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.title)
-                                    .font(AppFont.heading(13))
-                                    .foregroundStyle(Color.loomText)
-                                    .lineLimit(1)
-                                if item.kind == .reminder {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "bell.fill")
-                                            .font(.system(size: 7, weight: .semibold))
-                                        Text("Reminder")
-                                            .font(AppFont.caption(10))
-                                    }
-                                    .foregroundStyle(color)
-                                } else {
-                                    Text(item.contextName)
-                                        .font(AppFont.caption(10))
-                                        .foregroundStyle(color)
-                                }
-                            }
-
-                            Spacer(minLength: 0)
-
-                            if item.isActive(at: entry.date) {
-                                Text("NOW")
-                                    .font(AppFont.caption(9))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(color, in: Capsule())
-                            }
-                            if item.kind == .block {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.system(size: 17))
-                                    .foregroundStyle(color)
-                            }
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(entry.items.prefix(4)) { item in
+                            threadRow(item)
                         }
                     }
+                    .padding(.leading, 18)
                 }
-                Spacer(minLength: 0)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .containerBackground(Color.loomSurface, for: .widget)
+        .environment(\.colorScheme, .dark)
+        .containerBackground(for: .widget) {
+            HearthWidgetBackground()
+        }
+    }
+
+    private func threadRow(_ item: UpNextEntry.ItemInfo) -> some View {
+        let isActive = item.isActive(at: entry.date)
+        let color = isActive ? Color.brand300 : itemColor(item)
+
+        return Link(destination: item.deepLink) {
+            HStack(spacing: 8) {
+                Text(item.title)
+                    .font(AppFont.cardTitle(13))
+                    .foregroundStyle(isActive ? Color.brand100 : Color.loomText)
+                    .lineLimit(1)
+
+                if item.kind == .reminder {
+                    Image(systemName: "bell.fill")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(color)
+                }
+
+                Spacer(minLength: 0)
+
+                Text(isActive ? "Now" : TimeFormatter.clock.string(from: item.start))
+                    .font(AppFont.mono(11))
+                    .foregroundStyle(color)
+            }
+            .overlay(alignment: .leading) {
+                Circle()
+                    .fill(color)
+                    .frame(width: isActive ? 9 : 7, height: isActive ? 9 : 7)
+                    .shadow(color: color.opacity(0.8), radius: 4)
+                    .offset(x: -17)
+            }
+        }
     }
 
     private var emptyView: some View {

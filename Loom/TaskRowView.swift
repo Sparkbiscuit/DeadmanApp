@@ -14,7 +14,7 @@ struct TaskRowView: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.title)
-                        .font(AppFont.heading(16))
+                        .font(AppFont.cardTitle(16))
                         .foregroundStyle(Color.loomText)
                         .lineLimit(2)
 
@@ -176,7 +176,7 @@ struct TaskRowView: View {
     private var deadlineColor: Color {
         let hours = task.deadline.timeIntervalSince(Date()) / 3600
         if hours < 24 { return .loomRed }
-        if hours < 72 { return .workColor }
+        if hours < 72 { return .workDisplay }
         return .loomSubtle
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 // MARK: - Hex helpers
 
@@ -23,42 +24,127 @@ extension Color {
             )
         })
     }
+
+    /// Linear RGB mix — the SwiftUI stand-in for the prototype's
+    /// `color-mix(in oklab, …)`. `fraction` is how much of `a` survives.
+    static func mix(_ a: UInt32, _ b: UInt32, keeping fraction: Double) -> Color {
+        func channel(_ shift: UInt32) -> Double {
+            let ca = Double((a >> shift) & 0xFF)
+            let cb = Double((b >> shift) & 0xFF)
+            return (ca * fraction + cb * (1 - fraction)) / 255
+        }
+        return Color(red: channel(16), green: channel(8), blue: channel(0))
+    }
 }
 
-// MARK: - Color Palette (design-handoff tokens)
+// MARK: - Hearth accent (Hearthlight design system)
+
+/// The swappable brand hue. Ember is the hearth default; the other three are
+/// fully designed alternates surfaced as a user preference in Settings.
+enum HearthAccent: String, CaseIterable, Identifiable {
+    case ember
+    case indigo
+    case sage
+    case violet
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .ember: return "Ember"
+        case .indigo: return "Indigo"
+        case .sage: return "Sage"
+        case .violet: return "Violet"
+        }
+    }
+
+    var baseHex: UInt32 {
+        switch self {
+        case .ember: return 0xC1571F
+        case .indigo: return 0x5A78E0
+        case .sage: return 0x3FA372
+        case .violet: return 0x8B5AD6
+        }
+    }
+
+    var color: Color { Color(hex: baseHex) }
+    /// Brightest highlight — icon strokes and labels sitting on the accent.
+    var hi: Color { .mix(baseHex, 0xFFFFFF, keeping: 0.78) }
+    /// Most glow text, active-tab tint, ring highlight.
+    var soft: Color { .mix(baseHex, 0xFFFFFF, keeping: 0.52) }
+    /// Reserved dark shade.
+    var deep: Color { .mix(baseHex, 0x000000, keeping: 0.72) }
+
+    /// Reads the persisted choice without observation — for widget timelines
+    /// and other places outside a SwiftUI render pass.
+    static var current: HearthAccent {
+        let defaults = UserDefaults(suiteName: SharedStore.appGroupId) ?? .standard
+        return defaults.string(forKey: HearthTheme.defaultsKey).flatMap(HearthAccent.init) ?? .ember
+    }
+}
+
+/// Observable accent store. Views read `Color.brand500` (and friends) inside
+/// `body`, which routes through this singleton, so changing the hearth hue in
+/// Settings re-tints every screen live. Persisted in the App Group so the
+/// widgets pick the same hue.
+@Observable
+final class HearthTheme {
+    static let shared = HearthTheme()
+    static let defaultsKey = "hearthAccent"
+
+    var accent: HearthAccent {
+        didSet {
+            let defaults = UserDefaults(suiteName: SharedStore.appGroupId) ?? .standard
+            defaults.set(accent.rawValue, forKey: Self.defaultsKey)
+            SharedStore.reloadWidgets()
+        }
+    }
+
+    private init() {
+        accent = HearthAccent.current
+    }
+}
+
+// MARK: - Color Palette (Hearthlight tokens)
 
 extension Color {
-    // Brand — Ember
-    static let brand100 = Color(hex: 0xFBE4D4)
-    static let brand300 = Color(hex: 0xEFA36C)
-    static let brand500 = Color(hex: 0xC1571F)
-    static let brand600 = Color(hex: 0xA64715)
-    static let brand700 = Color(hex: 0x8A3A10)
+    // Brand — derived live from the chosen hearth accent.
+    static var brand100: Color { HearthTheme.shared.accent.hi }
+    static var brand300: Color { HearthTheme.shared.accent.soft }
+    static var brand500: Color { HearthTheme.shared.accent.color }
+    static var brand600: Color { .mix(HearthTheme.shared.accent.baseHex, 0x000000, keeping: 0.86) }
+    static var brand700: Color { HearthTheme.shared.accent.deep }
 
-    // Semantic — urgency & task contexts
+    // Semantic — urgency & task contexts (unchanged from the existing app)
     static let loomRed = Color(hex: 0xE2434A)
     static let loomRedPressed = Color(hex: 0xC93039)
     static let schoolColor = Color(hex: 0x5A78E0)
     static let workColor = Color(hex: 0xE0A020)
     static let personalColor = Color(hex: 0x3FA372)
 
-    // Surfaces (adaptive: light / dark)
-    static let loomBackground = Color(lightHex: 0xF4F4F6, darkHex: 0x121214)
-    static let loomSurface = Color(lightHex: 0xFFFFFF, darkHex: 0x1C1C1F)
-    static let loomSurface2 = Color(lightHex: 0xEAEAEF, darkHex: 0x29292D)
-    static let loomSurface3 = Color(lightHex: 0xDEDEE3, darkHex: 0x333338)
+    // Context display shades — lighter cousins used for text/labels on dark.
+    static let schoolDisplay = Color(hex: 0x8FA5EC)
+    static let workDisplay = Color(hex: 0xE8BE62)
+    static let personalDisplay = Color(hex: 0x6FC49A)
+
+    // Surfaces (Hearthlight is dark-first; light values kept for previews)
+    static let loomBackground = Color(lightHex: 0xF4F4F6, darkHex: 0x0F0F12)
+    static let loomSurface = Color(lightHex: 0xFFFFFF, darkHex: 0x19191D)
+    static let loomSurface2 = Color(lightHex: 0xEAEAEF, darkHex: 0x232327)
+    static let loomSurface3 = Color(lightHex: 0xDEDEE3, darkHex: 0x2E2E33)
     static let loomText = Color(lightHex: 0x1C1C1E, darkHex: 0xF5F5F7)
     static let loomSubtle = Color(lightHex: 0x6E6E76, darkHex: 0x9A9AA2)
     static let loomFaint = Color(lightHex: 0x9A9AA2, darkHex: 0x6E6E76)
 
     static let loomBorder = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(white: 1, alpha: 0.08)
+            ? UIColor(white: 1, alpha: 0.07)
             : UIColor(white: 0, alpha: 0.07)
     })
 }
 
 extension TaskContext {
+    /// Fill color for bars, dots, and tags.
     var color: Color {
         switch self {
         case .school: return .schoolColor
@@ -66,14 +152,49 @@ extension TaskContext {
         case .personal: return .personalColor
         }
     }
+
+    /// Text/label shade — brighter than the fill so it reads on dark surfaces.
+    var displayColor: Color {
+        switch self {
+        case .school: return .schoolDisplay
+        case .work: return .workDisplay
+        case .personal: return .personalDisplay
+        }
+    }
+}
+
+// MARK: - Gradients
+
+extension LinearGradient {
+    /// The signature CTA / hero fill: soft accent lighting into the full hue.
+    static var hearth: LinearGradient {
+        let accent = HearthTheme.shared.accent
+        return LinearGradient(
+            colors: [accent.soft, accent.color],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Screen-title treatment: near-white melting into accentSoft.
+    static var hearthTitle: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: 0xF5F5F7), HearthTheme.shared.accent.soft],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
 }
 
 // MARK: - Corner radii
 
 enum LoomRadius {
     static let sm: CGFloat = 8
+    static let row: CGFloat = 14
     static let button: CGFloat = 14
     static let card: CGFloat = 16
+    static let group: CGFloat = 18
+    static let hero: CGFloat = 22
     static let sheet: CGFloat = 24
 }
 
@@ -86,13 +207,18 @@ struct AppFont {
     }
 
     /// Screen titles ("Your Tasks") use the heaviest cut.
-    static func title(_ size: CGFloat = 26) -> Font {
+    static func title(_ size: CGFloat = 28) -> Font {
         .custom("Nunito-Black", size: size, relativeTo: .title)
     }
 
     /// Heading — Nunito Bold
     static func heading(_ size: CGFloat = 20) -> Font {
         .custom("Nunito-Bold", size: size, relativeTo: .headline)
+    }
+
+    /// Card/list titles — Nunito ExtraBold
+    static func cardTitle(_ size: CGFloat = 17) -> Font {
+        .custom("Nunito-ExtraBold", size: size, relativeTo: .headline)
     }
 
     /// Body — Nunito Regular
@@ -118,21 +244,26 @@ struct AppFont {
     static func monoMedium(_ size: CGFloat = 14) -> Font {
         .custom("JetBrainsMono-Medium", size: size, relativeTo: .body)
     }
+
+    static func monoBold(_ size: CGFloat = 14) -> Font {
+        .custom("JetBrainsMono-Bold", size: size, relativeTo: .body)
+    }
 }
 
 // MARK: - View Modifiers
 
 struct CardModifier: ViewModifier {
-    @Environment(\.colorScheme) var colorScheme
+    var radius: CGFloat = LoomRadius.card
 
     func body(content: Content) -> some View {
         content
             .padding(16)
             .background(Color.loomSurface)
-            .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
-            // Elevation is light-mode only; dark mode relies on surface contrast.
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.06), radius: 1, y: 1)
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0 : 0.05), radius: 10, y: 8)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .stroke(Color.loomBorder, lineWidth: 1)
+            )
     }
 }
 
@@ -142,42 +273,336 @@ struct ContextTagModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .font(AppFont.caption(11))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 8)
+            .foregroundStyle(context.displayColor)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(context.color, in: Capsule())
+            .background(context.color.opacity(0.18), in: Capsule())
+            .overlay(Capsule().stroke(context.color.opacity(0.25), lineWidth: 1))
     }
 }
 
-/// Full-width brand CTA ("Schedule it", "Save Progress"…).
+/// Full-width gradient CTA ("Schedule it", "Continue session"…) with the
+/// signature hearth glow.
 struct PrimaryButtonModifier: ViewModifier {
-    var fill: Color = .brand500
+    var fill: Color? = nil
     var enabled: Bool = true
 
     func body(content: Content) -> some View {
-        content
+        let gradient: LinearGradient = {
+            if let fill {
+                return LinearGradient(
+                    colors: [fill.opacity(0.85), fill],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            return .hearth
+        }()
+        let glowColor = fill ?? Color.brand500
+
+        return content
             .font(AppFont.heading(16))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: LoomRadius.button, style: .continuous)
-                    .fill(enabled ? fill : Color.loomFaint)
+                    .fill(enabled ? AnyShapeStyle(gradient) : AnyShapeStyle(Color.loomSurface3))
             )
+            .shadow(color: enabled ? glowColor.opacity(0.35) : .clear, radius: 14, y: 6)
+    }
+}
+
+/// The single most repeated visual signature of Hearthlight: a soft
+/// color-matched glow behind anything active or highlighted.
+struct HearthGlowModifier: ViewModifier {
+    var color: Color
+    var radius: CGFloat = 12
+    var opacity: Double = 0.4
+
+    func body(content: Content) -> some View {
+        content.shadow(color: color.opacity(opacity), radius: radius)
     }
 }
 
 extension View {
-    func cardStyle() -> some View {
-        modifier(CardModifier())
+    func cardStyle(radius: CGFloat = LoomRadius.card) -> some View {
+        modifier(CardModifier(radius: radius))
     }
 
     func contextTag(_ context: TaskContext) -> some View {
         modifier(ContextTagModifier(context: context))
     }
 
-    func primaryButtonStyle(fill: Color = .brand500, enabled: Bool = true) -> some View {
+    func primaryButtonStyle(fill: Color? = nil, enabled: Bool = true) -> some View {
         modifier(PrimaryButtonModifier(fill: fill, enabled: enabled))
+    }
+
+    func hearthGlow(_ color: Color, radius: CGFloat = 12, opacity: Double = 0.4) -> some View {
+        modifier(HearthGlowModifier(color: color, radius: radius, opacity: opacity))
+    }
+}
+
+// MARK: - Gradient screen title
+
+/// "Your Tasks" / "Schedule" / "Your Weave" — 900-weight with the two-color
+/// left-to-right melt into accentSoft.
+struct HearthTitle: View {
+    let text: String
+    var size: CGFloat = 30
+
+    var body: some View {
+        Text(text)
+            .font(AppFont.title(size))
+            .foregroundStyle(LinearGradient.hearthTitle)
+    }
+}
+
+// MARK: - Ambient hearth background
+
+/// Rising ember particles — the hearth is always faintly alive. Pure Canvas
+/// drawing, seeded once per appearance; honors Reduce Motion by holding the
+/// embers still instead of animating them.
+struct EmberField: View {
+    var emberCount: Int = 11
+    var intensity: Double = 1.0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private struct Ember {
+        let x: Double        // 0…1 horizontal anchor
+        let drift: Double    // horizontal wobble in points
+        let speed: Double    // full rises per minute
+        let size: Double
+        let phase: Double    // 0…1 head start
+        let brightness: Double
+    }
+
+    @State private var embers: [Ember] = []
+    @State private var birth = Date()
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                canvas(at: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
+                    canvas(at: timeline.date.timeIntervalSince(birth))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            guard embers.isEmpty else { return }
+            birth = Date()
+            embers = (0..<emberCount).map { _ in
+                Ember(
+                    x: .random(in: 0.03...0.97),
+                    drift: .random(in: 6...22),
+                    speed: .random(in: 0.55...1.4),
+                    size: .random(in: 1.6...3.4),
+                    phase: .random(in: 0...1),
+                    brightness: .random(in: 0.25...0.8)
+                )
+            }
+        }
+    }
+
+    private func canvas(at elapsed: TimeInterval) -> some View {
+        Canvas { context, size in
+            let accent = HearthTheme.shared.accent
+            for ember in embers {
+                // 0 at the bottom, 1 at the top, looping.
+                let t = (elapsed / 60 * ember.speed + ember.phase)
+                    .truncatingRemainder(dividingBy: 1)
+                let y = size.height * (1 - t)
+                let x = ember.x * size.width + sin(t * .pi * 4 + ember.phase * 10) * ember.drift
+                // Fade in near the hearth, gutter out near the top.
+                let fade = min(1, min(t / 0.15, (1 - t) / 0.35))
+                let alpha = ember.brightness * fade * 0.55 * intensity
+                guard alpha > 0.01 else { continue }
+
+                let rect = CGRect(
+                    x: x - ember.size / 2, y: y - ember.size / 2,
+                    width: ember.size, height: ember.size
+                )
+                context.opacity = alpha
+                context.fill(Path(ellipseIn: rect), with: .color(accent.soft))
+                context.opacity = alpha * 0.5
+                context.fill(
+                    Path(ellipseIn: rect.insetBy(dx: -ember.size, dy: -ember.size)),
+                    with: .color(accent.color)
+                )
+            }
+        }
+    }
+}
+
+/// The standard Hearthlight screen backdrop: near-black canvas, a warm
+/// ambient glow banked at the top, and embers rising through everything.
+struct HearthScreenBackground: View {
+    var glowOpacity: Double = 0.16
+
+    var body: some View {
+        ZStack {
+            Color.loomBackground
+
+            RadialGradient(
+                colors: [
+                    Color.brand500.opacity(glowOpacity),
+                    Color.brand500.opacity(glowOpacity * 0.35),
+                    .clear
+                ],
+                center: UnitPoint(x: 0.5, y: -0.15),
+                startRadius: 0,
+                endRadius: 500
+            )
+
+            RadialGradient(
+                colors: [Color.brand500.opacity(glowOpacity * 0.5), .clear],
+                center: UnitPoint(x: 0.5, y: 1.1),
+                startRadius: 0,
+                endRadius: 420
+            )
+
+            EmberField()
+        }
+        .ignoresSafeArea()
+    }
+}
+
+extension View {
+    /// Wraps a screen in the hearth backdrop.
+    func hearthScreen(glowOpacity: Double = 0.16) -> some View {
+        background(HearthScreenBackground(glowOpacity: glowOpacity))
+    }
+}
+
+// MARK: - Progress ring
+
+/// The held flame: a conic progress arc in accentSoft→accent with a blurred
+/// glow duplicate behind it. Used at 74pt on the home hero and 200pt in the
+/// work session.
+struct HearthProgressRing: View {
+    /// 0…1 completed fraction.
+    var progress: Double
+    var size: CGFloat
+    var lineWidth: CGFloat
+    /// Extra pulsing halo behind the ring (work session only).
+    var showsHalo: Bool = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    private var clamped: Double { min(1, max(0.003, progress)) }
+
+    var body: some View {
+        let accent = HearthTheme.shared.accent
+        let arcGradient = AngularGradient(
+            colors: [accent.soft, accent.color, accent.color],
+            center: .center,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(-90 + 360 * clamped)
+        )
+
+        ZStack {
+            if showsHalo {
+                Circle()
+                    .fill(accent.color.opacity(0.22))
+                    .frame(width: size * 1.22, height: size * 1.22)
+                    .blur(radius: size * 0.14)
+                    .scaleEffect(breathing ? 1.06 : 0.94)
+            }
+
+            // Track
+            Circle()
+                .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
+                .frame(width: size, height: size)
+
+            // Glow duplicate under the arc
+            arc(arcGradient)
+                .blur(radius: lineWidth * 0.9)
+                .opacity(0.8)
+
+            arc(arcGradient)
+        }
+        .onAppear {
+            guard showsHalo, !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+                breathing = true
+            }
+        }
+    }
+
+    private func arc(_ style: AngularGradient) -> some View {
+        Circle()
+            .trim(from: 0, to: clamped)
+            .stroke(style, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+            .frame(width: size, height: size)
+    }
+}
+
+// MARK: - Breathing dot
+
+/// The small living dot used on the "now" line, session status, and active
+/// cards. Sits still under Reduce Motion.
+struct BreathingDot: View {
+    var color: Color
+    var size: CGFloat = 8
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .hearthGlow(color, radius: size, opacity: 0.7)
+            .scaleEffect(breathing ? 1.18 : 0.88)
+            .opacity(breathing ? 1 : 0.75)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
+            }
+    }
+}
+
+// MARK: - Hearth toggle
+
+/// Capsule switch with an accent-gradient, glowing track when on.
+struct HearthToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                configuration.isOn.toggle()
+            }
+        } label: {
+            HStack {
+                configuration.label
+                Spacer(minLength: 8)
+                Capsule()
+                    .fill(
+                        configuration.isOn
+                            ? AnyShapeStyle(LinearGradient.hearth)
+                            : AnyShapeStyle(Color.loomSurface3)
+                    )
+                    .frame(width: 46, height: 28)
+                    .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                        Circle()
+                            .fill(configuration.isOn ? Color.white : Color(hex: 0x8E8E96))
+                            .frame(width: 22, height: 22)
+                            .padding(3)
+                    }
+                    .shadow(
+                        color: configuration.isOn ? Color.brand500.opacity(0.45) : .clear,
+                        radius: 8
+                    )
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -195,11 +620,11 @@ struct EmptyStateView: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(Color.loomSurface2)
+                    .fill(Color.brand500.opacity(0.1))
                     .frame(width: 52, height: 52)
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(Color.loomFaint)
+                    .foregroundStyle(Color.brand300)
             }
             .padding(.bottom, 6)
 
@@ -216,10 +641,10 @@ struct EmptyStateView: View {
                 Button(action: action) {
                     Text(actionLabel)
                         .font(AppFont.caption(13))
-                        .foregroundStyle(Color.brand500)
+                        .foregroundStyle(Color.brand300)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .overlay(Capsule().stroke(Color.loomBorder, lineWidth: 1))
+                        .overlay(Capsule().stroke(Color.brand500.opacity(0.4), lineWidth: 1))
                 }
                 .padding(.top, 10)
             }
@@ -234,7 +659,7 @@ struct EmptyStateView: View {
 struct InfoBanner: View {
     let icon: String
     let text: String
-    var tint: Color = .schoolColor
+    var tint: Color = .schoolDisplay
 
     var body: some View {
         HStack(spacing: 10) {
@@ -249,9 +674,9 @@ struct InfoBanner: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.loomSurface)
-        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+            RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
                 .stroke(Color.loomBorder, lineWidth: 1)
         )
     }
