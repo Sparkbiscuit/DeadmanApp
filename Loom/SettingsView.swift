@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var showNotificationsDeniedAlert = false
     @State private var didPushNow = false
     @State private var exportFileURL: URL?
+    @State private var isConnectingGoogle = false
+    @State private var showGoogleConnectFailed = false
 
     var body: some View {
         NavigationStack {
@@ -38,6 +40,7 @@ struct SettingsView: View {
                 planningSection(settings)
                 nudgeSection(settings)
                 calendarSection(settings)
+                googleCalendarSection(settings)
                 aboutSection
 
                 Text("Loom \(appVersion) · woven with care")
@@ -58,6 +61,11 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Enable notifications for Loom in Settings to get block start nudges.")
+        }
+        .alert("Couldn't connect Google", isPresented: $showGoogleConnectFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Something went wrong signing in to Google. Check your connection and try again.")
         }
     }
 
@@ -454,6 +462,140 @@ struct SettingsView: View {
             } else {
                 showCalendarDeniedAlert = true
             }
+        }
+    }
+
+    // MARK: - Google Calendar
+
+    /// Google Calendar, treated the same as the Apple pair: one connect
+    /// button, then the identical import/export toggles. Connection state
+    /// lives in the Keychain; `googleAccountEmail` mirrors it for display.
+    private func googleCalendarSection(_ settings: UserSettings) -> some View {
+        SettingsGroup(
+            title: "Google Calendar",
+            footer: settings.googleAccountEmail == nil
+                ? "Sign in once and Google Calendar joins the loom: its events become busy time Loom schedules around, and export mirrors your blocks into your primary Google calendar. Events never become tasks."
+                : "Import treats Google events as busy time; export mirrors your blocks into your primary Google calendar, marked so they're never re-imported."
+        ) {
+            if let email = settings.googleAccountEmail {
+                SettingsRow(icon: "person.crop.circle.fill", tint: .personalDisplay, label: email) {
+                    Button("Disconnect") {
+                        disconnectGoogle()
+                    }
+                    .font(AppFont.caption(13))
+                    .foregroundStyle(Color.loomRed)
+                    .buttonStyle(.plain)
+                }
+
+                if settings.googleNeedsReconnect {
+                    Button {
+                        connectGoogle(settings)
+                    } label: {
+                        SettingsRow(
+                            icon: "exclamationmark.arrow.circlepath",
+                            tint: .loomRed,
+                            label: "Reconnect Google",
+                            labelTint: .loomRed
+                        ) {
+                            if isConnectingGoogle {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.loomFaint)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isConnectingGoogle)
+                }
+
+                SettingsRow(icon: "calendar.badge.clock", tint: .workDisplay, label: "Import busy times") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.importFromGoogleCalendar },
+                        set: { enabled in setGoogleImport(enabled, settings: settings) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(HearthToggleStyle())
+                }
+
+                SettingsRow(icon: "arrow.up", tint: .workDisplay, label: "Export blocks to Google") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.exportToGoogleCalendar },
+                        set: { enabled in setGoogleExport(enabled, settings: settings) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(HearthToggleStyle())
+                }
+            } else {
+                Button {
+                    connectGoogle(settings)
+                } label: {
+                    SettingsRow(
+                        icon: "link",
+                        tint: .brand300,
+                        label: "Connect Google Calendar",
+                        labelTint: .brand300
+                    ) {
+                        if isConnectingGoogle {
+                            ProgressView()
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isConnectingGoogle)
+            }
+        }
+    }
+
+    private func connectGoogle(_ settings: UserSettings) {
+        guard !isConnectingGoogle else { return }
+        isConnectingGoogle = true
+        Task { @MainActor in
+            defer { isConnectingGoogle = false }
+            do {
+                let tokens = try await GoogleOAuth.shared.connect()
+                settings.googleAccountEmail = tokens.email ?? "Google account"
+                settings.googleNeedsReconnect = false
+                settings.googleSyncToken = nil
+                // Connecting is the ask to import; export stays opt-in.
+                settings.importFromGoogleCalendar = true
+                await GoogleCalendarService.importNow(context: modelContext, settings: settings)
+            } catch GoogleAuthError.cancelled {
+                // The user backed out of the consent screen — not an error.
+            } catch {
+                showGoogleConnectFailed = true
+            }
+        }
+    }
+
+    private func disconnectGoogle() {
+        GoogleCalendarService.disconnect(context: modelContext)
+    }
+
+    private func setGoogleImport(_ enabled: Bool, settings: UserSettings) {
+        settings.importFromGoogleCalendar = enabled
+        // Either direction invalidates the incremental cursor: re-enabling
+        // must start from a full window fetch.
+        settings.googleSyncToken = nil
+        if enabled {
+            Task { @MainActor in
+                await GoogleCalendarService.importNow(context: modelContext, settings: settings)
+            }
+        } else {
+            GoogleCalendarService.removeImportedEvents(context: modelContext)
+            replanAfterBusyChange(context: modelContext)
+        }
+    }
+
+    private func setGoogleExport(_ enabled: Bool, settings: UserSettings) {
+        settings.exportToGoogleCalendar = enabled
+        if enabled {
+            Task { @MainActor in
+                await GoogleCalendarService.exportNow(context: modelContext, settings: settings)
+            }
+        } else {
+            GoogleCalendarService.removeExportedEvents(context: modelContext)
         }
     }
 

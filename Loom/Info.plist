@@ -14,6 +14,14 @@
 				<string>loom</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christoforakis.Loom.google-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.720600189786-8m8c9bqvpipununa0vh9u03binokuhtv</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Loom uses the microphone so you can speak a task instead of typing it.</string>

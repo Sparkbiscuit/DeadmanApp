@@ -245,6 +245,7 @@ struct TaskListView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         withAnimation {
@@ -334,6 +335,7 @@ struct TaskListView: View {
             deleteTask(task, context: modelContext)
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -551,7 +553,7 @@ struct TaskListView: View {
             }
             .buttonStyle(.plain)
 
-            if isExpanded {
+            CollapsibleSectionBody(isExpanded: isExpanded) {
                 VStack(spacing: 10) {
                     ForEach(tasks) { task in
                         TaskRowView(
@@ -563,8 +565,6 @@ struct TaskListView: View {
                         .padding(.horizontal, 20)
                     }
                 }
-                .padding(.bottom, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -603,7 +603,7 @@ struct TaskListView: View {
                 }
                 .buttonStyle(.plain)
 
-                if showCompleted {
+                CollapsibleSectionBody(isExpanded: showCompleted) {
                     VStack(spacing: 10) {
                         ForEach(completed.sorted {
                             ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
@@ -631,8 +631,6 @@ struct TaskListView: View {
                             .padding(.horizontal, 20)
                         }
                     }
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -666,9 +664,32 @@ struct TaskListView: View {
         try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
+}
+
+// MARK: - Collapsible section body
+
+/// The stable clipping frame that makes a disclosure's rows fold up into the
+/// header when collapsed: without it, the removed rows slide up across the
+/// whole screen instead of disappearing under the disclosure. Every
+/// expandable section on this screen should collapse through this wrapper.
+private struct CollapsibleSectionBody<Content: View>: View {
+    let isExpanded: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                content
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .clipped()
+    }
 }
 
 // MARK: - Stat Pill
@@ -1326,5 +1347,6 @@ func restoreTask(_ task: LoomTask, context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
+    GoogleCalendarService.exportIfEnabled(context: context)
     scheduleDidChange(context: context)
 }

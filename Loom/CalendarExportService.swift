@@ -10,8 +10,8 @@ enum CalendarExportService {
 
     private static let store = EKEventStore()
 
-    /// How far ahead exported events are maintained.
-    private static let horizonDays = 60
+    /// How far ahead exported events are maintained (Google export shares it).
+    nonisolated static let horizonDays = 60
 
     static func requestAccess() async -> Bool {
         (try? await store.requestFullAccessToEvents()) ?? false

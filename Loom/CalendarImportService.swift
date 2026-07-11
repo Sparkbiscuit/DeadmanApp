@@ -10,8 +10,8 @@ enum CalendarImportService {
 
     private static let store = EKEventStore()
 
-    /// How far ahead imported events are mirrored.
-    private static let horizonDays = 30
+    /// How far ahead imported events are mirrored (Google import shares it).
+    nonisolated static let horizonDays = 30
 
     /// Mirror Apple Calendar into BusyEvents, if import is enabled and access
     /// was granted. Safe to call on every foreground.

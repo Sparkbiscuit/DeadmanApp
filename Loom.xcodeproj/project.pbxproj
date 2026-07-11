@@ -19,6 +19,9 @@
 		0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00102D6D3EF700D079F0 /* WeaveView.swift */; };
 		0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */; };
 		0CAF00412D6D3EF700D079F0 /* DataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00402D6D3EF700D079F0 /* DataExporter.swift */; };
+		0CAF00512D6D3EF700D079F0 /* GoogleAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */; };
+		0CAF00532D6D3EF700D079F0 /* GoogleCalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */; };
+		0CAF00552D6D3EF700D079F0 /* GoogleCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */; };
 		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
 		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
 		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
@@ -119,6 +122,9 @@
 		0CAF00102D6D3EF700D079F0 /* WeaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeaveView.swift; sourceTree = "<group>"; };
 		0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomIntents.swift; sourceTree = "<group>"; };
 		0CAF00402D6D3EF700D079F0 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExporter.swift; sourceTree = "<group>"; };
+		0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleAuth.swift; sourceTree = "<group>"; };
+		0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarService.swift; sourceTree = "<group>"; };
+		0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarTests.swift; sourceTree = "<group>"; };
 		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
@@ -234,6 +240,8 @@
 				0CA002042C6D3EF700D079F0 /* ConfettiView.swift */,
 				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
 				0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */,
+				0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */,
+				0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */,
 				0CA007002C6D3EF700D079F0 /* NotificationService.swift */,
 				0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */,
 				0CA005002C6D3EF700D079F0 /* OnboardingView.swift */,
@@ -261,6 +269,7 @@
 			isa = PBXGroup;
 			children = (
 				021ED3142C6D3EF800D079F0 /* LoomTests.swift */,
+				0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */,
 			);
 			path = LoomTests;
 			sourceTree = "<group>";
@@ -500,6 +509,8 @@
 				0CA003102C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
 				0CA005012C6D3EF700D079F0 /* OnboardingView.swift in Sources */,
 				0CA005032C6D3EF700D079F0 /* CalendarImportService.swift in Sources */,
+				0CAF00512D6D3EF700D079F0 /* GoogleAuth.swift in Sources */,
+				0CAF00532D6D3EF700D079F0 /* GoogleCalendarService.swift in Sources */,
 				0CA006012C6D3EF700D079F0 /* SharedStore.swift in Sources */,
 				0CA006042C6D3EF700D079F0 /* TaskEditView.swift in Sources */,
 				0CA007012C6D3EF700D079F0 /* NotificationService.swift in Sources */,
@@ -512,6 +523,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				021ED3152C6D3EF800D079F0 /* LoomTests.swift in Sources */,
+				0CAF00552D6D3EF700D079F0 /* GoogleCalendarTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
