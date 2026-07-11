@@ -20,7 +20,7 @@ struct BulkEntryView: View {
             rowList
             bottomBar
         }
-        .hearthScreen(glowOpacity: 0.1)
+        .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
         .toolbar(.hidden, for: .navigationBar)
         .alert("Scheduled", isPresented: $showSummary) {
             Button("Done") {

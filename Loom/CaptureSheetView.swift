@@ -78,7 +78,7 @@ struct CaptureSheetView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .hearthScreen(glowOpacity: 0.1)
+            .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showBulk) {
                 BulkEntryView {

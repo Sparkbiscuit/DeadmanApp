@@ -33,7 +33,7 @@ struct ScheduleView: View {
                     weekGrid
                 }
             }
-            .hearthScreen()
+            .hearthScreen(topGlow: 0.26, bottomGlow: 0.32)
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(item: $celebrationTask) { task in
                 TaskCompletionView(task: task) {
@@ -77,20 +77,20 @@ struct ScheduleView: View {
                     } label: {
                         Text(mode.rawValue)
                             .font(AppFont.caption(13))
-                            .foregroundStyle(viewMode == mode ? Color.brand100 : Color.loomSubtle)
+                            .foregroundStyle(viewMode == mode ? Color.brand300 : Color.loomSubtle)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .background(
-                                Capsule()
-                                    .fill(viewMode == mode ? Color.brand500.opacity(0.28) : Color.clear)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(viewMode == mode ? Color.brand500.opacity(0.2) : Color.clear)
                             )
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(3)
-            .background(Capsule().fill(Color.loomSurface))
-            .overlay(Capsule().stroke(Color.loomBorder, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.loomBorder, lineWidth: 1))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -601,6 +601,10 @@ private struct BlockCard: View {
         block.isComplete || block.endTime <= now
     }
 
+    private var hasStarted: Bool {
+        block.isComplete || block.startTime <= now
+    }
+
     private static let shortTime: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm"
@@ -656,12 +660,17 @@ private struct BlockCard: View {
                         .contextTag(ctx)
                 }
 
-                Button(action: onToggle) {
-                    Image(systemName: block.isComplete ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22, weight: .light))
-                        .foregroundStyle(block.isComplete ? Color.personalColor : Color.loomFaint)
+                // The check control only surfaces once the block has started —
+                // future rows stay clean, per the design. Early birds can
+                // still check off from the context menu.
+                if hasStarted && !isInSession {
+                    Button(action: onToggle) {
+                        Image(systemName: block.isComplete ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20, weight: .light))
+                            .foregroundStyle(block.isComplete ? Color.personalColor : Color.loomFaint.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
@@ -676,6 +685,14 @@ private struct BlockCard: View {
             )
             .shadow(color: isInSession ? Color.brand500.opacity(0.3) : .clear, radius: 16)
             .opacity(isPast && !block.isComplete ? 0.55 : 1)
+            .contextMenu {
+                Button(action: onToggle) {
+                    Label(
+                        block.isComplete ? "Mark Incomplete" : "Mark Complete",
+                        systemImage: block.isComplete ? "arrow.uturn.backward" : "checkmark.circle"
+                    )
+                }
+            }
         }
     }
 

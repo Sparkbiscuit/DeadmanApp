@@ -208,10 +208,10 @@ private struct HearthTabBar: View {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color(hex: 0x19191D).opacity(0.72)))
+                .overlay(Capsule().fill(Color(hex: 0x19191D).opacity(0.82)))
         )
-        .overlay(Capsule().stroke(Color.white.opacity(0.07), lineWidth: 1))
-        .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
+        .overlay(Capsule().stroke(Color.white.opacity(0.09), lineWidth: 1))
+        .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
     }
@@ -240,11 +240,12 @@ private struct HearthTabBar: View {
             )
             .overlay(alignment: .bottom) {
                 if isActive {
-                    Circle()
-                        .fill(Color.brand500)
-                        .frame(width: 4, height: 4)
-                        .hearthGlow(.brand500, radius: 6, opacity: 0.9)
-                        .offset(y: 2)
+                    // A smudge of banked light under the active tab, not a dot.
+                    Capsule()
+                        .fill(Color.brand300)
+                        .frame(width: 22, height: 4)
+                        .blur(radius: 3)
+                        .offset(y: 7)
                 }
             }
         }
@@ -256,15 +257,15 @@ private struct HearthTabBar: View {
     private var fab: some View {
         Button(action: onCapture) {
             Image(systemName: "plus")
-                .font(.system(size: 21, weight: .bold))
+                .font(.system(size: 19, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
+                .frame(width: 44, height: 44)
                 .background(LinearGradient.hearth, in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.14), lineWidth: 1))
-                .shadow(color: Color.brand500.opacity(0.5), radius: 14, y: 6)
+                .shadow(color: Color.brand500.opacity(0.5), radius: 10, y: 4)
         }
         .buttonStyle(.plain)
-        .offset(y: -6)
+        .offset(y: -2)
         .accessibilityLabel("Capture a task")
     }
 }

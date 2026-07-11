@@ -45,10 +45,7 @@ struct WorkSessionView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 30)
-        .hearthScreen(glowOpacity: 0.12)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(LoomRadius.sheet)
+        .hearthScreen(topGlow: 0.05, bottomGlow: 0.42)
         .onReceive(timer) { _ in
             if isRunning && !isPaused {
                 elapsedSeconds += 1
@@ -193,13 +190,15 @@ struct WorkSessionView: View {
 
             Circle()
                 .fill(
+                    // Light pools near the top of the disc (`circle at 50% 28%`).
                     RadialGradient(
-                        colors: [Color(hex: 0x1C1C21), Color(hex: 0x121215)],
-                        center: .center,
+                        colors: [Color(hex: 0x1E1E22), Color(hex: 0x131316)],
+                        center: UnitPoint(x: 0.5, y: 0.28),
                         startRadius: 10,
-                        endRadius: 95
+                        endRadius: 130
                     )
                 )
+                .overlay(Circle().stroke(Color.white.opacity(0.06), lineWidth: 1))
                 .frame(width: 168, height: 168)
 
             VStack(spacing: 8) {
@@ -239,8 +238,12 @@ struct WorkSessionView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: LoomRadius.button, style: .continuous)
-                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
                         )
                 }
                 .buttonStyle(.plain)

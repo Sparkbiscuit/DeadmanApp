@@ -166,20 +166,37 @@ extension TaskContext {
 // MARK: - Gradients
 
 extension LinearGradient {
-    /// The signature CTA / hero fill: soft accent lighting into the full hue.
+    /// The signature CTA / FAB / toggle fill — `135deg, accentHi → accent` in
+    /// the prototype. accentHi keeps the button hot; accentSoft here would
+    /// wash it out (soft is reserved for glow text and the ring arc).
     static var hearth: LinearGradient {
         let accent = HearthTheme.shared.accent
         return LinearGradient(
-            colors: [accent.soft, accent.color],
+            colors: [accent.hi, accent.color],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    /// Screen-title treatment: near-white melting into accentSoft.
+    /// Vertical soft→accent fill for the Weave's "today" bar.
+    static var hearthBar: LinearGradient {
+        let accent = HearthTheme.shared.accent
+        return LinearGradient(
+            colors: [accent.soft, accent.color],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// Screen-title treatment: white holds through the first third, then
+    /// melts into accentSoft (`100deg, #F5F5F7 30%, accentSoft`).
     static var hearthTitle: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: 0xF5F5F7), HearthTheme.shared.accent.soft],
+            stops: [
+                .init(color: Color(hex: 0xF5F5F7), location: 0),
+                .init(color: Color(hex: 0xF5F5F7), location: 0.3),
+                .init(color: HearthTheme.shared.accent.soft, location: 1)
+            ],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -309,7 +326,19 @@ struct PrimaryButtonModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: LoomRadius.button, style: .continuous)
                     .fill(enabled ? AnyShapeStyle(gradient) : AnyShapeStyle(Color.loomSurface3))
             )
-            .shadow(color: enabled ? glowColor.opacity(0.35) : .clear, radius: 14, y: 6)
+            // The prototype's `inset 0 1px 0 rgba(255,255,255,0.35)` top rim.
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.button, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(enabled ? 0.35 : 0), .white.opacity(0)],
+                            startPoint: .top,
+                            endPoint: .center
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: enabled ? glowColor.opacity(0.45) : .clear, radius: 14, y: 6)
     }
 }
 
@@ -438,31 +467,38 @@ struct EmberField: View {
     }
 }
 
-/// The standard Hearthlight screen backdrop: near-black canvas, a warm
-/// ambient glow banked at the top, and embers rising through everything.
+/// The standard Hearthlight screen backdrop: near-black canvas, warm glow
+/// banked above AND below ("hearth glow above, held flame below" — the bottom
+/// glow is the stronger of the two), and embers rising through everything.
+/// Defaults are the Tasks screen's prototype values (top 32%, bottom 34%).
 struct HearthScreenBackground: View {
-    var glowOpacity: Double = 0.16
+    var topGlow: Double = 0.32
+    var bottomGlow: Double = 0.34
 
     var body: some View {
         ZStack {
             Color.loomBackground
 
             RadialGradient(
-                colors: [
-                    Color.brand500.opacity(glowOpacity),
-                    Color.brand500.opacity(glowOpacity * 0.35),
-                    .clear
+                stops: [
+                    .init(color: Color.brand500.opacity(topGlow), location: 0),
+                    .init(color: Color.brand500.opacity(topGlow * 0.2), location: 0.55),
+                    .init(color: .clear, location: 0.75)
                 ],
-                center: UnitPoint(x: 0.5, y: -0.15),
+                center: UnitPoint(x: 0.5, y: -0.1),
                 startRadius: 0,
-                endRadius: 500
+                endRadius: 520
             )
 
             RadialGradient(
-                colors: [Color.brand500.opacity(glowOpacity * 0.5), .clear],
-                center: UnitPoint(x: 0.5, y: 1.1),
+                stops: [
+                    .init(color: Color.brand500.opacity(bottomGlow), location: 0),
+                    .init(color: Color.brand500.opacity(bottomGlow * 0.24), location: 0.55),
+                    .init(color: .clear, location: 0.75)
+                ],
+                center: UnitPoint(x: 0.5, y: 1.06),
                 startRadius: 0,
-                endRadius: 420
+                endRadius: 460
             )
 
             EmberField()
@@ -473,8 +509,8 @@ struct HearthScreenBackground: View {
 
 extension View {
     /// Wraps a screen in the hearth backdrop.
-    func hearthScreen(glowOpacity: Double = 0.16) -> some View {
-        background(HearthScreenBackground(glowOpacity: glowOpacity))
+    func hearthScreen(topGlow: Double = 0.32, bottomGlow: Double = 0.34) -> some View {
+        background(HearthScreenBackground(topGlow: topGlow, bottomGlow: bottomGlow))
     }
 }
 
@@ -519,16 +555,17 @@ struct HearthProgressRing: View {
                 .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
                 .frame(width: size, height: size)
 
-            // Glow duplicate under the arc
+            // Glow duplicate under the arc — breathes like the prototype's
+            // `animation: breathe` on the blurred conic layer.
             arc(arcGradient)
                 .blur(radius: lineWidth * 0.9)
-                .opacity(0.8)
+                .opacity(reduceMotion ? 0.8 : (breathing ? 1.0 : 0.55))
 
             arc(arcGradient)
         }
         .onAppear {
-            guard showsHalo, !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: showsHalo ? 3.2 : 3.5).repeatForever(autoreverses: true)) {
                 breathing = true
             }
         }

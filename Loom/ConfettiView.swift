@@ -12,7 +12,7 @@ struct TaskCompletionView: View {
 
     var body: some View {
         ZStack {
-            HearthScreenBackground(glowOpacity: 0.2)
+            HearthScreenBackground(topGlow: 0.24, bottomGlow: 0.3)
 
             ConfettiView(palette: [
                 .schoolColor, .workColor, .personalColor,

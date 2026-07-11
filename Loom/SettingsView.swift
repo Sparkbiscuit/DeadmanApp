@@ -48,7 +48,7 @@ struct SettingsView: View {
             }
             .padding(.bottom, 110)
         }
-        .hearthScreen(glowOpacity: 0.1)
+        .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
         .alert("Calendar access needed", isPresented: $showCalendarDeniedAlert) {
             Button("OK", role: .cancel) {}
         } message: {

@@ -101,14 +101,15 @@ struct WeaveView: View {
                 }
                 .padding(.bottom, 110)
             }
-            .hearthScreen()
+            .hearthScreen(topGlow: 0.22, bottomGlow: 0.30)
         }
         .onAppear(perform: playReveal)
     }
 
-    /// The "just wove itself" reveal — bars rise (recent days first), then a
-    /// single diagonal light pass. Reduce Motion skips straight to the woven
-    /// state.
+    /// The "just wove itself" reveal — bars rise left to right (the far past
+    /// lands first, today finishes the weave), while fire spreads up the
+    /// gridlines from the bottom-right corner. Reduce Motion skips straight
+    /// to the woven state.
     private func playReveal() {
         guard !barsRevealed else { return }
         if reduceMotion {
@@ -116,7 +117,7 @@ struct WeaveView: View {
             return
         }
         barsRevealed = true // animations hang off this via per-column delays
-        withAnimation(.easeInOut(duration: 3.8).delay(1.1)) {
+        withAnimation(.easeInOut(duration: 3.8).delay(0.6)) {
             sweepProgress = 1
         }
     }
@@ -170,10 +171,26 @@ struct WeaveView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
+        // An ember pooled in the card's top-right corner (applied before the
+        // surface fill so it renders in front of it, behind the content).
+        .background(alignment: .topTrailing) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.brand500.opacity(0.22), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 70
+                    )
+                )
+                .frame(width: 140, height: 140)
+                .blur(radius: 10)
+                .offset(x: 30, y: -40)
+        }
         .background(Color.loomSurface)
-        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color.loomBorder, lineWidth: 1)
         )
         .padding(.horizontal, 20)
@@ -196,8 +213,8 @@ struct WeaveView: View {
                         }
                 }
             }
-            .background(gridLines)
-            .overlay(lightSweep)
+            .background(grid(color: Color.white.opacity(0.035)))
+            .overlay(fireSweep)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             HStack(spacing: 5) {
@@ -215,67 +232,87 @@ struct WeaveView: View {
         }
     }
 
-    /// The warp behind the weft: faint grid lines the cloth hangs on.
-    private var gridLines: some View {
+    /// The warp behind the weft: fine grid lines the cloth hangs on
+    /// (horizontal every 9pt, vertical every 12pt, per the prototype).
+    private func grid(color: Color) -> some View {
         Canvas { context, size in
-            let line = Color.white.opacity(0.045)
-            let columns = 14
-            let step = size.width / CGFloat(columns)
-            for i in 0...columns {
-                let x = CGFloat(i) * step
+            var x: CGFloat = 0
+            while x <= size.width {
                 context.stroke(
                     Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: size.height)) },
-                    with: .color(line), lineWidth: 1
+                    with: .color(color), lineWidth: 1
                 )
+                x += 12
             }
             var y: CGFloat = size.height
             while y > 0 {
                 context.stroke(
                     Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
-                    with: .color(line), lineWidth: 1
+                    with: .color(color), lineWidth: 1
                 )
-                y -= 22
+                y -= 9
             }
         }
     }
 
-    /// The one-time diagonal band of light that crosses the finished cloth.
-    private var lightSweep: some View {
+    /// Fire spreading down the gridlines, once per visit: the same grid drawn
+    /// in accentSoft (crisp layer + blurred halo layer), revealed through a
+    /// diagonal band that travels from the bottom-right corner to the
+    /// top-left — the prototype's `fireSweep` mask animation.
+    private var fireSweep: some View {
         GeometryReader { geo in
-            let travel = geo.size.width + 160
-            LinearGradient(
-                colors: [.clear, Color.brand300.opacity(0.16), .clear],
-                startPoint: .leading,
-                endPoint: .trailing
+            ZStack {
+                grid(color: Color.brand300.opacity(0.75))
+                grid(color: Color.brand300.opacity(0.75))
+                    .blur(radius: 3)
+                    .opacity(0.7)
+            }
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.38),
+                        .init(color: .black, location: 0.5),
+                        .init(color: .clear, location: 0.62)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: geo.size.width * 2, height: geo.size.height * 2)
+                .offset(
+                    x: (0.5 - sweepProgress) * geo.size.width * 1.7,
+                    y: (0.5 - sweepProgress) * geo.size.height * 1.7
+                )
+                .frame(width: geo.size.width, height: geo.size.height)
             )
-            .frame(width: 120)
-            .rotationEffect(.degrees(16))
-            .offset(x: -140 + sweepProgress * travel)
-            .blendMode(.plusLighter)
         }
         .allowsHitTesting(false)
     }
 
     private func dayColumn(_ day: WeaveDay, index: Int, count: Int, maxTotal: Int) -> some View {
         let isToday = Calendar.current.isDateInToday(day.date)
-        // Recent days land first; the far past finishes the weave.
-        let revealDelay = 0.05 + Double(count - 1 - index) * 0.06
+        // The far past lands first; today finishes the weave.
+        let revealDelay = 0.05 + Double(index) * 0.06
 
-        return VStack(spacing: 3) {
+        return VStack(spacing: 2) {
             if day.totalMinutes == 0 {
                 // The bare warp: a rest day still holds the cloth together.
                 Circle()
-                    .fill(Color.loomSurface3)
+                    .fill(Color.white.opacity(0.18))
                     .frame(width: 5, height: 5)
+                    .padding(.bottom, 2)
             } else {
                 ForEach(TaskContext.allCases) { context in
                     if let minutes = day.minutesByContext[context], minutes > 0 {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        Capsule(style: .continuous)
                             .fill(barFill(context: context, isToday: isToday))
                             .frame(height: max(
                                 12,
                                 CGFloat(minutes) / CGFloat(maxTotal) * Self.columnHeight
                             ))
+                            .shadow(
+                                color: isToday ? Color.brand500.opacity(0.55) : .clear,
+                                radius: 5
+                            )
                             .opacity(selectedDay == nil || selectedDay == day ? 1 : 0.35)
                     }
                 }
@@ -286,23 +323,19 @@ struct WeaveView: View {
         .animation(
             reduceMotion
                 ? nil
-                : .spring(response: 0.55, dampingFraction: 0.62).delay(revealDelay),
+                : .spring(response: 0.55, dampingFraction: 0.65).delay(revealDelay),
             value: barsRevealed
         )
-        .background(alignment: .bottom) {
+        .background {
             if isToday {
-                // Today's column glows from within.
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.brand500.opacity(0.12))
-                    .frame(height: Self.columnHeight + 10)
-                    .hearthGlow(.brand500, radius: 12, opacity: 0.35)
+                TodayColumnGlow()
             }
         }
     }
 
     private func barFill(context: TaskContext, isToday: Bool) -> AnyShapeStyle {
         if isToday {
-            return AnyShapeStyle(LinearGradient.hearth)
+            return AnyShapeStyle(LinearGradient.hearthBar)
         }
         return AnyShapeStyle(context.color)
     }
@@ -521,6 +554,29 @@ struct WeaveView: View {
             .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Today column glow
+
+/// The breathing accent-tinted backdrop behind today's tapestry column.
+private struct TodayColumnGlow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.brand500.opacity(0.14))
+            .shadow(color: Color.brand500.opacity(0.3), radius: 16)
+            .padding(.horizontal, -3)
+            .padding(.vertical, -6)
+            .opacity(breathing ? 1 : 0.55)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
+            }
     }
 }
 

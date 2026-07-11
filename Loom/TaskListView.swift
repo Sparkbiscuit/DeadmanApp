@@ -47,7 +47,7 @@ struct TaskListView: View {
             .sheet(isPresented: $showingCapture) {
                 CaptureSheetView()
             }
-            .sheet(item: $workSessionTask) { task in
+            .fullScreenCover(item: $workSessionTask) { task in
                 WorkSessionView(task: task) { completed in
                     workSessionTask = nil
                     if completed {
@@ -91,7 +91,7 @@ struct TaskListView: View {
                 Text(greeting)
                     .font(AppFont.caption(13))
                     .foregroundStyle(Color.brand300)
-                HearthTitle(text: "Your Tasks", size: 30)
+                HearthTitle(text: "Your Tasks", size: 32)
             }
             Spacer()
             // The flame pill counts what's alive on the loom right now.
@@ -171,6 +171,27 @@ struct TaskListView: View {
                     .hearthGlow(.brand500, radius: 5, opacity: 0.5)
                     .padding(.leading, 6)
                     .padding(.vertical, 10)
+
+                    // The connector: light spills out of the hero card above,
+                    // drops down its left edge, and curls into this list —
+                    // "the glowing thread connects now → next."
+                    ThreadConnector()
+                        .stroke(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.brand300.opacity(0), location: 0),
+                                    .init(color: Color.brand300.opacity(0.95), location: 0.45),
+                                    .init(color: Color.brand300.opacity(0), location: 1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        )
+                        .frame(width: 90, height: 78)
+                        .shadow(color: Color.brand500.opacity(0.6), radius: 6)
+                        .offset(x: 5, y: -96)
+                        .allowsHitTesting(false)
 
                     VStack(spacing: 10) {
                         ForEach(Array(upcoming)) { block in
@@ -700,7 +721,7 @@ private struct ActiveCountPill: View {
                 .foregroundStyle(Color.brand300)
             Text("\(count)")
                 .font(AppFont.mono(14))
-                .foregroundStyle(Color.brand100)
+                .foregroundStyle(Color.brand300)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 8)
@@ -708,6 +729,21 @@ private struct ActiveCountPill: View {
         .overlay(Capsule().stroke(Color.brand500.opacity(0.35), lineWidth: 1))
         .hearthGlow(.brand500, radius: 12, opacity: 0.3)
         .accessibilityLabel("\(count) active tasks")
+    }
+}
+
+// MARK: - Thread connector
+
+/// The prototype's corner-glow path (`M1 0 V54 Q1 76 23 76 H86`): a vertical
+/// drop from the hero card that curves into the "Up next" list.
+private struct ThreadConnector: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 1, y: 0))
+        path.addLine(to: CGPoint(x: 1, y: 54))
+        path.addQuadCurve(to: CGPoint(x: 23, y: 76), control: CGPoint(x: 1, y: 76))
+        path.addLine(to: CGPoint(x: 86, y: 76))
+        return path
     }
 }
 
@@ -803,9 +839,10 @@ private struct RightNowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 16) {
-                // The held flame in miniature: ring + live countdown.
+                // The held flame in miniature: ring + live countdown, with the
+                // same pulsing halo as the full-size session flame.
                 ZStack {
-                    HearthProgressRing(progress: ringProgress, size: 74, lineWidth: 7)
+                    HearthProgressRing(progress: ringProgress, size: 74, lineWidth: 7, showsHalo: isActive)
                     VStack(spacing: 0) {
                         Text(ringCountdown)
                             .font(AppFont.mono(15))
@@ -863,8 +900,24 @@ private struct RightNowCard: View {
             .buttonStyle(.plain)
         }
         .padding(18)
+        // A soft ember pooled in the top-right corner (applied before the
+        // gradient fill so it renders in front of it, behind the content)…
+        .background(alignment: .topTrailing) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.brand500.opacity(0.3), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 75
+                    )
+                )
+                .frame(width: 150, height: 150)
+                .blur(radius: 10)
+                .offset(x: 30, y: -40)
+        }
+        // …over accent light banked into the top-left one.
         .background(
-            // Accent light banked into the card's top-left corner.
             LinearGradient(
                 stops: [
                     .init(color: Color.brand500.opacity(0.22), location: 0),
@@ -877,9 +930,9 @@ private struct RightNowCard: View {
         .clipShape(RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous)
-                .stroke(Color.brand500.opacity(0.28), lineWidth: 1)
+                .stroke(Color.brand300.opacity(0.28), lineWidth: 1)
         )
-        .hearthGlow(.brand500, radius: 26, opacity: 0.22)
+        .shadow(color: Color.brand500.opacity(0.22), radius: 30, y: 12)
         .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
             Button("Push 30 minutes") { onPush(.thirtyMinutes) }
             Button("Push 1 hour") { onPush(.oneHour) }

@@ -155,7 +155,7 @@ private struct LockScreenSessionView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [accent.soft, accent.color],
+                            colors: [accent.hi, accent.color],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
