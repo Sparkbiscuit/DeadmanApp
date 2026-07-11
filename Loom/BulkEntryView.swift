@@ -199,6 +199,7 @@ struct BulkEntryView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         if warningCount > 0 {

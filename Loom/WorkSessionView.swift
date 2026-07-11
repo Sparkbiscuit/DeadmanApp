@@ -7,6 +7,7 @@ import UIKit
 /// Saving at 100% completes the task.
 struct WorkSessionView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     let task: LoomTask
     /// Called with `true` when the user reported the task finished.
@@ -19,9 +20,18 @@ struct WorkSessionView: View {
     @State private var progressValue: Double = 0
     @State private var sessionStart: Date?
 
+    // Pause bookkeeping: worked time is derived from the wall clock
+    // (sessionStart → now, minus time spent paused), never from counting
+    // timer ticks — ticks stop when the app leaves the foreground, which is
+    // exactly when the ring used to snap back to zero.
+    @State private var pausedAccumSeconds = 0
+    @State private var pauseBegan: Date?
+
     // Immersion: the end of the currently running scheduled block, if the
     // session started inside one. Bounds the hyperfocus spurt from both sides.
     @State private var blockEndTarget: Date?
+    /// Length of that block in seconds — the ring's denominator.
+    @State private var blockDurationSeconds: Int?
     @State private var didWarnNearEnd = false
     @State private var didMarkBlockEnd = false
     @State private var immersionMessage: String?
@@ -50,9 +60,17 @@ struct WorkSessionView: View {
         .hearthScreen(topGlow: 0.05, bottomGlow: 0.5, embers: 30, emberIntensity: 1.5)
         .onReceive(timer) { _ in
             if isRunning && !isPaused {
-                elapsedSeconds += 1
+                syncElapsed()
                 checkBlockBoundary()
                 checkMicroGoal()
+            }
+        }
+        // Coming back from the background: the timer publisher slept, so the
+        // ring and label catch up to the wall clock immediately instead of
+        // resuming from wherever the last tick left them.
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active && isRunning && !isPaused {
+                syncElapsed()
             }
         }
         .onDisappear {
@@ -231,7 +249,7 @@ struct WorkSessionView: View {
             HStack(spacing: 12) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        isPaused.toggle()
+                        togglePause()
                     }
                 } label: {
                     Text(isPaused ? "Resume" : "Pause")
@@ -373,17 +391,17 @@ struct WorkSessionView: View {
         return "WEAVING"
     }
 
-    /// How much of the flame is held: progress through the running block, or
-    /// budget burned when the session floats outside any block.
+    /// How much of the flame is held: worked time as a fraction of the
+    /// scheduled block (same rule as the Live Activity ring), or budget
+    /// burned when the session floats outside any block. Either way the ring
+    /// starts empty and may exceed 1 — the ring loops a second lap over
+    /// itself rather than clamping.
     private var ringProgress: Double {
-        if isRunning, let end = blockEndTarget {
-            let remaining = max(0, end.timeIntervalSinceNow)
-            let total = remaining + Double(elapsedSeconds)
-            guard total > 0 else { return 0 }
-            return Double(elapsedSeconds) / total
+        if isRunning, let duration = blockDurationSeconds, duration > 0 {
+            return Double(elapsedSeconds) / Double(duration)
         }
         guard task.effortMinutes > 0 else { return 0 }
-        return min(1, Double(spentTotalMinutes) / Double(task.effortMinutes))
+        return Double(spentTotalMinutes) / Double(task.effortMinutes)
     }
 
     /// While a micro-goal is pending it owns the pill (a countdown reads
@@ -406,15 +424,18 @@ struct WorkSessionView: View {
         let now = Date()
         sessionStart = now
         elapsedSeconds = 0
+        pausedAccumSeconds = 0
+        pauseBegan = nil
         isPaused = false
         withAnimation { isRunning = true }
 
         // Immersion: the screen stays awake for the whole session, and the
         // running block's end becomes the gentle boundary chime.
         UIApplication.shared.isIdleTimerDisabled = true
-        blockEndTarget = task.scheduledBlocks
-            .first { $0.startTime <= now && now < $0.endTime }?
-            .endTime
+        let runningBlock = task.scheduledBlocks
+            .first { $0.startTime <= now && now < $0.endTime }
+        blockEndTarget = runningBlock?.endTime
+        blockDurationSeconds = runningBlock.map { $0.durationMinutes * 60 }
         didWarnNearEnd = false
         didMarkBlockEnd = false
         immersionMessage = nil
@@ -426,8 +447,42 @@ struct WorkSessionView: View {
             contextName: task.context.rawValue,
             effortMinutes: task.effortMinutes,
             startedAt: now,
-            blockEndsAt: blockEndTarget
+            blockEndsAt: blockEndTarget,
+            ringEndsAt: now.addingTimeInterval(TimeInterval(ringWindowSeconds(from: runningBlock)))
         )
+    }
+
+    /// How long the ring takes to fill: the scheduled block's duration, or
+    /// the remaining budget when working outside any block.
+    private func ringWindowSeconds(from block: ScheduledBlock?) -> Int {
+        if let block {
+            return block.durationMinutes * 60
+        }
+        return max(task.effortMinutes - task.timeSpentMinutes, 1) * 60
+    }
+
+    /// Worked time from the wall clock: start → now, minus paused stretches.
+    private func syncElapsed(now: Date = Date()) {
+        guard let start = sessionStart else { return }
+        let paused = pausedAccumSeconds
+            + (pauseBegan.map { Int(now.timeIntervalSince($0)) } ?? 0)
+        elapsedSeconds = max(0, Int(now.timeIntervalSince(start)) - paused)
+    }
+
+    private func togglePause() {
+        let now = Date()
+        if isPaused {
+            if let began = pauseBegan {
+                pausedAccumSeconds += max(0, Int(now.timeIntervalSince(began)))
+            }
+            pauseBegan = nil
+            isPaused = false
+            syncElapsed(now: now)
+        } else {
+            syncElapsed(now: now)
+            pauseBegan = now
+            isPaused = true
+        }
     }
 
     private func checkMicroGoal() {
@@ -464,6 +519,9 @@ struct WorkSessionView: View {
     private func stopTapped() {
         WorkSessionActivityController.end()
         UIApplication.shared.isIdleTimerDisabled = false
+        if !isPaused {
+            syncElapsed()
+        }
         withAnimation {
             isRunning = false
             isPaused = false
@@ -475,6 +533,12 @@ struct WorkSessionView: View {
     private func recordSession() {
         WorkSessionActivityController.end()
         UIApplication.shared.isIdleTimerDisabled = false
+        if isRunning && !isPaused {
+            // Catch up before logging — the last timer tick may be stale.
+            syncElapsed()
+        }
+        pausedAccumSeconds = 0
+        pauseBegan = nil
         guard elapsedSeconds > 0 else { return }
         let session = WorkSession(
             task: task,

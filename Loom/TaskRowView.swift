@@ -166,6 +166,7 @@ struct TaskRowView: View {
             Button(role: .destructive) {
                 deleteTask(task, context: modelContext)
                 CalendarExportService.syncIfEnabled(context: modelContext)
+                GoogleCalendarService.exportIfEnabled(context: modelContext)
                 scheduleDidChange(context: modelContext)
             } label: {
                 Label("Delete", systemImage: "trash")
@@ -220,6 +221,7 @@ struct TaskRowView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 }

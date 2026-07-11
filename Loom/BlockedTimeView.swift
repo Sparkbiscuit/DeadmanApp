@@ -63,6 +63,7 @@ struct BlockedTimeView: View {
         // Freed-up windows don't require moving anything, but the calendar
         // mirror may reference stale state.
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
     }
 }
 
@@ -85,6 +86,7 @@ func replanAfterBusyChange(context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
+    GoogleCalendarService.exportIfEnabled(context: context)
     scheduleDidChange(context: context)
 }
 

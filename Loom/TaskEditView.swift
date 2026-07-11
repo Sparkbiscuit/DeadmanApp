@@ -219,6 +219,7 @@ struct TaskEditView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         switch result {

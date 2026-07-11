@@ -245,6 +245,7 @@ struct TaskListView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         withAnimation {
@@ -334,6 +335,7 @@ struct TaskListView: View {
             deleteTask(task, context: modelContext)
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -551,21 +553,28 @@ struct TaskListView: View {
             }
             .buttonStyle(.plain)
 
-            if isExpanded {
-                VStack(spacing: 10) {
-                    ForEach(tasks) { task in
-                        TaskRowView(
-                            task: task,
-                            onStartSession: { workSessionTask = task },
-                            onComplete: { completeTask(task) },
-                            onEdit: { editingTask = task }
-                        )
-                        .padding(.horizontal, 20)
+            // The stable clipping frame is what makes the collapse read as
+            // rows folding up into the header: without it the removed rows
+            // slide up across the whole screen instead of disappearing under
+            // the disclosure.
+            VStack(spacing: 0) {
+                if isExpanded {
+                    VStack(spacing: 10) {
+                        ForEach(tasks) { task in
+                            TaskRowView(
+                                task: task,
+                                onStartSession: { workSessionTask = task },
+                                onComplete: { completeTask(task) },
+                                onEdit: { editingTask = task }
+                            )
+                            .padding(.horizontal, 20)
+                        }
                     }
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(.bottom, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
+            .clipped()
         }
     }
 
@@ -603,37 +612,43 @@ struct TaskListView: View {
                 }
                 .buttonStyle(.plain)
 
-                if showCompleted {
-                    VStack(spacing: 10) {
-                        ForEach(completed.sorted {
-                            ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
-                        }) { task in
-                            CompletedTaskRow(task: task) {
-                                withAnimation {
-                                    restoreTask(task, context: modelContext)
+                // Same stable clipping frame as the context sections, so the
+                // completed rows fold up into the disclosure instead of
+                // flying off the top of the screen.
+                VStack(spacing: 0) {
+                    if showCompleted {
+                        VStack(spacing: 10) {
+                            ForEach(completed.sorted {
+                                ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
+                            }) { task in
+                                CompletedTaskRow(task: task) {
+                                    withAnimation {
+                                        restoreTask(task, context: modelContext)
+                                    }
+                                } onDelete: {
+                                    withAnimation {
+                                        deleteTask(task, context: modelContext)
+                                    }
+                                    scheduleDidChange(context: modelContext)
                                 }
-                            } onDelete: {
-                                withAnimation {
-                                    deleteTask(task, context: modelContext)
-                                }
-                                scheduleDidChange(context: modelContext)
+                                .padding(.horizontal, 20)
                             }
-                            .padding(.horizontal, 20)
-                        }
-                        ForEach(completedReminders.sorted { $0.dueDate > $1.dueDate }) { reminder in
-                            CompletedReminderRow(reminder: reminder) {
-                                restoreReminder(reminder)
-                            } onDelete: {
-                                withAnimation {
-                                    modelContext.delete(reminder)
+                            ForEach(completedReminders.sorted { $0.dueDate > $1.dueDate }) { reminder in
+                                CompletedReminderRow(reminder: reminder) {
+                                    restoreReminder(reminder)
+                                } onDelete: {
+                                    withAnimation {
+                                        modelContext.delete(reminder)
+                                    }
                                 }
+                                .padding(.horizontal, 20)
                             }
-                            .padding(.horizontal, 20)
                         }
+                        .padding(.bottom, 16)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+                .clipped()
             }
         }
     }
@@ -666,6 +681,7 @@ struct TaskListView: View {
         try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -1326,5 +1342,6 @@ func restoreTask(_ task: LoomTask, context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
+    GoogleCalendarService.exportIfEnabled(context: context)
     scheduleDidChange(context: context)
 }

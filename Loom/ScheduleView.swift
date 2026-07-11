@@ -473,6 +473,7 @@ struct ScheduleView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -498,6 +499,7 @@ struct ScheduleView: View {
         try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 }

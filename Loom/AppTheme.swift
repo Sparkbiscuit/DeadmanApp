@@ -530,9 +530,11 @@ extension View {
 
 /// The held flame: a conic progress arc in accentSoft→accent with a blurred
 /// glow duplicate behind it. Used at 74pt on the home hero and 200pt in the
-/// work session.
+/// work session. Progress past 1 loops: the completed lap stays as a full,
+/// slightly banked ring underneath while the overflow arc burns a fresh lap
+/// over it.
 struct HearthProgressRing: View {
-    /// 0…1 completed fraction.
+    /// Completed fraction. Values above 1 draw a second lap over the full ring.
     var progress: Double
     var size: CGFloat
     var lineWidth: CGFloat
@@ -542,7 +544,14 @@ struct HearthProgressRing: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathing = false
 
-    private var clamped: Double { min(1, max(0.003, progress)) }
+    private var isLooping: Bool { progress > 1 }
+
+    /// The fraction the leading arc draws this lap.
+    private var lapFraction: Double {
+        guard isLooping else { return min(1, max(0.003, progress)) }
+        let wrapped = progress.truncatingRemainder(dividingBy: 1)
+        return max(0.003, wrapped)
+    }
 
     var body: some View {
         let accent = HearthTheme.shared.accent
@@ -550,7 +559,7 @@ struct HearthProgressRing: View {
             colors: [accent.soft, accent.color, accent.color],
             center: .center,
             startAngle: .degrees(-90),
-            endAngle: .degrees(-90 + 360 * clamped)
+            endAngle: .degrees(-90 + 360 * lapFraction)
         )
 
         ZStack {
@@ -574,6 +583,14 @@ struct HearthProgressRing: View {
                 .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
                 .frame(width: size, height: size)
 
+            // The finished lap, banked: the block's worth of work is done and
+            // the flame keeps going over it.
+            if isLooping {
+                Circle()
+                    .stroke(accent.color.opacity(0.45), lineWidth: lineWidth)
+                    .frame(width: size, height: size)
+            }
+
             // Glow duplicate under the arc — breathes like the prototype's
             // `animation: breathe` on the blurred conic layer.
             arc(arcGradient)
@@ -592,7 +609,7 @@ struct HearthProgressRing: View {
 
     private func arc(_ style: AngularGradient) -> some View {
         Circle()
-            .trim(from: 0, to: clamped)
+            .trim(from: 0, to: lapFraction)
             .stroke(style, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             .rotationEffect(.degrees(-90))
             .frame(width: size, height: size)

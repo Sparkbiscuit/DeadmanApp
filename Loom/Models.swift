@@ -148,6 +148,8 @@ final class ScheduledBlock {
     var isComplete: Bool
     var isLocked: Bool
     var appleCalendarEventId: String?
+    /// Mirrors `appleCalendarEventId` for the Google export.
+    var googleCalendarEventId: String? = nil
 
     init(
         task: LoomTask,
@@ -161,6 +163,7 @@ final class ScheduledBlock {
         self.isComplete = false
         self.isLocked = false
         self.appleCalendarEventId = nil
+        self.googleCalendarEventId = nil
     }
 
     var endTime: Date {
@@ -426,6 +429,16 @@ final class UserSettings {
     /// Calendars the user opted out of importing (EKCalendar identifiers).
     var excludedCalendarIds: [String] = []
     var loomCalendarIdentifier: String?
+    // Google Calendar — the OAuth mirror of the Apple pair above. Tokens live
+    // in the Keychain; these fields hold the sync state and display data.
+    var importFromGoogleCalendar: Bool = false
+    var exportToGoogleCalendar: Bool = false
+    /// Incremental cursor from events.list; nil forces a full window fetch.
+    var googleSyncToken: String? = nil
+    /// The connected account, shown in Settings. Nil means not connected.
+    var googleAccountEmail: String? = nil
+    /// The refresh token expired or was revoked — surface "Reconnect Google".
+    var googleNeedsReconnect: Bool = false
     var hasCompletedOnboarding: Bool = false
     /// Nudge when a scheduled block begins (the anti-time-blindness alarm).
     var blockRemindersEnabled: Bool = true
@@ -454,6 +467,11 @@ final class UserSettings {
         self.importFromAppleCalendar = false
         self.excludedCalendarIds = []
         self.loomCalendarIdentifier = nil
+        self.importFromGoogleCalendar = false
+        self.exportToGoogleCalendar = false
+        self.googleSyncToken = nil
+        self.googleAccountEmail = nil
+        self.googleNeedsReconnect = false
         self.hasCompletedOnboarding = false
         self.blockRemindersEnabled = true
         self.blockReminderLeadMinutes = 0

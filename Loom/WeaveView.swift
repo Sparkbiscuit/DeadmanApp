@@ -79,10 +79,14 @@ struct WeaveView: View {
 
     @State private var selectedDay: WeaveDay?
 
-    // One-shot reveal state: bars grow in staggered, then a band of light
-    // sweeps across the finished cloth. Plays once per visit to the tab.
+    // One-shot reveal state: bars grow in staggered, then a spark of fire
+    // travels corner to corner across the finished cloth. Plays once per
+    // visit to the tab.
     @State private var barsRevealed = false
+    /// 0 = the chart's top-left corner, 1 = its bottom-right corner.
     @State private var sweepProgress: CGFloat = 0
+    /// The spark's bloom: near-zero at both corners, full mid-travel.
+    @State private var sweepBloom: CGFloat = 0.001
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -107,9 +111,10 @@ struct WeaveView: View {
     }
 
     /// The "just wove itself" reveal — bars rise left to right (the far past
-    /// lands first, today finishes the weave), while fire spreads up the
-    /// gridlines from the bottom-right corner. Reduce Motion skips straight
-    /// to the woven state.
+    /// lands first, today finishes the weave), while a spark of fire catches
+    /// at the chart's top-left corner, blooms as it travels the diagonal, and
+    /// gutters out to a point at the bottom-right corner. Reduce Motion skips
+    /// straight to the woven state.
     private func playReveal() {
         guard !barsRevealed else { return }
         if reduceMotion {
@@ -119,6 +124,13 @@ struct WeaveView: View {
         barsRevealed = true // animations hang off this via per-column delays
         withAnimation(.easeInOut(duration: 3.8).delay(0.6)) {
             sweepProgress = 1
+        }
+        // Bloom while leaving the corner, gutter back down before arriving.
+        withAnimation(.easeIn(duration: 1.7).delay(0.6)) {
+            sweepBloom = 1
+        }
+        withAnimation(.easeOut(duration: 1.7).delay(0.6 + 2.1)) {
+            sweepBloom = 0.001
         }
     }
 
@@ -257,11 +269,16 @@ struct WeaveView: View {
 
     /// Fire spreading down the gridlines, once per visit: the same grid drawn
     /// in accentSoft (crisp layer + blurred halo layer), revealed through a
-    /// diagonal band. The fire catches at a single point in the top-left
-    /// corner, spreads across warp and weft, and gutters out to a single
-    /// point in the bottom-right corner.
+    /// traveling radial glow. The fire catches at a single point in the
+    /// chart's top-left corner — the corner of the whole plot area, not
+    /// wherever the bars happen to start — spreads across warp and weft as
+    /// it rides the diagonal, and gutters out to a single point in the
+    /// bottom-right corner. Position and scale are both animatable, so the
+    /// spark genuinely departs from (0, 0) and arrives at (w, h).
     private var fireSweep: some View {
         GeometryReader { geo in
+            let glowDiameter = max(geo.size.width, geo.size.height) * 1.5
+
             ZStack {
                 grid(color: Color.brand300.opacity(0.75))
                 grid(color: Color.brand300.opacity(0.75))
@@ -269,21 +286,25 @@ struct WeaveView: View {
                     .opacity(0.7)
             }
             .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.38),
-                        .init(color: .black, location: 0.5),
-                        .init(color: .clear, location: 0.62)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: geo.size.width * 2, height: geo.size.height * 2)
-                .offset(
-                    x: (sweepProgress - 0.5) * geo.size.width * 1.7,
-                    y: (sweepProgress - 0.5) * geo.size.height * 1.7
-                )
-                .frame(width: geo.size.width, height: geo.size.height)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black.opacity(0.85), location: 0.45),
+                                .init(color: .clear, location: 1)
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: glowDiameter / 2
+                        )
+                    )
+                    .frame(width: glowDiameter, height: glowDiameter)
+                    .scaleEffect(sweepBloom)
+                    .position(
+                        x: sweepProgress * geo.size.width,
+                        y: sweepProgress * geo.size.height
+                    )
             )
         }
         .allowsHitTesting(false)

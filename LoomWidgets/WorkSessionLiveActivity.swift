@@ -80,6 +80,19 @@ private func timerText(
     .monospacedDigit()
 }
 
+/// The ring's fill window: worked time over the scheduled block's duration.
+/// `ringEndsAt` is precomputed by the controller; the effort budget covers
+/// activities started before it existed.
+private func ringInterval(
+    _ context: ActivityViewContext<WorkSessionAttributes>
+) -> ClosedRange<Date> {
+    let start = context.state.startedAt
+    let end = context.attributes.ringEndsAt
+        ?? start.addingTimeInterval(TimeInterval(context.attributes.effortMinutes * 60))
+    // A degenerate window would crash the range; hold at least one minute.
+    return start...max(end, start.addingTimeInterval(60))
+}
+
 private func subtitle(_ context: ActivityViewContext<WorkSessionAttributes>) -> String {
     if let end = context.attributes.blockEndsAt {
         let formatter = DateFormatter()
@@ -102,7 +115,11 @@ private struct LockScreenSessionView: View {
         let accent = HearthAccent.current
 
         HStack(spacing: 14) {
-            // Held-flame ring around the live timer.
+            // Held-flame ring around the live timer. The arc is the system's
+            // self-updating timer ring: empty at session start, full when the
+            // scheduled block's worth of work is done — Live Activities can't
+            // run code while locked, so only the system styles tick on their
+            // own. Past the block it holds full (the in-app ring loops).
             ZStack {
                 // Static halo — Live Activities can't run continuous
                 // animations, so the flame is held at a warm moment.
@@ -111,21 +128,15 @@ private struct LockScreenSessionView: View {
                     .blur(radius: 10)
                     .padding(-6)
 
-                Circle()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 5)
-                Circle()
-                    .trim(from: 0, to: 0.62)
-                    .stroke(
-                        AngularGradient(
-                            colors: [accent.soft, accent.color],
-                            center: .center,
-                            startAngle: .degrees(-90),
-                            endAngle: .degrees(133)
-                        ),
-                        style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: accent.color.opacity(0.6), radius: 5)
+                ProgressView(
+                    timerInterval: ringInterval(context),
+                    countsDown: false,
+                    label: { EmptyView() },
+                    currentValueLabel: { EmptyView() }
+                )
+                .progressViewStyle(.circular)
+                .tint(accent.color)
+                .shadow(color: accent.color.opacity(0.6), radius: 5)
 
                 timerText(context, size: 13)
                     .foregroundStyle(.white)

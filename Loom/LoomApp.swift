@@ -156,6 +156,9 @@ struct MainTabView: View {
     /// the result back out.
     private func refreshSchedule() {
         CalendarImportService.syncIfEnabled(context: modelContext)
+        // Google runs async off the same hook; when its import lands changes
+        // it replans on its own, mirroring the busy-change path below.
+        GoogleCalendarService.foregroundSyncIfEnabled(context: modelContext)
         sweepOrphans()
 
         let settings = UserSettings.fetchOrCreate(in: modelContext)
