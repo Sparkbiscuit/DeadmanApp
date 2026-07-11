@@ -393,7 +393,7 @@ struct HearthTitle: View {
 /// drawing, seeded once per appearance; honors Reduce Motion by holding the
 /// embers still instead of animating them.
 struct EmberField: View {
-    var emberCount: Int = 11
+    var emberCount: Int = 16
     var intensity: Double = 1.0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -429,9 +429,9 @@ struct EmberField: View {
                     x: .random(in: 0.03...0.97),
                     drift: .random(in: 6...22),
                     speed: .random(in: 0.55...1.4),
-                    size: .random(in: 1.6...3.4),
+                    size: .random(in: 2.2...5.0),
                     phase: .random(in: 0...1),
-                    brightness: .random(in: 0.25...0.8)
+                    brightness: .random(in: 0.4...0.95)
                 )
             }
         }
@@ -448,7 +448,7 @@ struct EmberField: View {
                 let x = ember.x * size.width + sin(t * .pi * 4 + ember.phase * 10) * ember.drift
                 // Fade in near the hearth, gutter out near the top.
                 let fade = min(1, min(t / 0.15, (1 - t) / 0.35))
-                let alpha = ember.brightness * fade * 0.55 * intensity
+                let alpha = ember.brightness * fade * 0.85 * intensity
                 guard alpha > 0.01 else { continue }
 
                 let rect = CGRect(
@@ -474,6 +474,8 @@ struct EmberField: View {
 struct HearthScreenBackground: View {
     var topGlow: Double = 0.32
     var bottomGlow: Double = 0.34
+    var embers: Int = 16
+    var emberIntensity: Double = 1.0
 
     var body: some View {
         ZStack {
@@ -501,7 +503,7 @@ struct HearthScreenBackground: View {
                 endRadius: 460
             )
 
-            EmberField()
+            EmberField(emberCount: embers, intensity: emberIntensity)
         }
         .ignoresSafeArea()
     }
@@ -509,8 +511,18 @@ struct HearthScreenBackground: View {
 
 extension View {
     /// Wraps a screen in the hearth backdrop.
-    func hearthScreen(topGlow: Double = 0.32, bottomGlow: Double = 0.34) -> some View {
-        background(HearthScreenBackground(topGlow: topGlow, bottomGlow: bottomGlow))
+    func hearthScreen(
+        topGlow: Double = 0.32,
+        bottomGlow: Double = 0.34,
+        embers: Int = 16,
+        emberIntensity: Double = 1.0
+    ) -> some View {
+        background(HearthScreenBackground(
+            topGlow: topGlow,
+            bottomGlow: bottomGlow,
+            embers: embers,
+            emberIntensity: emberIntensity
+        ))
     }
 }
 
@@ -543,11 +555,18 @@ struct HearthProgressRing: View {
 
         ZStack {
             if showsHalo {
+                // Two pulsing layers: a wide soft corona and a tighter core,
+                // so the held flame reads as burning rather than tinted.
                 Circle()
-                    .fill(accent.color.opacity(0.22))
-                    .frame(width: size * 1.22, height: size * 1.22)
-                    .blur(radius: size * 0.14)
-                    .scaleEffect(breathing ? 1.06 : 0.94)
+                    .fill(accent.color.opacity(0.3))
+                    .frame(width: size * 1.32, height: size * 1.32)
+                    .blur(radius: size * 0.16)
+                    .scaleEffect(breathing ? 1.09 : 0.92)
+                Circle()
+                    .fill(accent.color.opacity(0.2))
+                    .frame(width: size * 1.12, height: size * 1.12)
+                    .blur(radius: size * 0.08)
+                    .scaleEffect(breathing ? 1.05 : 0.96)
             }
 
             // Track

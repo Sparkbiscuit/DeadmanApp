@@ -45,7 +45,9 @@ struct WorkSessionView: View {
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 30)
-        .hearthScreen(topGlow: 0.05, bottomGlow: 0.42)
+        // The held flame at full strength: no top glow to compete with the
+        // ring, a hot floor, and the densest ember field in the app.
+        .hearthScreen(topGlow: 0.05, bottomGlow: 0.5, embers: 30, emberIntensity: 1.5)
         .onReceive(timer) { _ in
             if isRunning && !isPaused {
                 elapsedSeconds += 1

@@ -257,19 +257,58 @@ private struct TodayWidgetView: View {
 
 // MARK: - Widget backdrop
 
-/// Dark hearth surface with a faint accent glow — the widget-sized version of
-/// the app's ambient background. Widgets always render the dark look; the
-/// dark environment override upstream keeps adaptive text legible on it.
+/// Dark hearth surface with the flame banked at the bottom and a scatter of
+/// ember sparks — the widget-sized version of the app's ambient background.
+/// WidgetKit renders are static, so the embers are a frozen moment of the
+/// rising fire rather than an animation. Widgets always render the dark look;
+/// the dark environment override upstream keeps adaptive text legible on it.
 struct HearthWidgetBackground: View {
+    private struct Spark: Identifiable {
+        let id: Int
+        let x: CGFloat
+        let y: CGFloat
+        let size: CGFloat
+        let alpha: Double
+    }
+
+    /// Deterministic spark field (unit coordinates, biased toward the hearth
+    /// at the bottom) so every render looks alive but identical.
+    private static let sparks: [Spark] = [
+        Spark(id: 0, x: 0.14, y: 0.82, size: 3.0, alpha: 0.55),
+        Spark(id: 1, x: 0.32, y: 0.64, size: 2.2, alpha: 0.35),
+        Spark(id: 2, x: 0.47, y: 0.88, size: 3.6, alpha: 0.6),
+        Spark(id: 3, x: 0.63, y: 0.72, size: 2.4, alpha: 0.4),
+        Spark(id: 4, x: 0.78, y: 0.9, size: 3.0, alpha: 0.5),
+        Spark(id: 5, x: 0.88, y: 0.58, size: 2.0, alpha: 0.3)
+    ]
+
     var body: some View {
+        let accent = HearthAccent.current
         ZStack {
-            Color(hex: 0x19191D)
+            Color(hex: 0x131316)
+
+            // The held flame below, per the design's widget frames.
             RadialGradient(
-                colors: [Color.brand500.opacity(0.16), .clear],
-                center: UnitPoint(x: 0.85, y: -0.1),
+                colors: [Color.brand500.opacity(0.34), .clear],
+                center: UnitPoint(x: 0.5, y: 1.12),
                 startRadius: 0,
-                endRadius: 220
+                endRadius: 260
             )
+
+            GeometryReader { geo in
+                ForEach(Self.sparks) { spark in
+                    Circle()
+                        .fill(accent.soft)
+                        .frame(width: spark.size, height: spark.size)
+                        .blur(radius: 0.5)
+                        .shadow(color: accent.color.opacity(0.7), radius: 3)
+                        .opacity(spark.alpha)
+                        .position(
+                            x: spark.x * geo.size.width,
+                            y: spark.y * geo.size.height
+                        )
+                }
+            }
         }
     }
 }

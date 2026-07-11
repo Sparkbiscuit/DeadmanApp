@@ -164,7 +164,7 @@ struct TaskRowView: View {
                 }
             }
             Button(role: .destructive) {
-                modelContext.delete(task)
+                deleteTask(task, context: modelContext)
                 CalendarExportService.syncIfEnabled(context: modelContext)
                 scheduleDidChange(context: modelContext)
             } label: {

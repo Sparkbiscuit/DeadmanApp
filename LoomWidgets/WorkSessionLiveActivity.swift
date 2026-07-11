@@ -104,6 +104,13 @@ private struct LockScreenSessionView: View {
         HStack(spacing: 14) {
             // Held-flame ring around the live timer.
             ZStack {
+                // Static halo — Live Activities can't run continuous
+                // animations, so the flame is held at a warm moment.
+                Circle()
+                    .fill(accent.color.opacity(0.3))
+                    .blur(radius: 10)
+                    .padding(-6)
+
                 Circle()
                     .stroke(Color.white.opacity(0.08), lineWidth: 5)
                 Circle()
@@ -168,7 +175,41 @@ private struct LockScreenSessionView: View {
             }
         }
         .padding(16)
+        // The hearth banked in the corner behind the flame, with a few
+        // frozen ember sparks — same language as the widgets.
+        .background {
+            ZStack {
+                RadialGradient(
+                    colors: [accent.color.opacity(0.38), .clear],
+                    center: UnitPoint(x: 0.12, y: 1.1),
+                    startRadius: 0,
+                    endRadius: 240
+                )
+                GeometryReader { geo in
+                    ForEach(Array(Self.sparks.enumerated()), id: \.offset) { _, spark in
+                        Circle()
+                            .fill(accent.soft)
+                            .frame(width: spark.size, height: spark.size)
+                            .blur(radius: 0.5)
+                            .shadow(color: accent.color.opacity(0.7), radius: 3)
+                            .opacity(spark.alpha)
+                            .position(
+                                x: spark.x * geo.size.width,
+                                y: spark.y * geo.size.height
+                            )
+                    }
+                }
+            }
+        }
     }
+
+    /// Deterministic spark positions (unit coordinates).
+    private static let sparks: [(x: CGFloat, y: CGFloat, size: CGFloat, alpha: Double)] = [
+        (0.12, 0.75, 2.5, 0.5),
+        (0.3, 0.55, 2.0, 0.35),
+        (0.55, 0.8, 2.5, 0.45),
+        (0.72, 0.35, 2.0, 0.3)
+    ]
 
     private static let clockFormatter: DateFormatter = {
         let formatter = DateFormatter()

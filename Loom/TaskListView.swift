@@ -170,28 +170,10 @@ struct TaskListView: View {
                     .frame(maxHeight: .infinity)
                     .hearthGlow(.brand500, radius: 5, opacity: 0.5)
                     .padding(.leading, 6)
-                    .padding(.vertical, 10)
-
-                    // The connector: light spills out of the hero card above,
-                    // drops down its left edge, and curls into this list —
-                    // "the glowing thread connects now → next."
-                    ThreadConnector()
-                        .stroke(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.brand300.opacity(0), location: 0),
-                                    .init(color: Color.brand300.opacity(0.95), location: 0.45),
-                                    .init(color: Color.brand300.opacity(0), location: 1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                        )
-                        .frame(width: 90, height: 78)
-                        .shadow(color: Color.brand500.opacity(0.6), radius: 6)
-                        .offset(x: 5, y: -96)
-                        .allowsHitTesting(false)
+                    .padding(.bottom, 10)
+                    // Reach up past the section header to the hero card's
+                    // glowing corner, so now → next reads as one thread.
+                    .padding(.top, -44)
 
                     VStack(spacing: 10) {
                         ForEach(Array(upcoming)) { block in
@@ -349,7 +331,7 @@ struct TaskListView: View {
     /// Deliberately dropping a task is a decision, not a failure.
     private func letGo(_ task: LoomTask) {
         withAnimation {
-            modelContext.delete(task)
+            deleteTask(task, context: modelContext)
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
@@ -632,7 +614,7 @@ struct TaskListView: View {
                                 }
                             } onDelete: {
                                 withAnimation {
-                                    modelContext.delete(task)
+                                    deleteTask(task, context: modelContext)
                                 }
                                 scheduleDidChange(context: modelContext)
                             }
@@ -679,6 +661,9 @@ struct TaskListView: View {
                 modelContext.delete(block)
             }
         }
+        // Persist the released blocks immediately — unsaved deletes have
+        // historically resurfaced as orphaned "Unknown Task" rows.
+        try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
@@ -932,6 +917,28 @@ private struct RightNowCard: View {
             RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous)
                 .stroke(Color.brand300.opacity(0.28), lineWidth: 1)
         )
+        // The thread's origin: light rims the card's bottom-left corner —
+        // down the left edge, around the corner, along the bottom — and the
+        // Up Next thread below picks it up. "Now → next" is one thread.
+        .overlay(alignment: .bottomLeading) {
+            ThreadConnector()
+                .stroke(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.brand300.opacity(0), location: 0),
+                            .init(color: Color.brand300.opacity(0.95), location: 0.45),
+                            .init(color: Color.brand300.opacity(0), location: 1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                )
+                .frame(width: 90, height: 78)
+                .offset(x: -0.5, y: 1.5)
+                .shadow(color: Color.brand500.opacity(0.6), radius: 6)
+                .allowsHitTesting(false)
+        }
         .shadow(color: Color.brand500.opacity(0.22), radius: 30, y: 12)
         .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
             Button("Push 30 minutes") { onPush(.thirtyMinutes) }
@@ -1269,6 +1276,25 @@ private struct CompletedReminderRow: View {
         formatter.dateFormat = "MMM d"
         return "\(formatter.string(from: reminder.dueDate)), \(time)"
     }
+}
+
+// MARK: - Delete
+
+/// Delete a task and everything hanging off it, explicitly. The cascade rule
+/// on `LoomTask.scheduledBlocks`/`workSessions` should handle this, but
+/// SwiftData cascades have a history of leaving children behind with a nil
+/// task — those are the "Unknown Task" ghost blocks on the Schedule. Deleting
+/// the children first and saving immediately closes that hole.
+@MainActor
+func deleteTask(_ task: LoomTask, context: ModelContext) {
+    for block in task.scheduledBlocks {
+        context.delete(block)
+    }
+    for session in task.workSessions {
+        context.delete(session)
+    }
+    context.delete(task)
+    try? context.save()
 }
 
 // MARK: - Restore

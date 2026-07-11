@@ -435,8 +435,11 @@ struct ScheduleView: View {
         let start = calendar.startOfDay(for: date)
         guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
 
+        // Blocks whose task is gone are data damage, not schedule — never
+        // render them as "Unknown Task" rows (the foreground sweep in
+        // MainTabView deletes them).
         var items: [DayItem] = allBlocks
-            .filter { $0.startTime >= start && $0.startTime < end }
+            .filter { $0.task != nil && $0.startTime >= start && $0.startTime < end }
             .map { .block($0) }
 
         for blocked in blockedTimes {
@@ -490,6 +493,9 @@ struct ScheduleView: View {
         for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
             modelContext.delete(block)
         }
+        // Persist the released blocks immediately — unsaved deletes have
+        // historically resurfaced as orphaned "Unknown Task" rows.
+        try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)

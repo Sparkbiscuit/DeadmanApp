@@ -257,8 +257,9 @@ struct WeaveView: View {
 
     /// Fire spreading down the gridlines, once per visit: the same grid drawn
     /// in accentSoft (crisp layer + blurred halo layer), revealed through a
-    /// diagonal band that travels from the bottom-right corner to the
-    /// top-left — the prototype's `fireSweep` mask animation.
+    /// diagonal band. The fire catches at a single point in the top-left
+    /// corner, spreads across warp and weft, and gutters out to a single
+    /// point in the bottom-right corner.
     private var fireSweep: some View {
         GeometryReader { geo in
             ZStack {
@@ -279,8 +280,8 @@ struct WeaveView: View {
                 )
                 .frame(width: geo.size.width * 2, height: geo.size.height * 2)
                 .offset(
-                    x: (0.5 - sweepProgress) * geo.size.width * 1.7,
-                    y: (0.5 - sweepProgress) * geo.size.height * 1.7
+                    x: (sweepProgress - 0.5) * geo.size.width * 1.7,
+                    y: (sweepProgress - 0.5) * geo.size.height * 1.7
                 )
                 .frame(width: geo.size.width, height: geo.size.height)
             )

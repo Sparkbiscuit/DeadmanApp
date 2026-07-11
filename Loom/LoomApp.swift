@@ -130,11 +130,33 @@ struct MainTabView: View {
         refreshSchedule()
     }
 
+    /// Blocks and sessions whose task is gone are damage left behind by
+    /// SwiftData cascade deletes that didn't finish the job — they used to
+    /// surface as "Unknown Task" rows scattered across the Schedule. Delete
+    /// them on every foreground refresh so old damage heals itself too.
+    private func sweepOrphans() {
+        let blocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        let sessions = (try? modelContext.fetch(FetchDescriptor<WorkSession>())) ?? []
+        var swept = 0
+        for block in blocks where block.task == nil {
+            modelContext.delete(block)
+            swept += 1
+        }
+        for session in sessions where session.task == nil {
+            modelContext.delete(session)
+            swept += 1
+        }
+        if swept > 0 {
+            try? modelContext.save()
+        }
+    }
+
     /// Foreground refresh: pull fresh calendar busy times, stamp out any due
     /// recurring tasks, replan missed blocks around everything, then mirror
     /// the result back out.
     private func refreshSchedule() {
         CalendarImportService.syncIfEnabled(context: modelContext)
+        sweepOrphans()
 
         let settings = UserSettings.fetchOrCreate(in: modelContext)
         let templates = (try? modelContext.fetch(FetchDescriptor<TaskTemplate>())) ?? []
