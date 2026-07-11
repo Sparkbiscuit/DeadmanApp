@@ -10,13 +10,67 @@ daily focus limit if you set one.
 
 - **Capture in seconds** — type or dictate a task, pick a context (School / Work /
   Personal), a deadline, and an effort estimate. Bulk entry handles a whole syllabus.
+- **Right Now card** — the top of the Tasks tab always answers "what should I be
+  doing this minute?": the running block (with elapsed/remaining) or the next one
+  up, with a single big Start button. Opening the app never requires a decision.
+- **First step** — optionally capture the very first physical action ("open the doc,
+  paste the data table"). It shows in the Right Now card, the block-start
+  notification, and the session timer, then clears itself once you've started.
+- **Overdue triage** — tasks that slip past their deadline move into a "Needs a
+  decision" queue with three kind exits: new deadline, done actually, or let it go.
+  No guilt pile.
+- **Estimate reality-check** — completed tasks keep their planned-vs-actual record,
+  and capture compares your guess against your recent history in that context:
+  "Your last 5 School tasks ran about 1.6× over. Plan for 2h 30m instead?" with a
+  one-tap accept. Needs at least 3 tracked completions; suggestions cap at 2×.
+- **Pace dots** — every task carries a quiet pressure reading: remaining effort
+  versus the free time left before its buffered deadline. Green under 50%, amber
+  to 80%, red beyond — plus one honest sentence in the stats bar about the most
+  pressured task, days before anything turns into a crisis.
+- **Morning preview & evening wrap-up** — a notification 30 minutes after wake
+  time pre-loads the day's shape ("First block: 9:00 Lab report. 3 blocks total,
+  done by 4:30"), and a configurable evening one closes the day and names
+  tomorrow's opener. Both optional, in Settings → Nudges.
+- **Start streak** — a flame in the header counting days you *started* a session,
+  not days you finished things, with two free mend days a week so one bad day
+  can't torch the thread.
+- **Widget start** — tapping a block on the Up Next widget deep-links straight
+  into that task's work session timer; one tap from Home Screen to running timer.
+- **Session immersion** — the screen stays awake during a work session, a gentle
+  haptic warns ten minutes before the block ends, and another marks the boundary:
+  stopping on time is the win, not the interruption.
+- **Weekly repeats** — capture a problem set once with "Weekly until…" and fresh
+  copies appear a rolling two weeks ahead, each scheduled around that week's
+  reality. Missed weeks are skipped silently — recurrence never manufactures
+  overdue guilt. Stop any recurrence from its task's context menu.
+- **The Weave** — a reflection tab that renders your last two weeks as a woven
+  tapestry: one column per day, threads colored by context and sized by time
+  actually worked, rest days shown as bare warp (they hold the cloth together).
+  With week totals, start counts, your streak, an estimate-heat reading, and
+  the week's finished tasks.
+- **Just 10 minutes** — a micro-start next to the session button: commit to ten
+  minutes, watch them count down, and get released at zero. Keep going or stop —
+  both count.
+- **Capture from anywhere** — "Add a task to Loom" via Siri, Shortcuts,
+  Spotlight, or the Action button. The task lands fully scheduled without the
+  app ever opening, and Siri tells you when its first block is.
+- **Can't right now** — one tap under the Right Now card pushes the plan 30
+  minutes, an hour, or to tomorrow morning. The whole task replans from the new
+  start, so nothing quietly rots and the deadline math stays honest.
+- **Today widget** — a Lock Screen ring of blocks done vs planned (and your
+  streak on quiet days), plus a Home Screen card with today's count, progress,
+  and what's next. Tapping jumps straight into the next block's timer.
+- **Data export** — Settings → Export my data writes everything Loom knows to
+  a plain, pretty-printed JSON file you can share, archive, or parse. Your
+  data is yours.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
   placed into free slots that finish before your deadline, with a safety buffer.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the
   whole schedule rebalances earliest-deadline-first, so an urgent task claims
   near slots from work that can wait.
 - **Reminders** — one-off reminders with local notifications, alongside the
-  scheduled tasks.
+  scheduled tasks. They appear in the Up Next widget with your work blocks, and
+  completed ones land in the Completed section where they can be restored.
 - **Work sessions** — a focused timer per task with self-reported progress; finish at
   100% and the task completes with a small celebration. A Live Activity mirrors the
   running timer on the Lock Screen and in the Dynamic Island.
@@ -35,3 +89,10 @@ daily focus limit if you set one.
 SwiftUI + SwiftData, iOS 17.5+. Open `Loom.xcodeproj` in Xcode and run the `Loom`
 scheme. The visual system (colors, type, spacing, per-screen specs) lives in
 `design-handoff/`.
+
+## Tests
+
+Unit tests live in `LoomTests` (scheduler, estimate advisor, streaks, pace,
+digests, recurrence). The shared `Loom` scheme includes both test bundles, so
+**Product → Test** (⌘U) runs everything; they also appear in Xcode's Test
+navigator (⌘6).

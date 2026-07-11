@@ -5,26 +5,45 @@ import SwiftData
 // MARK: - Timeline
 
 struct UpNextEntry: TimelineEntry {
-    struct BlockInfo: Identifiable {
+    /// A row on the widget: a scheduled work block or a point-in-time reminder,
+    /// merged into one chronological stream.
+    struct ItemInfo: Identifiable {
+        enum Kind {
+            case block
+            case reminder
+        }
+
         let id: UUID
+        let kind: Kind
         let title: String
         let contextName: String
         let start: Date
         let end: Date
+        var taskId: UUID? = nil
 
         func isActive(at date: Date) -> Bool {
-            start <= date && date < end
+            kind == .block && start <= date && date < end
+        }
+
+        /// Tap target: blocks jump straight into the work session timer for
+        /// their task; reminders just open the app.
+        var deepLink: URL {
+            if kind == .block, let taskId {
+                return URL(string: "loom://start-session/\(taskId.uuidString)")
+                    ?? URL(string: "loom://open")!
+            }
+            return URL(string: "loom://open")!
         }
     }
 
     let date: Date
-    let blocks: [BlockInfo]
+    let items: [ItemInfo]
 }
 
 struct UpNextProvider: TimelineProvider {
     func placeholder(in context: Context) -> UpNextEntry {
-        UpNextEntry(date: Date(), blocks: [
-            .init(id: UUID(), title: "Finish lab report", contextName: "School",
+        UpNextEntry(date: Date(), items: [
+            .init(id: UUID(), kind: .block, title: "Finish lab report", contextName: "School",
                   start: Date().addingTimeInterval(3600), end: Date().addingTimeInterval(5400))
         ])
     }
@@ -36,12 +55,12 @@ struct UpNextProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<UpNextEntry>) -> Void) {
         let entry = fetchEntry()
 
-        // Wake at the next block boundary so "Now" flips without polling.
+        // Wake at the next block/reminder boundary so "Now" flips without polling.
         let now = entry.date
         var boundaries: [Date] = []
-        for block in entry.blocks {
-            if block.start > now { boundaries.append(block.start) }
-            if block.end > now { boundaries.append(block.end) }
+        for item in entry.items {
+            if item.start > now { boundaries.append(item.start) }
+            if item.end > now { boundaries.append(item.end) }
         }
         let fallback = now.addingTimeInterval(30 * 60)
         let refresh = boundaries.min().map { min($0, fallback) } ?? fallback
@@ -52,31 +71,52 @@ struct UpNextProvider: TimelineProvider {
     private func fetchEntry() -> UpNextEntry {
         let now = Date()
         guard let container = try? SharedStore.makeContainer() else {
-            return UpNextEntry(date: now, blocks: [])
+            return UpNextEntry(date: now, items: [])
         }
         let context = ModelContext(container)
 
-        let descriptor = FetchDescriptor<ScheduledBlock>(
+        let blockDescriptor = FetchDescriptor<ScheduledBlock>(
             sortBy: [SortDescriptor(\ScheduledBlock.startTime)]
         )
-        let blocks = ((try? context.fetch(descriptor)) ?? [])
+        let blocks = ((try? context.fetch(blockDescriptor)) ?? [])
             .filter { block in
                 guard !block.isComplete, block.endTime > now else { return false }
                 guard let task = block.task, !task.isComplete else { return false }
                 return true
             }
-            .prefix(4)
             .map { block in
-                UpNextEntry.BlockInfo(
+                UpNextEntry.ItemInfo(
                     id: block.id,
+                    kind: .block,
                     title: block.task?.title ?? "Task",
                     contextName: block.task?.context.rawValue ?? "",
                     start: block.startTime,
-                    end: block.endTime
+                    end: block.endTime,
+                    taskId: block.task?.id
                 )
             }
 
-        return UpNextEntry(date: now, blocks: Array(blocks))
+        let reminderDescriptor = FetchDescriptor<Reminder>(
+            sortBy: [SortDescriptor(\Reminder.dueDate)]
+        )
+        let reminders = ((try? context.fetch(reminderDescriptor)) ?? [])
+            .filter { !$0.isComplete && $0.dueDate > now }
+            .map { reminder in
+                UpNextEntry.ItemInfo(
+                    id: reminder.id,
+                    kind: .reminder,
+                    title: reminder.title,
+                    contextName: "",
+                    start: reminder.dueDate,
+                    end: reminder.dueDate
+                )
+            }
+
+        let items = (blocks + reminders)
+            .sorted { $0.start < $1.start }
+            .prefix(4)
+
+        return UpNextEntry(date: now, items: Array(items))
     }
 }
 
@@ -91,7 +131,7 @@ struct UpNextWidget: Widget {
             UpNextWidgetView(entry: entry)
         }
         .configurationDisplayName("Up Next")
-        .description("Your next scheduled work blocks at a glance.")
+        .description("Your next work blocks and reminders at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -119,92 +159,139 @@ private struct UpNextWidgetView: View {
         }
     }
 
-    private var next: UpNextEntry.BlockInfo? { entry.blocks.first }
+    private var next: UpNextEntry.ItemInfo? { entry.items.first }
 
-    private func timeRange(_ block: UpNextEntry.BlockInfo) -> String {
-        "\(TimeFormatter.clock.string(from: block.start)) – \(TimeFormatter.clock.string(from: block.end))"
+    private func timeLabel(_ item: UpNextEntry.ItemInfo) -> String {
+        if item.kind == .reminder {
+            return TimeFormatter.clock.string(from: item.start)
+        }
+        return "\(TimeFormatter.clock.string(from: item.start)) – \(TimeFormatter.clock.string(from: item.end))"
+    }
+
+    private func itemColor(_ item: UpNextEntry.ItemInfo) -> Color {
+        item.kind == .reminder ? .brand500 : widgetContextColor(item.contextName)
+    }
+
+    private func itemLabel(_ item: UpNextEntry.ItemInfo) -> String {
+        if item.kind == .reminder { return "REMINDER" }
+        return item.isActive(at: entry.date) ? "NOW" : "UP NEXT"
     }
 
     // MARK: Home Screen
 
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let block = next {
-                let color = widgetContextColor(block.contextName)
-                let active = block.isActive(at: entry.date)
+            if let item = next {
+                let color = itemColor(item)
 
                 HStack(spacing: 5) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 7, height: 7)
-                    Text(active ? "NOW" : "UP NEXT")
+                    if item.kind == .reminder {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(color)
+                    } else {
+                        Circle()
+                            .fill(color)
+                            .frame(width: 7, height: 7)
+                    }
+                    Text(itemLabel(item))
                         .font(AppFont.caption(10))
                         .foregroundStyle(color)
                         .kerning(0.5)
                 }
                 .padding(.bottom, 6)
 
-                Text(block.title)
+                Text(item.title)
                     .font(AppFont.heading(15))
                     .foregroundStyle(Color.loomText)
                     .lineLimit(2)
                     .padding(.bottom, 3)
 
-                Text(timeRange(block))
+                Text(timeLabel(item))
                     .font(AppFont.monoMedium(11))
                     .foregroundStyle(Color.loomSubtle)
 
                 Spacer(minLength: 0)
 
-                if entry.blocks.count > 1 {
-                    Text("+\(entry.blocks.count - 1) more coming up")
-                        .font(AppFont.caption(10))
-                        .foregroundStyle(Color.loomFaint)
+                HStack(spacing: 4) {
+                    if item.kind == .block {
+                        // One tap from Home Screen to a running timer.
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(color)
+                        Text("Start")
+                            .font(AppFont.caption(11))
+                            .foregroundStyle(color)
+                    }
+                    Spacer(minLength: 0)
+                    if entry.items.count > 1 {
+                        Text("+\(entry.items.count - 1) more")
+                            .font(AppFont.caption(10))
+                            .foregroundStyle(Color.loomFaint)
+                    }
                 }
             } else {
                 emptyView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .widgetURL(next?.deepLink)
         .containerBackground(Color.loomSurface, for: .widget)
     }
 
     private var mediumView: some View {
         VStack(alignment: .leading, spacing: 9) {
-            if entry.blocks.isEmpty {
+            if entry.items.isEmpty {
                 emptyView
             } else {
-                ForEach(entry.blocks.prefix(3)) { block in
-                    let color = widgetContextColor(block.contextName)
-                    HStack(spacing: 10) {
-                        Text(TimeFormatter.clock.string(from: block.start))
-                            .font(AppFont.monoMedium(11))
-                            .foregroundStyle(Color.loomSubtle)
-                            .frame(width: 62, alignment: .trailing)
+                ForEach(entry.items.prefix(3)) { item in
+                    let color = itemColor(item)
+                    Link(destination: item.deepLink) {
+                        HStack(spacing: 10) {
+                            Text(TimeFormatter.clock.string(from: item.start))
+                                .font(AppFont.monoMedium(11))
+                                .foregroundStyle(Color.loomSubtle)
+                                .frame(width: 62, alignment: .trailing)
 
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(color)
-                            .frame(width: 3, height: 26)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(color)
+                                .frame(width: 3, height: 26)
 
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(block.title)
-                                .font(AppFont.heading(13))
-                                .foregroundStyle(Color.loomText)
-                                .lineLimit(1)
-                            Text(block.contextName)
-                                .font(AppFont.caption(10))
-                                .foregroundStyle(color)
-                        }
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.title)
+                                    .font(AppFont.heading(13))
+                                    .foregroundStyle(Color.loomText)
+                                    .lineLimit(1)
+                                if item.kind == .reminder {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "bell.fill")
+                                            .font(.system(size: 7, weight: .semibold))
+                                        Text("Reminder")
+                                            .font(AppFont.caption(10))
+                                    }
+                                    .foregroundStyle(color)
+                                } else {
+                                    Text(item.contextName)
+                                        .font(AppFont.caption(10))
+                                        .foregroundStyle(color)
+                                }
+                            }
 
-                        Spacer(minLength: 0)
+                            Spacer(minLength: 0)
 
-                        if block.isActive(at: entry.date) {
-                            Text("NOW")
-                                .font(AppFont.caption(9))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(color, in: Capsule())
+                            if item.isActive(at: entry.date) {
+                                Text("NOW")
+                                    .font(AppFont.caption(9))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(color, in: Capsule())
+                            }
+                            if item.kind == .block {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 17))
+                                    .foregroundStyle(color)
+                            }
                         }
                     }
                 }
@@ -232,15 +319,15 @@ private struct UpNextWidgetView: View {
 
     private var rectangularView: some View {
         Group {
-            if let block = next {
+            if let item = next {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(block.isActive(at: entry.date) ? "NOW" : "UP NEXT")
+                    Text(itemLabel(item))
                         .font(AppFont.caption(10))
                         .widgetAccentable()
-                    Text(block.title)
+                    Text(item.title)
                         .font(AppFont.heading(14))
                         .lineLimit(1)
-                    Text(timeRange(block))
+                    Text(timeLabel(item))
                         .font(AppFont.monoMedium(11))
                         .opacity(0.7)
                 }
@@ -250,17 +337,19 @@ private struct UpNextWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .widgetURL(next?.deepLink)
         .containerBackground(.clear, for: .widget)
     }
 
     private var inlineView: some View {
         Group {
-            if let block = next {
-                Text("\(block.isActive(at: entry.date) ? "Now" : TimeFormatter.clock.string(from: block.start)): \(block.title)")
+            if let item = next {
+                Text("\(item.isActive(at: entry.date) ? "Now" : TimeFormatter.clock.string(from: item.start)): \(item.title)")
             } else {
                 Text("Loom: all clear")
             }
         }
+        .widgetURL(next?.deepLink)
         .containerBackground(.clear, for: .widget)
     }
 }

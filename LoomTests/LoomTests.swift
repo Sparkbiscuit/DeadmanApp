@@ -10,7 +10,7 @@ final class LoomTests: XCTestCase {
 
     override func setUpWithError() throws {
         let schema = Schema([
-            LoomTask.self, ScheduledBlock.self, WorkSession.self,
+            LoomTask.self, TaskTemplate.self, ScheduledBlock.self, WorkSession.self,
             BlockedTime.self, BusyEvent.self, Reminder.self, UserSettings.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -610,5 +610,522 @@ final class LoomTests: XCTestCase {
         for (a, b) in zip(sorted, sorted.dropFirst()) {
             XCTAssertLessThanOrEqual(a.endTime, b.startTime, "rebalanced blocks must not overlap")
         }
+    }
+
+    // MARK: - Estimate advisor
+
+    /// A completed task with a real planned-vs-actual record: `spent` minutes
+    /// of tracked sessions against an `effort`-minute estimate.
+    @discardableResult
+    private func makeCompletedTask(
+        taskContext: TaskContext = .school,
+        effort: Int,
+        spent: Int,
+        completedDaysAgo: Int = 1
+    ) -> LoomTask {
+        let completedAt = anchor.addingTimeInterval(-Double(completedDaysAgo) * 86_400)
+        let task = LoomTask(
+            title: "Done task",
+            context: taskContext,
+            deadline: completedAt,
+            effortMinutes: effort
+        )
+        task.isComplete = true
+        task.completedAt = completedAt
+        context.insert(task)
+        let session = WorkSession(
+            task: task,
+            startedAt: completedAt.addingTimeInterval(-Double(spent) * 60),
+            durationSeconds: spent * 60
+        )
+        context.insert(session)
+        return task
+    }
+
+    func testEstimateAdvisorNeedsThreeSamples() throws {
+        makeCompletedTask(effort: 60, spent: 120)
+        makeCompletedTask(effort: 60, spent: 120)
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "two samples are an anecdote, not a pattern"
+        )
+    }
+
+    func testEstimateAdvisorSuggestsMedianOverrun() throws {
+        makeCompletedTask(effort: 60, spent: 90)   // 1.5×
+        makeCompletedTask(effort: 60, spent: 96)   // 1.6×
+        makeCompletedTask(effort: 60, spent: 102)  // 1.7×
+        try context.save()
+
+        let advice = try XCTUnwrap(EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context))
+        XCTAssertEqual(advice.sampleCount, 3)
+        XCTAssertEqual(advice.ratio, 1.6, accuracy: 0.01)
+        // 60 × 1.6 = 96, rounded to the nearest 15.
+        XCTAssertEqual(advice.suggestedMinutes, 90)
+    }
+
+    func testEstimateAdvisorCapsSuggestionAtDouble() throws {
+        makeCompletedTask(effort: 60, spent: 180)  // 3×
+        makeCompletedTask(effort: 60, spent: 180)
+        makeCompletedTask(effort: 60, spent: 180)
+        try context.save()
+
+        let advice = try XCTUnwrap(EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context))
+        XCTAssertEqual(advice.ratio, 3.0, accuracy: 0.01, "the shown ratio stays honest")
+        XCTAssertEqual(advice.suggestedMinutes, 120, "the suggestion is capped at 2× the guess")
+    }
+
+    func testEstimateAdvisorSilentWhenEstimatesAreHonest() throws {
+        makeCompletedTask(effort: 60, spent: 55)
+        makeCompletedTask(effort: 60, spent: 60)
+        makeCompletedTask(effort: 60, spent: 66)
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "roughly accurate history should not interrupt capture"
+        )
+    }
+
+    func testEstimateAdvisorIgnoresOtherContextsAndUntrackedTasks() throws {
+        // Chronic over-runs, but all in Work…
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 150)
+        // …and School completions with no tracked time say nothing.
+        let untracked = makeTask(effort: 60, deadlineHoursFromAnchor: -24)
+        untracked.isComplete = true
+        untracked.completedAt = anchor
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "advice must come from the same context and only from tracked work"
+        )
+        XCTAssertNotNil(
+            EstimateAdvisor.advice(for: .work, effortMinutes: 60, in: context),
+            "the Work record itself should still advise Work captures"
+        )
+    }
+
+    func testEstimateAdvisorUsesFiveMostRecentSamples() throws {
+        // Old habit: wild over-runs, further in the past.
+        for daysAgo in 10...14 {
+            makeCompletedTask(effort: 60, spent: 180, completedDaysAgo: daysAgo)
+        }
+        // Recent record: dead-on estimates.
+        for daysAgo in 1...5 {
+            makeCompletedTask(effort: 60, spent: 60, completedDaysAgo: daysAgo)
+        }
+        try context.save()
+
+        XCTAssertNil(
+            EstimateAdvisor.advice(for: .school, effortMinutes: 60, in: context),
+            "recent accuracy should outweigh an older over-run habit"
+        )
+    }
+
+    // MARK: - Start streaks
+
+    /// Noon on the day `daysAgo` days before the anchor.
+    private func startDate(daysAgo: Int) -> Date {
+        calendar.date(byAdding: .day, value: -daysAgo, to: anchor)!
+    }
+
+    func testStreakCountsConsecutiveStartDays() {
+        let starts = [0, 1, 2, 3].map(startDate(daysAgo:))
+        XCTAssertEqual(StreakCalculator.startStreak(startDates: starts, now: anchor), 4)
+    }
+
+    func testStreakEmptyHistoryIsZero() {
+        XCTAssertEqual(StreakCalculator.startStreak(startDates: [], now: anchor), 0)
+    }
+
+    func testStreakTodayWithoutStartDoesNotBreak() {
+        // Started yesterday and the day before; nothing yet today.
+        let starts = [1, 2].map(startDate(daysAgo:))
+        XCTAssertEqual(
+            StreakCalculator.startStreak(startDates: starts, now: anchor), 2,
+            "an unfinished today must neither break nor count"
+        )
+    }
+
+    func testStreakMendsBridgeShortGaps() {
+        // Started 0, 1, 3, 4 days ago — the single missed day is mended and
+        // counted, so the thread reads 5.
+        let starts = [0, 1, 3, 4].map(startDate(daysAgo:))
+        XCTAssertEqual(StreakCalculator.startStreak(startDates: starts, now: anchor), 5)
+    }
+
+    func testStreakBreaksWhenWeeklyMendsRunOut() {
+        // A five-day gap can never be mended (at most 2 mends per week, and
+        // the gap spans at most two calendar weeks), wherever the week breaks.
+        let starts = [0, 6, 7].map(startDate(daysAgo:))
+        XCTAssertEqual(
+            StreakCalculator.startStreak(startDates: starts, now: anchor), 1,
+            "a five-day gap should end the chain at today's start"
+        )
+    }
+
+    // MARK: - Pace (schedule pressure)
+
+    func testAvailableMinutesSubtractsOtherWork() {
+        let settings = makeSettings() // wake 8, sleep 23
+        let other = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let block = ScheduledBlock(task: other, startTime: anchor, durationMinutes: 120)
+        context.insert(block)
+
+        // 9:00 → 14:00 = 300 minutes, minus the 120-minute block.
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: anchor.addingTimeInterval(5 * 3600),
+            allBlocks: [block],
+            settings: settings
+        )
+        XCTAssertEqual(available, 180)
+    }
+
+    func testAvailableMinutesIgnoresOwnBlocks() {
+        let settings = makeSettings()
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let ownBlock = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 120)
+        context.insert(ownBlock)
+
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: anchor.addingTimeInterval(5 * 3600),
+            excludingTaskId: task.id,
+            allBlocks: [ownBlock],
+            settings: settings
+        )
+        XCTAssertEqual(available, 300, "a task's own booked time still belongs to it")
+    }
+
+    func testPressureReflectsRemainingVersusFreeTime() throws {
+        let settings = makeSettings() // buffer 120
+        // 60m of work; window 9:00 → deadline(anchor+7h)−2h buffer = 14:00 → 300 free.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 7)
+        let pressure = try XCTUnwrap(SchedulerService.pressure(
+            for: task, allBlocks: [], settings: settings, now: anchor
+        ))
+        XCTAssertEqual(pressure, 0.2, accuracy: 0.01)
+    }
+
+    func testPressureInfiniteWhenNoWindowRemains() throws {
+        let settings = makeSettings() // buffer 120
+        // Deadline in 1h, buffer 2h: the usable window is already gone.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 1)
+        let pressure = try XCTUnwrap(SchedulerService.pressure(
+            for: task, allBlocks: [], settings: settings, now: anchor
+        ))
+        XCTAssertTrue(pressure.isInfinite)
+    }
+
+    func testPressureNilWithoutRemainingEffort() {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 24)
+        task.manualProgressPercent = 100
+        XCTAssertNil(SchedulerService.pressure(
+            for: task, allBlocks: [], settings: settings, now: anchor
+        ))
+    }
+
+    // MARK: - Daily digests
+
+    private func digestBlock(
+        title: String = "Lab report",
+        startHour: Double,
+        minutes: Int = 60,
+        isComplete: Bool = false
+    ) -> BlockNotificationService.DigestBlock {
+        let start = anchor.addingTimeInterval((startHour - 9) * 3600)
+        return BlockNotificationService.DigestBlock(
+            title: title,
+            start: start,
+            end: start.addingTimeInterval(Double(minutes) * 60),
+            isComplete: isComplete
+        )
+    }
+
+    func testMorningDigestNamesFirstBlockAndDayShape() throws {
+        let body = try XCTUnwrap(BlockNotificationService.morningDigestBody(dayBlocks: [
+            digestBlock(title: "Lab report", startHour: 9),
+            digestBlock(title: "Essay", startHour: 13, minutes: 90),
+            digestBlock(title: "Reading", startHour: 11)
+        ]))
+        XCTAssertTrue(body.contains("Lab report"), "leads with the first block: \(body)")
+        XCTAssertTrue(body.contains("3 blocks"), "names the day's shape: \(body)")
+        XCTAssertTrue(body.contains("2:30"), "ends with when the day is done: \(body)")
+    }
+
+    func testMorningDigestNilOnEmptyDay() {
+        XCTAssertNil(BlockNotificationService.morningDigestBody(dayBlocks: []))
+    }
+
+    func testEveningDigestCountsAndPreviewsTomorrow() throws {
+        let body = try XCTUnwrap(BlockNotificationService.eveningDigestBody(
+            todayBlocks: [
+                digestBlock(startHour: 9, isComplete: true),
+                digestBlock(startHour: 11, isComplete: true),
+                digestBlock(startHour: 14)
+            ],
+            tomorrowFirst: digestBlock(title: "Problem set", startHour: 10)
+        ))
+        XCTAssertTrue(body.contains("2 of 3"), "honest done count: \(body)")
+        XCTAssertTrue(body.contains("Problem set"), "pre-loads tomorrow's opener: \(body)")
+    }
+
+    func testEveningDigestNilWhenNothingToSay() {
+        XCTAssertNil(BlockNotificationService.eveningDigestBody(
+            todayBlocks: [], tomorrowFirst: nil
+        ))
+    }
+
+    // MARK: - Recurring tasks
+
+    func testMaterializeStampsOccurrencesTwoWeeksAhead() throws {
+        let settings = makeSettings()
+        let template = TaskTemplate(
+            title: "Weekly problem set",
+            context: .school,
+            effortMinutes: 60,
+            nextDeadline: anchor.addingTimeInterval(3 * 86_400),
+            repeatUntil: anchor.addingTimeInterval(60 * 86_400)
+        )
+        context.insert(template)
+        try context.save()
+
+        let created = SchedulerService.materializeRecurringTasks(
+            templates: [template],
+            allBlocks: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        // Deadlines at day 3 and day 10 fall inside the 14-day horizon; day 17 doesn't.
+        XCTAssertEqual(created, 2)
+        let tasks = try context.fetch(FetchDescriptor<LoomTask>())
+            .filter { $0.source == .recurring }
+        XCTAssertEqual(tasks.count, 2)
+        for task in tasks {
+            XCTAssertEqual(task.templateId, template.id)
+            XCTAssertFalse(task.scheduledBlocks.isEmpty, "occurrences arrive already scheduled")
+        }
+        XCTAssertEqual(
+            template.nextDeadline,
+            anchor.addingTimeInterval(17 * 86_400),
+            "the template must remember where it left off"
+        )
+
+        // A second pass right away must not duplicate anything.
+        let secondPass = SchedulerService.materializeRecurringTasks(
+            templates: [template],
+            allBlocks: try context.fetch(FetchDescriptor<ScheduledBlock>()),
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        XCTAssertEqual(secondPass, 0)
+    }
+
+    func testMaterializeSkipsMissedOccurrencesWithoutGuilt() throws {
+        let settings = makeSettings()
+        // The app wasn't opened for a while: one occurrence is already past.
+        let template = TaskTemplate(
+            title: "Weekly reading",
+            context: .school,
+            effortMinutes: 30,
+            nextDeadline: anchor.addingTimeInterval(-3 * 86_400),
+            repeatUntil: anchor.addingTimeInterval(60 * 86_400)
+        )
+        context.insert(template)
+        try context.save()
+
+        let created = SchedulerService.materializeRecurringTasks(
+            templates: [template],
+            allBlocks: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        // Day −3 is skipped; days +4 and +11 materialize.
+        XCTAssertEqual(created, 2)
+        let tasks = try context.fetch(FetchDescriptor<LoomTask>())
+        XCTAssertTrue(
+            tasks.allSatisfy { $0.deadline > anchor },
+            "a recurrence must never spawn an already-overdue task"
+        )
+    }
+
+    func testMaterializeRetiresExhaustedTemplates() throws {
+        let settings = makeSettings()
+        let template = TaskTemplate(
+            title: "Short-lived chore",
+            context: .personal,
+            effortMinutes: 30,
+            nextDeadline: anchor.addingTimeInterval(2 * 86_400),
+            repeatUntil: anchor.addingTimeInterval(5 * 86_400)
+        )
+        context.insert(template)
+        try context.save()
+
+        let created = SchedulerService.materializeRecurringTasks(
+            templates: [template],
+            allBlocks: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(created, 1, "only the day-2 occurrence fits before repeatUntil")
+        let remaining = try context.fetch(FetchDescriptor<TaskTemplate>())
+        XCTAssertTrue(remaining.isEmpty, "an exhausted template deletes itself")
+    }
+
+    // MARK: - Weave
+
+    func testWeaveAggregatesSessionsAndCheckedBlocksByDay() throws {
+        let school = makeTask(effort: 300, deadlineHoursFromAnchor: 48)
+        let personal = LoomTask(
+            title: "Chores", context: .personal,
+            deadline: anchor.addingTimeInterval(48 * 3600), effortMinutes: 120
+        )
+        context.insert(personal)
+
+        // Today: two school sessions and a checked personal block.
+        let s1 = WorkSession(task: school, startedAt: anchor, durationSeconds: 60 * 60)
+        let s2 = WorkSession(task: school, startedAt: anchor.addingTimeInterval(3 * 3600), durationSeconds: 30 * 60)
+        let checked = ScheduledBlock(task: personal, startTime: anchor.addingTimeInterval(3600), durationMinutes: 45)
+        checked.isComplete = true
+        // Yesterday: one personal session. An unchecked block must not count.
+        let s3 = WorkSession(task: personal, startedAt: anchor.addingTimeInterval(-24 * 3600), durationSeconds: 20 * 60)
+        let unchecked = ScheduledBlock(task: school, startTime: anchor.addingTimeInterval(-24 * 3600), durationMinutes: 90)
+        context.insert(s1)
+        context.insert(s2)
+        context.insert(checked)
+        context.insert(s3)
+        context.insert(unchecked)
+        try context.save()
+
+        let days = WeaveBuilder.days(
+            sessions: [s1, s2, s3],
+            blocks: [checked, unchecked],
+            daysBack: 7,
+            now: anchor
+        )
+
+        XCTAssertEqual(days.count, 7)
+        let today = try XCTUnwrap(days.last)
+        XCTAssertEqual(today.minutesByContext[.school], 90)
+        XCTAssertEqual(today.minutesByContext[.personal], 45)
+        XCTAssertEqual(today.sessionCount, 2, "checked blocks add minutes, not starts")
+
+        let yesterday = days[5]
+        XCTAssertEqual(yesterday.minutesByContext[.personal], 20)
+        XCTAssertNil(yesterday.minutesByContext[.school], "unchecked blocks contribute nothing")
+        XCTAssertEqual(yesterday.sessionCount, 1)
+
+        XCTAssertEqual(days[0].totalMinutes, 0, "untouched days stay empty")
+    }
+
+    func testWeaveEstimateHeatIsMedianAcrossContexts() {
+        makeCompletedTask(taskContext: .school, effort: 60, spent: 90)    // 1.5×
+        makeCompletedTask(taskContext: .work, effort: 60, spent: 60)      // 1.0×
+        makeCompletedTask(taskContext: .personal, effort: 60, spent: 120) // 2.0×
+        let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+
+        let heat = WeaveBuilder.estimateHeat(tasks: tasks)
+        XCTAssertEqual(heat ?? 0, 1.5, accuracy: 0.01)
+    }
+
+    func testWeaveEstimateHeatNeedsThreeSamples() {
+        makeCompletedTask(effort: 60, spent: 120)
+        let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+        XCTAssertNil(WeaveBuilder.estimateHeat(tasks: tasks))
+    }
+
+    // MARK: - Block push ("can't right now")
+
+    func testRescheduleHonorsEarliestStart() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 72)
+        let soon = ScheduledBlock(task: task, startTime: anchor.addingTimeInterval(600), durationMinutes: 60)
+        context.insert(soon)
+        try context.save()
+
+        // "Push to tomorrow": nothing may land before the requested start.
+        let tomorrowWake = calendar.date(
+            bySettingHour: 8, minute: 0, second: 0,
+            of: calendar.date(byAdding: .day, value: 1, to: anchor)!
+        )!
+        let result = SchedulerService.reschedule(
+            task: task,
+            allBlocks: [soon],
+            settings: settings,
+            from: tomorrowWake,
+            context: context
+        )
+        try context.save()
+
+        guard case .success = result else {
+            return XCTFail("expected the pushed task to fit, got \(result)")
+        }
+        let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertFalse(all.isEmpty)
+        for block in all {
+            XCTAssertGreaterThanOrEqual(
+                block.startTime, tomorrowWake,
+                "a pushed plan must not sneak work back before the chosen start"
+            )
+        }
+    }
+
+    // MARK: - Data export
+
+    func testDataExportRoundTrips() throws {
+        let task = makeTask(effort: 90, deadlineHoursFromAnchor: 48)
+        task.firstStep = "Open the doc"
+        let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 45)
+        context.insert(block)
+        let session = WorkSession(task: task, startedAt: anchor, durationSeconds: 1200)
+        context.insert(session)
+        let reminder = Reminder(title: "Take meds", dueDate: anchor.addingTimeInterval(3600))
+        context.insert(reminder)
+        let blocked = BlockedTime(label: "Class", weekdays: [2, 4], startHour: 10, startMinute: 30, durationMinutes: 90)
+        context.insert(blocked)
+        let template = TaskTemplate(
+            title: "Weekly set", context: .school, effortMinutes: 60,
+            nextDeadline: anchor.addingTimeInterval(7 * 86_400),
+            repeatUntil: anchor.addingTimeInterval(30 * 86_400)
+        )
+        context.insert(template)
+        try context.save()
+
+        let data = try DataExporter.exportJSON(context: context)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let export = try decoder.decode(DataExporter.Export.self, from: data)
+
+        XCTAssertEqual(export.version, 1)
+        XCTAssertEqual(export.tasks.count, 1)
+        XCTAssertEqual(export.blocks.count, 1)
+        XCTAssertEqual(export.workSessions.count, 1)
+        XCTAssertEqual(export.reminders.count, 1)
+        XCTAssertEqual(export.blockedTimes.count, 1)
+        XCTAssertEqual(export.templates.count, 1)
+
+        let exportedTask = try XCTUnwrap(export.tasks.first)
+        XCTAssertEqual(exportedTask.id, task.id)
+        XCTAssertEqual(exportedTask.firstStep, "Open the doc")
+        XCTAssertEqual(exportedTask.context, "School")
+        XCTAssertEqual(export.blocks.first?.taskId, task.id, "relations survive as id references")
+        XCTAssertEqual(export.blockedTimes.first?.weekdays, [2, 4])
     }
 }

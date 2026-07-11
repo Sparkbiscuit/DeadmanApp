@@ -16,6 +16,7 @@ enum BlockNotificationService {
     static let startActionId = "LOOM_START_SESSION"
     static let snoozeActionId = "LOOM_SNOOZE_10"
     private static let idPrefix = "block-"
+    private static let digestIdPrefix = "digest-"
 
     /// Pending-notification budget (iOS caps at 64 per app; reminders need room too).
     private static let maxBlocks = 20
@@ -27,6 +28,7 @@ enum BlockNotificationService {
         let title: String
         let start: Date
         let minutes: Int
+        let firstStep: String?
     }
 
     static func registerCategory() {
@@ -49,7 +51,8 @@ enum BlockNotificationService {
         UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
-    /// Rebuild the pending block notifications from the current schedule.
+    /// Rebuild the pending block notifications and daily digests from the
+    /// current schedule.
     @MainActor
     static func resync(context: ModelContext) {
         let settings = UserSettings.fetchOrCreate(in: context)
@@ -58,7 +61,9 @@ enum BlockNotificationService {
 
         let now = Date()
         guard let horizon = Calendar.current.date(byAdding: .day, value: horizonDays, to: now) else { return }
-        let snapshots: [BlockSnapshot] = ((try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? [])
+        let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+
+        let snapshots: [BlockSnapshot] = allBlocks
             .filter { block in
                 guard !block.isComplete,
                       block.startTime > now.addingTimeInterval(60),
@@ -75,26 +80,184 @@ enum BlockNotificationService {
                     taskId: task.id,
                     title: task.title,
                     start: block.startTime,
-                    minutes: block.durationMinutes
+                    minutes: block.durationMinutes,
+                    firstStep: task.firstStep
                 )
             }
 
+        let digests = digestRequests(settings: settings, allBlocks: allBlocks, now: now)
+
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pending in
-            let stale = pending.map(\.identifier).filter { $0.hasPrefix(idPrefix) }
+            let stale = pending.map(\.identifier).filter {
+                $0.hasPrefix(idPrefix) || $0.hasPrefix(digestIdPrefix)
+            }
             center.removePendingNotificationRequests(withIdentifiers: stale)
 
-            guard enabled else { return }
+            guard enabled || !digests.isEmpty else { return }
             center.getNotificationSettings { notifSettings in
                 guard notifSettings.authorizationStatus == .authorized else { return }
-                for snapshot in snapshots {
-                    center.add(request(for: snapshot, leadMinutes: 0))
-                    if leadMinutes > 0 {
-                        center.add(request(for: snapshot, leadMinutes: leadMinutes))
+                if enabled {
+                    for snapshot in snapshots {
+                        center.add(request(for: snapshot, leadMinutes: 0))
+                        if leadMinutes > 0 {
+                            center.add(request(for: snapshot, leadMinutes: leadMinutes))
+                        }
                     }
+                }
+                for digest in digests {
+                    center.add(digest)
                 }
             }
         }
+    }
+
+    // MARK: - Daily digests
+
+    /// One block's worth of digest input — a plain value so the copy builders
+    /// below stay pure and testable.
+    struct DigestBlock {
+        let title: String
+        let start: Date
+        let end: Date
+        let isComplete: Bool
+    }
+
+    /// Morning preview: the day's shape, pre-loaded before the day ambushes
+    /// you. Nil when the day holds no blocks — no content, no notification.
+    static func morningDigestBody(dayBlocks: [DigestBlock]) -> String? {
+        let ordered = dayBlocks.sorted { $0.start < $1.start }
+        guard let first = ordered.first,
+              let doneBy = ordered.map(\.end).max() else { return nil }
+        let clock = TimeFormatter.clock
+        if ordered.count == 1 {
+            return "One block today: \(clock.string(from: first.start)) \(first.title). Done by \(clock.string(from: doneBy))."
+        }
+        return "First block: \(clock.string(from: first.start)) \(first.title). \(ordered.count) blocks total, done by \(clock.string(from: doneBy))."
+    }
+
+    /// Evening wrap-up: what happened today and what tomorrow opens with —
+    /// working memory, externalized across the day boundary. Nil when there's
+    /// nothing to say on either side.
+    static func eveningDigestBody(todayBlocks: [DigestBlock], tomorrowFirst: DigestBlock?) -> String? {
+        var parts: [String] = []
+        if !todayBlocks.isEmpty {
+            let done = todayBlocks.filter(\.isComplete).count
+            if done == todayBlocks.count && done > 0 {
+                parts.append(done == 1 ? "Today: your block, done." : "Today: all \(done) blocks done.")
+            } else {
+                parts.append("Today: \(done) of \(todayBlocks.count) blocks done.")
+            }
+        }
+        if let first = tomorrowFirst {
+            parts.append("Tomorrow starts with \(first.title) at \(TimeFormatter.clock.string(from: first.start)).")
+        } else if !todayBlocks.isEmpty {
+            parts.append("Nothing booked tomorrow — capture something small if that's wrong.")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    private static let digestDayKey: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter
+    }()
+
+    /// Build the pending morning/evening digest notifications for the next
+    /// few days from the current schedule. Content is a snapshot from resync
+    /// time; resync runs on every schedule change, so it stays fresh.
+    private static func digestRequests(
+        settings: UserSettings,
+        allBlocks: [ScheduledBlock],
+        now: Date
+    ) -> [UNNotificationRequest] {
+        guard settings.morningPreviewEnabled || settings.eveningReviewEnabled else { return [] }
+        let calendar = Calendar.current
+
+        // Evening counts include checked blocks of since-completed tasks;
+        // the morning preview only lists work still ahead.
+        let withTask = allBlocks.filter { $0.task != nil }
+        func digestBlocks(on day: Date, upcomingOnly: Bool) -> [DigestBlock] {
+            withTask
+                .filter { block in
+                    calendar.isDate(block.startTime, inSameDayAs: day)
+                        && (!upcomingOnly || (!block.isComplete && !(block.task?.isComplete ?? true)))
+                }
+                .map { block in
+                    DigestBlock(
+                        title: block.task?.title ?? "Task",
+                        start: block.startTime,
+                        end: block.endTime,
+                        isComplete: block.isComplete
+                    )
+                }
+        }
+
+        var requests: [UNNotificationRequest] = []
+        for offset in 0..<3 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { continue }
+            let key = digestDayKey.string(from: day)
+
+            if settings.morningPreviewEnabled,
+               let wake = calendar.date(
+                   bySettingHour: settings.wakeHour,
+                   minute: settings.wakeMinute,
+                   second: 0, of: day
+               ) {
+                let fire = wake.addingTimeInterval(30 * 60)
+                if fire > now,
+                   let body = morningDigestBody(dayBlocks: digestBlocks(on: day, upcomingOnly: true)) {
+                    requests.append(digestRequest(
+                        id: "\(digestIdPrefix)morning-\(key)",
+                        title: "Today, at a glance",
+                        body: body,
+                        fireDate: fire
+                    ))
+                }
+            }
+
+            if settings.eveningReviewEnabled,
+               let fire = calendar.date(
+                   bySettingHour: settings.eveningReviewHour,
+                   minute: settings.eveningReviewMinute,
+                   second: 0, of: day
+               ),
+               fire > now,
+               let tomorrow = calendar.date(byAdding: .day, value: 1, to: day) {
+                let tomorrowFirst = digestBlocks(on: tomorrow, upcomingOnly: true)
+                    .min { $0.start < $1.start }
+                if let body = eveningDigestBody(
+                    todayBlocks: digestBlocks(on: day, upcomingOnly: false),
+                    tomorrowFirst: tomorrowFirst
+                ) {
+                    requests.append(digestRequest(
+                        id: "\(digestIdPrefix)evening-\(key)",
+                        title: "Today, wrapped",
+                        body: body,
+                        fireDate: fire
+                    ))
+                }
+            }
+        }
+        return requests
+    }
+
+    private static func digestRequest(
+        id: String,
+        title: String,
+        body: String,
+        fireDate: Date
+    ) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute],
+            from: fireDate
+        )
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
     }
 
     /// Re-ping in 10 minutes without touching the schedule.
@@ -118,6 +281,10 @@ enum BlockNotificationService {
             : "\(snapshot.minutes / 60)h\(snapshot.minutes % 60 > 0 ? " \(snapshot.minutes % 60)m" : "")"
         if leadMinutes > 0 {
             content.body = "\(length) block starts in \(leadMinutes) min. Wrap up what you're doing."
+        } else if let step = snapshot.firstStep, !step.isEmpty {
+            // The captured opening move beats a platitude: name the exact
+            // physical action so the block is startable from the banner.
+            content.body = "\(length) block starting now. First step: \(step)"
         } else {
             content.body = "\(length) block starting now. One small start counts."
         }
@@ -147,6 +314,7 @@ enum BlockNotificationService {
 /// user-initiated actions so it never appears out of nowhere at launch.
 @MainActor
 func scheduleDidChange(context: ModelContext, interactive: Bool = true) {
+    PaceCache.invalidate()
     SharedStore.reloadWidgets()
     if interactive {
         Task { @MainActor in

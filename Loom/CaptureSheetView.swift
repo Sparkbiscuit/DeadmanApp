@@ -8,6 +8,7 @@ struct CaptureSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
+    @State private var firstStep = ""
     @State private var deadline = defaultDeadline()
     @State private var effortMinutes = 60
     @State private var context: TaskContext = .school
@@ -16,6 +17,8 @@ struct CaptureSheetView: View {
     @State private var showBulk = false
     @State private var useCustomStart = false
     @State private var customStart = Date().addingTimeInterval(15 * 60)
+    @State private var repeatWeekly = false
+    @State private var repeatUntil = Date().addingTimeInterval(35 * 86_400)
 
     // Capture mode: a scheduled task, or a one-off reminder
     private enum CaptureMode: String, CaseIterable {
@@ -25,6 +28,11 @@ struct CaptureSheetView: View {
     @State private var captureMode: CaptureMode = .task
     @State private var reminderDate = Date().addingTimeInterval(3600)
     @State private var showNotificationsDeniedNote = false
+
+    // Estimate reality-check: what the planned-vs-actual record says about
+    // the current guess, and whether the suggestion was taken.
+    @State private var estimateAdvice: EstimateAdvisor.Advice?
+    @State private var estimateAccepted = false
 
     // Scheduling result — nothing is committed until the user confirms.
     @State private var scheduleWarning: String?
@@ -53,9 +61,12 @@ struct CaptureSheetView: View {
                         modePicker
                         titleField
                         if captureMode == .task {
+                            firstStepField
                             contextPicker
                             deadlinePicker
+                            repeatPicker
                             effortPicker
+                            estimateAdviceRow
                             startPicker
                             scheduleButton
                         } else {
@@ -81,7 +92,21 @@ struct CaptureSheetView: View {
             } message: {
                 Text(scheduleWarning ?? "")
             }
-            .onAppear { titleFocused = true }
+            .onAppear {
+                titleFocused = true
+                refreshEstimateAdvice()
+            }
+            .onChange(of: context) { _, _ in
+                estimateAccepted = false
+                refreshEstimateAdvice()
+            }
+            .onChange(of: effortMinutes) { _, newValue in
+                // Accepting the suggestion changes the effort too — don't
+                // treat that as a fresh guess and immediately re-advise on it.
+                if estimateAccepted && newValue == estimateAdvice?.suggestedMinutes { return }
+                estimateAccepted = false
+                refreshEstimateAdvice()
+            }
             .onDisappear { if isListening { stopListening() } }
         }
         .presentationDetents([.large])
@@ -185,6 +210,7 @@ struct CaptureSheetView: View {
             dueDate: reminderDate
         )
         modelContext.insert(reminder)
+        SharedStore.reloadWidgets()
 
         Task { @MainActor in
             let granted = await NotificationService.requestAuthorization()
@@ -226,6 +252,24 @@ struct CaptureSheetView: View {
                         )
                 }
             }
+        }
+    }
+
+    // MARK: - First Step Field
+
+    /// Optional, never required — but a concrete opening move is what makes a
+    /// task startable later. Surfaces in the hero card, the block-start nudge,
+    /// and the work session timer.
+    private var firstStepField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("What's the very first physical action? (optional)")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            TextField("e.g. Open the doc and paste the data", text: $firstStep)
+                .font(AppFont.body(15))
+                .foregroundStyle(Color.loomText)
+                .submitLabel(.done)
         }
     }
 
@@ -329,6 +373,129 @@ struct CaptureSheetView: View {
         }
     }
 
+    // MARK: - Repeat picker
+
+    /// Weekly problem sets, readings, chores: capture once, and a fresh copy
+    /// with the same shape appears each week until the end date.
+    private var repeatPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Repeats")
+                .font(AppFont.caption(12))
+                .foregroundStyle(Color.loomSubtle)
+
+            HStack(spacing: 8) {
+                EffortChip(label: "One-off", isSelected: !repeatWeekly) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        repeatWeekly = false
+                    }
+                }
+                EffortChip(label: "Weekly", isSelected: repeatWeekly) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        repeatWeekly = true
+                        repeatUntil = max(repeatUntil, deadline.addingTimeInterval(7 * 86_400))
+                    }
+                }
+            }
+
+            if repeatWeekly {
+                HStack {
+                    Text("Until")
+                        .font(AppFont.body(13))
+                        .foregroundStyle(Color.loomSubtle)
+                    DatePicker(
+                        "",
+                        selection: $repeatUntil,
+                        in: Date()...,
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .tint(Color.brand500)
+                    Spacer()
+                }
+                .padding(.top, 4)
+                Text("A fresh copy appears each week, scheduled around whatever that week holds.")
+                    .font(AppFont.body(11))
+                    .foregroundStyle(Color.loomFaint)
+            }
+        }
+    }
+
+    // MARK: - Estimate reality-check
+
+    /// A gentle line from the record, not a lecture: "your last N tasks like
+    /// this ran over — plan for X instead?" with a one-tap accept.
+    @ViewBuilder
+    private var estimateAdviceRow: some View {
+        if let advice = estimateAdvice {
+            if estimateAccepted {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.personalColor)
+                    Text("Planned for \(CountdownFormatter.effortString(minutes: effortMinutes)) — future you says thanks.")
+                        .font(AppFont.body(12))
+                        .foregroundStyle(Color.loomSubtle)
+                    Spacer(minLength: 0)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "hourglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.workColor)
+                            .padding(.top, 1)
+                        Text("Your last \(advice.sampleCount) \(context.rawValue) tasks ran about \(advice.ratioLabel) over their estimates.")
+                            .font(AppFont.body(13))
+                            .foregroundStyle(Color.loomText)
+                    }
+
+                    Button {
+                        acceptEstimateSuggestion()
+                    } label: {
+                        Text("Plan for \(CountdownFormatter.effortString(minutes: advice.suggestedMinutes)) instead")
+                            .font(AppFont.caption(13))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.workColor, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.workColor.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                        .stroke(Color.workColor.opacity(0.25), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func refreshEstimateAdvice() {
+        estimateAdvice = EstimateAdvisor.advice(
+            for: context,
+            effortMinutes: effortMinutes,
+            in: modelContext
+        )
+    }
+
+    private func acceptEstimateSuggestion() {
+        guard let advice = estimateAdvice else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if advice.suggestedMinutes >= 180 {
+                showCustomEffort = true
+                customEffort = advice.suggestedMinutes
+            } else {
+                showCustomEffort = false
+            }
+            effortMinutes = advice.suggestedMinutes
+            estimateAccepted = true
+        }
+    }
+
     // MARK: - Earliest start
 
     private var startPicker: some View {
@@ -396,11 +563,13 @@ struct CaptureSheetView: View {
         let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         // Build without inserting — a cancelled warning must leave no trace.
+        let trimmedStep = firstStep.trimmingCharacters(in: .whitespaces)
         let task = LoomTask(
             title: title,
             context: context,
             deadline: deadline,
-            effortMinutes: effortMinutes
+            effortMinutes: effortMinutes,
+            firstStep: trimmedStep.isEmpty ? nil : trimmedStep
         )
 
         // Never book work to start "right now" — leave the configured buffer,
@@ -445,6 +614,7 @@ struct CaptureSheetView: View {
         for block in pendingBlocks {
             modelContext.insert(block)
         }
+        insertTemplateIfRepeating(for: task)
         pendingTask = nil
         pendingBlocks = []
         CalendarExportService.syncIfEnabled(context: modelContext)
@@ -452,11 +622,30 @@ struct CaptureSheetView: View {
         dismiss()
     }
 
+    /// A weekly capture leaves a template behind; the foreground refresh
+    /// stamps out the future occurrences from it.
+    private func insertTemplateIfRepeating(for task: LoomTask) {
+        guard repeatWeekly,
+              let nextDeadline = Calendar.current.date(byAdding: .day, value: 7, to: task.deadline),
+              nextDeadline <= repeatUntil else { return }
+        let template = TaskTemplate(
+            title: task.title,
+            context: task.context,
+            effortMinutes: task.effortMinutes,
+            firstStep: task.firstStep,
+            nextDeadline: nextDeadline,
+            repeatUntil: repeatUntil
+        )
+        modelContext.insert(template)
+        task.templateId = template.id
+    }
+
     /// The new task doesn't fit in the gaps: commit it and rebuild the whole
     /// plan by deadline, letting it bump later-deadline work.
     private func makeRoom() {
         guard let task = pendingTask else { return }
         modelContext.insert(task)
+        insertTemplateIfRepeating(for: task)
         pendingTask = nil
         pendingBlocks = []
 

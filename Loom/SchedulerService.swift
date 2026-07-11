@@ -18,6 +18,70 @@ struct CatchUpSummary: Equatable {
     var unschedulableTasks = 0
 }
 
+// MARK: - Estimate Advisor
+
+/// Advice from the planned-vs-actual record: nobody with ADHD estimates well,
+/// and Loom silently trusting the guess makes every downstream schedule a lie.
+/// Completed tasks already carry both sides (`effortMinutes` vs
+/// `timeSpentMinutes`); at capture this surfaces the pattern as a gentle,
+/// one-tap suggestion instead of a lecture.
+struct EstimateAdvisor {
+
+    struct Advice: Equatable {
+        /// Median actual÷planned ratio across the sample (uncapped — shown to
+        /// the user honestly even when the suggestion below is capped).
+        let ratio: Double
+        let sampleCount: Int
+        /// The estimate to offer instead: capped at 2× the guess so one wild
+        /// outlier history can't balloon a plan, rounded to tidy 15s.
+        let suggestedMinutes: Int
+
+        var ratioLabel: String {
+            String(format: "%.1f×", ratio)
+        }
+    }
+
+    /// Below this the record says the guess is roughly honest — stay quiet.
+    private static let minRatio = 1.2
+    private static let minSamples = 3
+    private static let maxSamples = 5
+    private static let suggestionCap = 2.0
+
+    static func advice(
+        for taskContext: TaskContext,
+        effortMinutes: Int,
+        in modelContext: ModelContext
+    ) -> Advice? {
+        guard effortMinutes > 0 else { return nil }
+
+        // Only tasks with tracked work say anything about estimation; a task
+        // marked done with zero logged time is a shrug, not a data point.
+        let samples = ((try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? [])
+            .filter {
+                $0.isComplete && $0.context == taskContext
+                    && $0.effortMinutes > 0 && $0.timeSpentMinutes > 0
+            }
+            .sorted { ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline) }
+            .prefix(maxSamples)
+        guard samples.count >= minSamples else { return nil }
+
+        let ratios = samples
+            .map { Double($0.timeSpentMinutes) / Double($0.effortMinutes) }
+            .sorted()
+        let median = ratios.count.isMultiple(of: 2)
+            ? (ratios[ratios.count / 2 - 1] + ratios[ratios.count / 2]) / 2
+            : ratios[ratios.count / 2]
+        guard median >= minRatio else { return nil }
+
+        let raw = Double(effortMinutes) * min(median, suggestionCap)
+        // 720 is the app-wide effort ceiling (capture stepper, edit stepper).
+        let rounded = min(720, Int((raw / 15).rounded()) * 15)
+        guard rounded > effortMinutes else { return nil }
+
+        return Advice(ratio: median, sampleCount: samples.count, suggestedMinutes: rounded)
+    }
+}
+
 // MARK: - Scheduler Service
 
 struct SchedulerService {
@@ -351,6 +415,146 @@ struct SchedulerService {
             replanned += 1
         }
         return replanned
+    }
+
+    // MARK: - Pace (schedule pressure)
+
+    /// Total scheduleable free minutes between two dates, treating other
+    /// tasks' incomplete blocks, blocked times, and busy events as occupied.
+    /// A task's own blocks don't count against it — that time is already his.
+    static func availableMinutes(
+        from: Date,
+        to: Date,
+        excludingTaskId: UUID? = nil,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings
+    ) -> Int {
+        let from = roundUpToFiveMinutes(from)
+        guard from < to else { return 0 }
+
+        var occupied = allBlocks
+            .filter { !$0.isComplete && $0.endTime > from && $0.task?.id != excludingTaskId }
+            .map { Interval(start: $0.startTime, end: $0.endTime) }
+        for blocked in blockedTimes {
+            occupied.append(contentsOf: blocked
+                .occurrences(from: from, to: to)
+                .map { Interval(start: $0.start, end: $0.end) })
+        }
+        for event in busyEvents where event.endTime > from && event.startTime < to {
+            occupied.append(Interval(start: event.startTime, end: event.endTime))
+        }
+        occupied.sort { $0.start < $1.start }
+
+        let slots = findFreeSlots(
+            from: from,
+            to: to,
+            occupied: occupied,
+            settings: settings,
+            allowOvernight: false
+        )
+        return Int(slots.reduce(0.0) { $0 + $1.durationMinutes })
+    }
+
+    /// Schedule pressure for a task: remaining effort ÷ free minutes left
+    /// before its buffered deadline. 0.5 means half the free time is spoken
+    /// for; above 1 the task no longer fits. Infinity when there's no window
+    /// at all. Nil when the task carries no remaining effort.
+    static func pressure(
+        for task: LoomTask,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date()
+    ) -> Double? {
+        let remaining = task.remainingMinutes
+        guard !task.isComplete, remaining > 0 else { return nil }
+
+        let windowEnd = task.deadline.addingTimeInterval(
+            -Double(settings.deadlineBufferMinutes) * 60
+        )
+        guard windowEnd > now else { return .infinity }
+
+        let available = availableMinutes(
+            from: now,
+            to: windowEnd,
+            excludingTaskId: task.id,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings
+        )
+        guard available > 0 else { return .infinity }
+        return Double(remaining) / Double(available)
+    }
+
+    // MARK: - Recurring tasks
+
+    /// Stamp out upcoming occurrences of recurring templates, a rolling two
+    /// weeks ahead — run on foreground refresh. Occurrences whose deadline
+    /// already passed while the app was closed are skipped silently: a
+    /// recurrence must never spawn retroactive guilt. Exhausted templates
+    /// delete themselves. Returns the number of tasks created.
+    @discardableResult
+    static func materializeRecurringTasks(
+        templates: [TaskTemplate],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date(),
+        context: ModelContext
+    ) -> Int {
+        guard !templates.isEmpty else { return 0 }
+        let calendar = Calendar.current
+        guard let horizon = calendar.date(byAdding: .day, value: 14, to: now) else { return 0 }
+
+        var created = 0
+        var currentBlocks = allBlocks
+        let start = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+
+        for template in templates {
+            var next = template.nextDeadline
+            while next <= horizon && next <= template.repeatUntil {
+                if next > now {
+                    let task = LoomTask(
+                        title: template.title,
+                        context: template.context,
+                        deadline: next,
+                        effortMinutes: template.effortMinutes,
+                        source: .recurring,
+                        firstStep: template.firstStep
+                    )
+                    task.templateId = template.id
+                    context.insert(task)
+
+                    let result = schedule(
+                        task: task,
+                        allBlocks: currentBlocks,
+                        blockedTimes: blockedTimes,
+                        busyEvents: busyEvents,
+                        settings: settings,
+                        from: start
+                    )
+                    insert(result: result, into: context)
+                    if case .success(let blocks) = result {
+                        currentBlocks.append(contentsOf: blocks)
+                    } else if case .partialFit(let blocks, _) = result {
+                        currentBlocks.append(contentsOf: blocks)
+                    }
+                    created += 1
+                }
+                guard let following = calendar.date(byAdding: .day, value: 7, to: next) else { break }
+                next = following
+            }
+            template.nextDeadline = next
+            if next > template.repeatUntil {
+                context.delete(template)
+            }
+        }
+        return created
     }
 
     /// Round a date up to the next 5-minute boundary.

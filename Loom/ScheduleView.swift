@@ -457,6 +457,7 @@ struct ScheduleView: View {
 
     private func completeTask(_ task: LoomTask) {
         task.isComplete = true
+        task.completedAt = Date()
         for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
             modelContext.delete(block)
         }

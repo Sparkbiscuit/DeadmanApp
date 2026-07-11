@@ -4,6 +4,17 @@
 <dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christoforakis.Loom</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>loom</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Loom uses the microphone so you can speak a task instead of typing it.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

@@ -22,6 +22,8 @@ enum TaskContext: String, Codable, CaseIterable, Identifiable {
 enum TaskSource: String, Codable {
     case manual
     case bulkEntry
+    /// Stamped out automatically from a TaskTemplate.
+    case recurring
 }
 
 // MARK: - Task
@@ -39,6 +41,16 @@ final class LoomTask {
     /// Self-reported completion (0–100) from work sessions; combined with
     /// block-based progress, whichever is further along.
     var manualProgressPercent: Int = 0
+    /// The tiny concrete opening move ("open the doc, paste the data table").
+    /// "Write lab report" is un-startable; the first physical action isn't.
+    /// Cleared automatically after the first work session — its job is done.
+    var firstStep: String? = nil
+    /// When the task was completed. Completed tasks are kept as history so the
+    /// planned-vs-actual record can inform future estimates (EstimateAdvisor).
+    var completedAt: Date? = nil
+    /// The recurring template this task was stamped from, when it was.
+    /// Lets "Stop repeating" find and end the recurrence from any occurrence.
+    var templateId: UUID? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduledBlock.task)
     var scheduledBlocks: [ScheduledBlock]
@@ -51,7 +63,8 @@ final class LoomTask {
         context: TaskContext,
         deadline: Date,
         effortMinutes: Int,
-        source: TaskSource = .manual
+        source: TaskSource = .manual,
+        firstStep: String? = nil
     ) {
         self.id = UUID()
         self.title = title
@@ -62,6 +75,7 @@ final class LoomTask {
         self.userModified = false
         self.source = source
         self.manualProgressPercent = 0
+        self.firstStep = firstStep
         self.scheduledBlocks = []
         self.workSessions = []
     }
@@ -232,6 +246,44 @@ final class BlockedTime {
     }
 }
 
+// MARK: - TaskTemplate
+
+/// A weekly-recurring capture: problem sets, readings, chores. The template
+/// itself never appears in the task list — on foreground refresh it stamps
+/// out real LoomTasks a rolling two weeks ahead (see
+/// `SchedulerService.materializeRecurringTasks`), then deletes itself once
+/// `repeatUntil` passes.
+@Model
+final class TaskTemplate {
+    var id: UUID
+    var title: String
+    var context: TaskContext
+    var effortMinutes: Int
+    var firstStep: String?
+    /// Deadline of the next occurrence to materialize; advances by 7 days
+    /// per stamped task.
+    var nextDeadline: Date
+    /// The recurrence ends after this date (inclusive).
+    var repeatUntil: Date
+
+    init(
+        title: String,
+        context: TaskContext,
+        effortMinutes: Int,
+        firstStep: String? = nil,
+        nextDeadline: Date,
+        repeatUntil: Date
+    ) {
+        self.id = UUID()
+        self.title = title
+        self.context = context
+        self.effortMinutes = effortMinutes
+        self.firstStep = firstStep
+        self.nextDeadline = nextDeadline
+        self.repeatUntil = repeatUntil
+    }
+}
+
 // MARK: - Reminder
 
 /// A one-off, point-in-time reminder with a local notification. Deliberately
@@ -293,6 +345,64 @@ final class BusyEvent {
     }
 }
 
+// MARK: - Start streak
+
+/// Streaks that count *initiation*, not completion — starting is the actual
+/// disorder-level challenge. A couple of free "mend" days per week keep one
+/// bad day from torching the whole thread (broken-streak despair is the
+/// classic ADHD streak-app failure). Lives here rather than in Insights so
+/// the widget target can compute it too.
+struct StreakCalculator {
+
+    /// Length in days of the current chain of "days with at least one work
+    /// session start", walking back from today. Rules:
+    /// - Today without a start yet neither counts nor breaks — the day isn't over.
+    /// - Up to `weeklyMends` startless days per calendar week are mended: they
+    ///   keep the chain alive and count toward its length, but only when they
+    ///   actually bridge to an earlier start day — mends that dead-end into a
+    ///   break must not inflate the count.
+    static func startStreak(
+        startDates: [Date],
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        weeklyMends: Int = 2
+    ) -> Int {
+        let startDays = Set(startDates.map { calendar.startOfDay(for: $0) })
+        guard let earliest = startDays.min() else { return 0 }
+
+        var cursor = calendar.startOfDay(for: now)
+        if !startDays.contains(cursor) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: cursor) else {
+                return 0
+            }
+            cursor = yesterday
+        }
+
+        var streak = 0
+        var pendingMends = 0
+        var mendsUsedByWeek: [Int: Int] = [:]
+
+        while cursor >= earliest {
+            if startDays.contains(cursor) {
+                streak += 1 + pendingMends
+                pendingMends = 0
+            } else {
+                let comps = calendar.dateComponents(
+                    [.weekOfYear, .yearForWeekOfYear], from: cursor
+                )
+                let weekKey = (comps.yearForWeekOfYear ?? 0) * 100 + (comps.weekOfYear ?? 0)
+                guard mendsUsedByWeek[weekKey, default: 0] < weeklyMends else { break }
+                mendsUsedByWeek[weekKey, default: 0] += 1
+                pendingMends += 1
+            }
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+
+        return streak
+    }
+}
+
 // MARK: - UserSettings
 
 @Model
@@ -321,6 +431,13 @@ final class UserSettings {
     var blockRemindersEnabled: Bool = true
     /// Extra heads-up this many minutes before a block starts. 0 = off.
     var blockReminderLeadMinutes: Int = 0
+    /// Morning preview notification (wake time + 30 min): the day's shape,
+    /// pre-loaded before the day ambushes you.
+    var morningPreviewEnabled: Bool = true
+    /// Evening wrap-up notification: what got done, what tomorrow opens with.
+    var eveningReviewEnabled: Bool = true
+    var eveningReviewHour: Int = 21
+    var eveningReviewMinute: Int = 30
 
     init() {
         self.id = UUID()
@@ -340,6 +457,10 @@ final class UserSettings {
         self.hasCompletedOnboarding = false
         self.blockRemindersEnabled = true
         self.blockReminderLeadMinutes = 0
+        self.morningPreviewEnabled = true
+        self.eveningReviewEnabled = true
+        self.eveningReviewHour = 21
+        self.eveningReviewMinute = 30
     }
 
     var wakeTime: DateComponents {

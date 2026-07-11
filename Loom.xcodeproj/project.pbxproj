@@ -15,6 +15,10 @@
 		021ED3212C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */; };
 		0CA001012C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
 		0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001022C6D3EF700D079F0 /* SchedulerService.swift */; };
+		0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00002D6D3EF700D079F0 /* Insights.swift */; };
+		0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00102D6D3EF700D079F0 /* WeaveView.swift */; };
+		0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */; };
+		0CAF00412D6D3EF700D079F0 /* DataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00402D6D3EF700D079F0 /* DataExporter.swift */; };
 		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
 		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
 		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
@@ -46,6 +50,7 @@
 		0CA006022C6D3EF700D079F0 /* SharedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA006002C6D3EF700D079F0 /* SharedStore.swift */; };
 		0CA006042C6D3EF700D079F0 /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA006032C6D3EF700D079F0 /* TaskEditView.swift */; };
 		0CA006062C6D3EF700D079F0 /* UpNextWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA006052C6D3EF700D079F0 /* UpNextWidget.swift */; };
+		0CAF00312D6D3EF700D079F0 /* TodayWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00302D6D3EF700D079F0 /* TodayWidget.swift */; };
 		0CA006072C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
 		0CA007012C6D3EF700D079F0 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA007002C6D3EF700D079F0 /* NotificationService.swift */; };
 		0CA007022C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
@@ -110,6 +115,10 @@
 		021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		0CA001002C6D3EF700D079F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		0CA001022C6D3EF700D079F0 /* SchedulerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerService.swift; sourceTree = "<group>"; };
+		0CAF00002D6D3EF700D079F0 /* Insights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Insights.swift; sourceTree = "<group>"; };
+		0CAF00102D6D3EF700D079F0 /* WeaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeaveView.swift; sourceTree = "<group>"; };
+		0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomIntents.swift; sourceTree = "<group>"; };
+		0CAF00402D6D3EF700D079F0 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExporter.swift; sourceTree = "<group>"; };
 		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
@@ -141,6 +150,7 @@
 		0CA006002C6D3EF700D079F0 /* SharedStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
 		0CA006032C6D3EF700D079F0 /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
 		0CA006052C6D3EF700D079F0 /* UpNextWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpNextWidget.swift; sourceTree = "<group>"; };
+		0CAF00302D6D3EF700D079F0 /* TodayWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidget.swift; sourceTree = "<group>"; };
 		0CA006082C6D3EF700D079F0 /* Loom.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Loom.entitlements; sourceTree = "<group>"; };
 		0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgets.entitlements; sourceTree = "<group>"; };
 		0CA007002C6D3EF700D079F0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -208,6 +218,10 @@
 				021ED3002C6D3EF700D079F0 /* LoomApp.swift */,
 				0CA001002C6D3EF700D079F0 /* Models.swift */,
 				0CA001022C6D3EF700D079F0 /* SchedulerService.swift */,
+				0CAF00002D6D3EF700D079F0 /* Insights.swift */,
+				0CAF00102D6D3EF700D079F0 /* WeaveView.swift */,
+				0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */,
+				0CAF00402D6D3EF700D079F0 /* DataExporter.swift */,
 				0CA001042C6D3EF700D079F0 /* AppTheme.swift */,
 				0CA001062C6D3EF700D079F0 /* TaskListView.swift */,
 				0CA001082C6D3EF700D079F0 /* TaskRowView.swift */,
@@ -281,6 +295,7 @@
 				0CA003012C6D3EF700D079F0 /* LoomWidgetsBundle.swift */,
 				0CA003022C6D3EF700D079F0 /* WorkSessionLiveActivity.swift */,
 				0CA006052C6D3EF700D079F0 /* UpNextWidget.swift */,
+				0CAF00302D6D3EF700D079F0 /* TodayWidget.swift */,
 				0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */,
 				0CA003032C6D3EF700D079F0 /* Info.plist */,
 			);
@@ -467,6 +482,10 @@
 				021ED3012C6D3EF700D079F0 /* LoomApp.swift in Sources */,
 				0CA001012C6D3EF700D079F0 /* Models.swift in Sources */,
 				0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */,
+				0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */,
+				0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */,
+				0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */,
+				0CAF00412D6D3EF700D079F0 /* DataExporter.swift in Sources */,
 				0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */,
 				0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */,
 				0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */,
@@ -513,6 +532,7 @@
 				0CA003122C6D3EF700D079F0 /* WorkSessionLiveActivity.swift in Sources */,
 				0CA003132C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
 				0CA006062C6D3EF700D079F0 /* UpNextWidget.swift in Sources */,
+				0CAF00312D6D3EF700D079F0 /* TodayWidget.swift in Sources */,
 				0CA006072C6D3EF700D079F0 /* Models.swift in Sources */,
 				0CA006022C6D3EF700D079F0 /* SharedStore.swift in Sources */,
 				0CA007022C6D3EF700D079F0 /* AppTheme.swift in Sources */,

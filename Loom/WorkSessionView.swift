@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Focused timer sheet for a single task: start/stop a session, then
 /// self-report overall progress. Saving at 100% completes the task.
@@ -15,6 +16,18 @@ struct WorkSessionView: View {
     @State private var showProgressPrompt = false
     @State private var progressValue: Double = 0
     @State private var sessionStart: Date?
+
+    // Immersion: the end of the currently running scheduled block, if the
+    // session started inside one. Bounds the hyperfocus spurt from both sides.
+    @State private var blockEndTarget: Date?
+    @State private var didWarnNearEnd = false
+    @State private var didMarkBlockEnd = false
+    @State private var immersionMessage: String?
+
+    // Micro-start: a deliberately tiny commitment. "Work on the essay" is
+    // unstartable; "ten minutes" is a dare you can take.
+    @State private var microGoalSeconds: Int?
+    @State private var didHitMicroGoal = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -37,6 +50,8 @@ struct WorkSessionView: View {
         .onReceive(timer) { _ in
             if isRunning {
                 elapsedSeconds += 1
+                checkBlockBoundary()
+                checkMicroGoal()
             }
         }
         .onDisappear {
@@ -44,6 +59,7 @@ struct WorkSessionView: View {
             if isRunning {
                 recordSession()
             }
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 
@@ -92,6 +108,33 @@ struct WorkSessionView: View {
                 Text(budgetLabel)
                     .font(AppFont.monoMedium(13))
                     .foregroundStyle(isOverBudgetNow ? Color.workColor : Color.loomSubtle)
+
+                // The captured opening move, shown only while idle — once the
+                // timer runs the start problem is solved.
+                if !isRunning, let step = task.firstStep, !step.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.brand500)
+                            .padding(.top, 3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Just start here")
+                                .font(AppFont.caption(11))
+                                .foregroundStyle(Color.loomSubtle)
+                            Text(step)
+                                .font(AppFont.bodySemibold(14))
+                                .foregroundStyle(Color.loomText)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.loomSurface)
+                    )
+                    .padding(.top, 6)
+                }
             }
             .padding(.top, 10)
 
@@ -112,6 +155,14 @@ struct WorkSessionView: View {
                             .font(AppFont.caption(13))
                             .foregroundStyle(Color.loomRed)
                     }
+                }
+
+                if isRunning, let subtext = runningSubtext {
+                    Text(subtext)
+                        .font(AppFont.body(12))
+                        .foregroundStyle(Color.loomSubtle)
+                        .multilineTextAlignment(.center)
+                        .transition(.opacity)
                 }
 
                 Button {
@@ -136,6 +187,22 @@ struct WorkSessionView: View {
                     }
                 }
                 .buttonStyle(.plain)
+
+                if !isRunning {
+                    Button {
+                        startTapped(microMinutes: 10)
+                    } label: {
+                        Text("Just 10 minutes")
+                            .font(AppFont.caption(13))
+                            .foregroundStyle(task.context.color)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .overlay(
+                                Capsule().stroke(task.context.color.opacity(0.35), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Spacer()
@@ -207,11 +274,24 @@ struct WorkSessionView: View {
 
     // MARK: - Actions
 
-    private func startTapped() {
+    private func startTapped(microMinutes: Int? = nil) {
         let now = Date()
         sessionStart = now
         elapsedSeconds = 0
         withAnimation { isRunning = true }
+
+        // Immersion: the screen stays awake for the whole session, and the
+        // running block's end becomes the gentle boundary chime.
+        UIApplication.shared.isIdleTimerDisabled = true
+        blockEndTarget = task.scheduledBlocks
+            .first { $0.startTime <= now && now < $0.endTime }?
+            .endTime
+        didWarnNearEnd = false
+        didMarkBlockEnd = false
+        immersionMessage = nil
+        microGoalSeconds = microMinutes.map { $0 * 60 }
+        didHitMicroGoal = false
+
         WorkSessionActivityController.start(
             taskTitle: task.title,
             contextName: task.context.rawValue,
@@ -220,8 +300,50 @@ struct WorkSessionView: View {
         )
     }
 
+    /// While a micro-goal is pending it owns the subtext (a countdown reads
+    /// louder than any coaching); afterwards the immersion messages take over.
+    private var runningSubtext: String? {
+        if let goal = microGoalSeconds, !didHitMicroGoal {
+            let left = CountdownFormatter.timerString(seconds: max(0, goal - elapsedSeconds))
+            return "\(left) to your ten — that's the whole ask."
+        }
+        return immersionMessage
+    }
+
+    private func checkMicroGoal() {
+        guard let goal = microGoalSeconds, !didHitMicroGoal, elapsedSeconds >= goal else { return }
+        didHitMicroGoal = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation {
+            immersionMessage = "Ten minutes done — that was the hard part. Keep going or stop; both count."
+        }
+    }
+
+    /// Haptic + one-line nudge near and at the end of the running block. The
+    /// near-end warning offers an off-ramp; the end marker bounds the
+    /// Herculean spurt the app exists to prevent.
+    private func checkBlockBoundary() {
+        guard let end = blockEndTarget else { return }
+        let remaining = end.timeIntervalSinceNow
+
+        if remaining <= 600 && remaining > 0 && !didWarnNearEnd {
+            didWarnNearEnd = true
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            withAnimation {
+                immersionMessage = "About 10 minutes left in this block — a good stopping point is coming."
+            }
+        } else if remaining <= 0 && !didMarkBlockEnd {
+            didMarkBlockEnd = true
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation {
+                immersionMessage = "Block done. Stopping now is a win — no heroics required."
+            }
+        }
+    }
+
     private func stopTapped() {
         WorkSessionActivityController.end()
+        UIApplication.shared.isIdleTimerDisabled = false
         withAnimation {
             isRunning = false
             progressValue = Double(task.progressPercent)
@@ -231,6 +353,7 @@ struct WorkSessionView: View {
 
     private func recordSession() {
         WorkSessionActivityController.end()
+        UIApplication.shared.isIdleTimerDisabled = false
         guard elapsedSeconds > 0 else { return }
         let session = WorkSession(
             task: task,
@@ -238,8 +361,12 @@ struct WorkSessionView: View {
             durationSeconds: elapsedSeconds
         )
         modelContext.insert(session)
+        // The first step's whole job is getting the first session started;
+        // once that's happened it would just be stale noise.
+        task.firstStep = nil
         isRunning = false
         elapsedSeconds = 0
+        microGoalSeconds = nil
     }
 
     private func saveProgress() {
