@@ -100,6 +100,7 @@ struct WorkSessionView: View {
             }
             .font(AppFont.caption(14))
             .foregroundStyle(Color.loomSubtle)
+            .contentShape(Rectangle().inset(by: -14))
 
             Spacer()
 
@@ -138,6 +139,7 @@ struct WorkSessionView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.brand300)
                             .padding(.top, 3)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Just start here")
                                 .font(AppFont.caption(11))
@@ -148,6 +150,7 @@ struct WorkSessionView: View {
                                 .multilineTextAlignment(.leading)
                         }
                     }
+                    .accessibilityElement(children: .combine)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -173,6 +176,7 @@ struct WorkSessionView: View {
                         Image(systemName: "flame.fill")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.brand300)
+                            .accessibilityHidden(true)
                         Text(subtext)
                             .font(AppFont.bodySemibold(13))
                             .foregroundStyle(Color.brand100)
@@ -228,6 +232,8 @@ struct WorkSessionView: View {
                     .font(AppFont.mono(38))
                     .foregroundStyle(isRunning && !isPaused ? Color.loomText : Color.loomSubtle)
                     .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
 
                 HStack(spacing: 6) {
                     if isRunning && !isPaused {
@@ -239,6 +245,9 @@ struct WorkSessionView: View {
                         .kerning(2)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(statusLabel.capitalized)
+            .accessibilityValue(timerLabel)
         }
         .frame(width: 244, height: 244)
     }
@@ -287,6 +296,7 @@ struct WorkSessionView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14, weight: .semibold))
+                            .accessibilityHidden(true)
                         Text("Start working")
                     }
                     .primaryButtonStyle()
@@ -306,6 +316,7 @@ struct WorkSessionView: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle().inset(by: -6))
             }
         }
     }

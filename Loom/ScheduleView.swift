@@ -355,6 +355,15 @@ struct ScheduleView: View {
         let top = max(0, (startMinutes / 60 - Double(startHour)) * pointsPerHour)
         let height = max(6, interval.duration / 3600 * pointsPerHour)
 
+        let title: String = {
+            switch item {
+            case .block(let block): return block.task?.title ?? "Task"
+            case .blocked(_, let label): return label
+            case .busy(let event): return event.title
+            case .reminder(let reminder): return reminder.title
+            }
+        }()
+
         return RoundedRectangle(cornerRadius: 4, style: .continuous)
             .fill(color)
             .frame(height: min(height, gridHeight - top))
@@ -363,6 +372,10 @@ struct ScheduleView: View {
             .onTapGesture {
                 jumpToDay(day)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(title)
+            .accessibilityHint("Jumps to this day")
     }
 
     private func hourLabel(_ hour: Int) -> String {
@@ -536,10 +549,22 @@ private struct DayPill: View {
                 .stroke(isSelected ? Color.brand500.opacity(0.5) : Color.loomBorder, lineWidth: 1)
         )
         .shadow(color: isSelected ? Color.brand500.opacity(0.3) : .clear, radius: 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(dayLabel)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private var isToday: Bool {
         calendar.isDateInToday(date)
+    }
+
+    private var dayLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        var label = isToday ? "Today, \(formatter.string(from: date))" : formatter.string(from: date)
+        if hasItems { label += ", has scheduled items" }
+        return label
     }
 }
 
@@ -624,49 +649,53 @@ private struct BlockCard: View {
             TimeGutter(date: block.startTime, dimmed: isPast && !isInSession)
 
             HStack(spacing: 10) {
-                if isInSession {
-                    BreathingDot(color: .brand300, size: 9)
-                } else if block.isComplete {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.personalDisplay)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(block.task?.title ?? "Unknown Task")
-                        .font(AppFont.cardTitle(15))
-                        .strikethrough(block.isComplete)
-                        .foregroundStyle(block.isComplete ? Color.loomFaint : Color.loomText)
-                        .lineLimit(1)
-
+                Group {
                     if isInSession {
-                        Text("In session · \(minutesLeftLabel) left in block")
-                            .font(AppFont.bodySemibold(12))
-                            .foregroundStyle(Color.brand300)
-                    } else {
-                        HStack(spacing: 6) {
-                            Text("\(Self.shortTime.string(from: block.startTime))–\(Self.shortTime.string(from: block.endTime)) · \(CountdownFormatter.effortString(minutes: block.durationMinutes))")
-                                .font(AppFont.monoMedium(11))
-                                .foregroundStyle(Color.loomSubtle)
-                            if block.isLocked {
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(Color.loomFaint)
+                        BreathingDot(color: .brand300, size: 9)
+                    } else if block.isComplete {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.personalDisplay)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(block.task?.title ?? "Unknown Task")
+                            .font(AppFont.cardTitle(15))
+                            .strikethrough(block.isComplete)
+                            .foregroundStyle(block.isComplete ? Color.loomFaint : Color.loomText)
+                            .lineLimit(1)
+
+                        if isInSession {
+                            Text("In session · \(minutesLeftLabel) left in block")
+                                .font(AppFont.bodySemibold(12))
+                                .foregroundStyle(Color.brand300)
+                        } else {
+                            HStack(spacing: 6) {
+                                Text("\(Self.shortTime.string(from: block.startTime))–\(Self.shortTime.string(from: block.endTime)) · \(CountdownFormatter.effortString(minutes: block.durationMinutes))")
+                                    .font(AppFont.monoMedium(11))
+                                    .foregroundStyle(Color.loomSubtle)
+                                if block.isLocked {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(Color.loomFaint)
+                                }
                             }
                         }
                     }
-                }
 
-                Spacer(minLength: 6)
+                    Spacer(minLength: 6)
 
-                if isInSession {
-                    Text("\(Self.shortTime.string(from: block.startTime))-\(Self.shortTime.string(from: block.endTime))")
-                        .font(AppFont.mono(12))
-                        .foregroundStyle(Color.brand300)
-                } else if let ctx = block.task?.context, !isPast {
-                    Text(ctx.rawValue)
-                        .contextTag(ctx)
+                    if isInSession {
+                        Text("\(Self.shortTime.string(from: block.startTime))-\(Self.shortTime.string(from: block.endTime))")
+                            .font(AppFont.mono(12))
+                            .foregroundStyle(Color.brand300)
+                    } else if let ctx = block.task?.context, !isPast {
+                        Text(ctx.rawValue)
+                            .contextTag(ctx)
+                    }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityDescription)
 
                 // The check control only surfaces once the block has started —
                 // future rows stay clean, per the design. Early birds can
@@ -678,6 +707,8 @@ private struct BlockCard: View {
                             .foregroundStyle(block.isComplete ? Color.personalColor : Color.loomFaint.opacity(0.7))
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Rectangle().inset(by: -12))
+                    .accessibilityLabel(block.isComplete ? "Mark incomplete" : "Mark complete")
                 }
             }
             .padding(.horizontal, 14)
@@ -702,6 +733,19 @@ private struct BlockCard: View {
                 }
             }
         }
+    }
+
+    private var accessibilityDescription: String {
+        var parts = [block.task?.title ?? "Unknown Task"]
+        if block.isComplete { parts.append("Complete") }
+        if isInSession {
+            parts.append("In session, \(minutesLeftLabel) left in block")
+        } else {
+            parts.append("\(Self.shortTime.string(from: block.startTime)) to \(Self.shortTime.string(from: block.endTime))")
+            if block.isLocked { parts.append("Locked") }
+            if let ctx = block.task?.context, !isPast { parts.append(ctx.rawValue) }
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -741,6 +785,7 @@ private struct BlockedTimeCard: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.loomFaint)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(label)
@@ -757,6 +802,7 @@ private struct BlockedTimeCard: View {
                     .font(AppFont.monoMedium(11))
                     .foregroundStyle(Color.loomFaint)
             }
+            .accessibilityElement(children: .combine)
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .overlay(
@@ -788,6 +834,7 @@ private struct BusyEventCard: View {
                 Image(systemName: "clock")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.loomFaint)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("\(event.title) — busy from \(event.calendarName ?? "Calendar")")
@@ -803,6 +850,7 @@ private struct BusyEventCard: View {
                     .foregroundStyle(Color.loomFaint)
                     .multilineTextAlignment(.trailing)
             }
+            .accessibilityElement(children: .combine)
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .overlay(
@@ -835,6 +883,7 @@ private struct ReminderScheduleCard: View {
                 Image(systemName: "bell.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.brand300)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(reminder.title)
@@ -846,6 +895,7 @@ private struct ReminderScheduleCard: View {
                         .font(AppFont.caption(11))
                         .foregroundStyle(Color.brand300)
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer(minLength: 6)
 
@@ -855,6 +905,8 @@ private struct ReminderScheduleCard: View {
                         .foregroundStyle(reminder.isComplete ? Color.personalColor : Color.loomFaint)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle().inset(by: -11))
+                .accessibilityLabel(reminder.isComplete ? "Mark incomplete" : "Mark complete")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 13)

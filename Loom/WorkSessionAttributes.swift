@@ -54,7 +54,6 @@ enum WorkSessionActivityController {
         ringEndsAt: Date? = nil
     ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        endAll()
 
         let attributes = WorkSessionAttributes(
             taskTitle: taskTitle,
@@ -67,7 +66,14 @@ enum WorkSessionActivityController {
             state: WorkSessionAttributes.ContentState(startedAt: startedAt),
             staleDate: nil
         )
-        _ = try? Activity.request(attributes: attributes, content: content)
+        // End-then-request inside one Task so a rapid restart can't leave two
+        // activities alive.
+        Task {
+            for activity in Activity<WorkSessionAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            _ = try? Activity.request(attributes: attributes, content: content)
+        }
     }
 
     static func end() {

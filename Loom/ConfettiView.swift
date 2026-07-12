@@ -20,6 +20,7 @@ struct TaskCompletionView: View {
             ])
             .ignoresSafeArea()
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             VStack(spacing: 0) {
                 Spacer()
@@ -41,6 +42,7 @@ struct TaskCompletionView: View {
                 }
                 .scaleEffect(badgeScale)
                 .padding(.bottom, 20)
+                .accessibilityHidden(true)
 
                 Text("Task Complete!")
                     .font(AppFont.title(26))
@@ -110,6 +112,7 @@ struct TaskCompletionView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(task.context.color)
                 .frame(width: 20)
+                .accessibilityHidden(true)
             Text(label)
                 .font(AppFont.body(14))
                 .foregroundStyle(Color.loomSubtle)
@@ -122,6 +125,7 @@ struct TaskCompletionView: View {
         .padding(.vertical, 12)
         .background(Color.loomSurface)
         .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -132,6 +136,8 @@ struct TaskCompletionView: View {
 struct ConfettiView: View {
     let palette: [Color]
     var pieceCount: Int = 60
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private struct Piece {
         let x: Double          // 0…1 horizontal position
@@ -148,32 +154,18 @@ struct ConfettiView: View {
     @State private var startDate = Date()
 
     var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { canvasContext, size in
-                let elapsed = timeline.date.timeIntervalSince(startDate)
-                for piece in pieces {
-                    let t = (elapsed - piece.delay) / piece.fallDuration
-                    guard t > 0, t < 1.15 else { continue }
-
-                    let y = t * (size.height + 80) - 40
-                    let x = piece.x * size.width + sin(t * .pi * 3) * piece.drift
-                    let angle = Angle(degrees: t * 360 * piece.spin)
-                    let opacity = t > 0.9 ? max(0, 1 - (t - 0.9) / 0.25) : 1
-
-                    var ctx = canvasContext
-                    ctx.opacity = opacity
-                    ctx.translateBy(x: x, y: y)
-                    ctx.rotate(by: angle)
-
-                    let color = palette[piece.colorIndex % max(1, palette.count)]
-                    let rect = CGRect(
-                        x: -piece.size / 2, y: -piece.size / 2,
-                        width: piece.size, height: piece.isCircle ? piece.size : piece.size * 0.6
-                    )
-                    if piece.isCircle {
-                        ctx.fill(Path(ellipseIn: rect), with: .color(color))
-                    } else {
-                        ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(color))
+        Group {
+            if reduceMotion {
+                // A calm, still scatter instead of a continuous fall — the
+                // celebration still reads, nothing keeps moving.
+                Canvas { canvasContext, size in
+                    draw(pieces, elapsed: 1.1, in: canvasContext, size: size)
+                }
+            } else {
+                TimelineView(.animation) { timeline in
+                    Canvas { canvasContext, size in
+                        let elapsed = timeline.date.timeIntervalSince(startDate)
+                        draw(pieces, elapsed: elapsed, in: canvasContext, size: size)
                     }
                 }
             }
@@ -191,6 +183,34 @@ struct ConfettiView: View {
                     spin: .random(in: 1...3),
                     drift: .random(in: 12...36)
                 )
+            }
+        }
+    }
+
+    private func draw(_ pieces: [Piece], elapsed: Double, in context: GraphicsContext, size: CGSize) {
+        for piece in pieces {
+            let t = (elapsed - piece.delay) / piece.fallDuration
+            guard t > 0, t < 1.15 else { continue }
+
+            let y = t * (size.height + 80) - 40
+            let x = piece.x * size.width + sin(t * .pi * 3) * piece.drift
+            let angle = Angle(degrees: t * 360 * piece.spin)
+            let opacity = t > 0.9 ? max(0, 1 - (t - 0.9) / 0.25) : 1
+
+            var ctx = context
+            ctx.opacity = opacity
+            ctx.translateBy(x: x, y: y)
+            ctx.rotate(by: angle)
+
+            let color = palette[piece.colorIndex % max(1, palette.count)]
+            let rect = CGRect(
+                x: -piece.size / 2, y: -piece.size / 2,
+                width: piece.size, height: piece.isCircle ? piece.size : piece.size * 0.6
+            )
+            if piece.isCircle {
+                ctx.fill(Path(ellipseIn: rect), with: .color(color))
+            } else {
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 1.5), with: .color(color))
             }
         }
     }

@@ -42,6 +42,7 @@ struct BulkEntryView: View {
             Button("Back") { dismiss() }
                 .font(AppFont.caption(14))
                 .foregroundStyle(Color.loomSubtle)
+                .contentShape(Rectangle().inset(by: -14))
 
             Spacer()
 
@@ -242,6 +243,8 @@ private struct BulkRowCard: View {
                         .foregroundStyle(Color.loomFaint)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle().inset(by: -10))
+                .accessibilityLabel("Remove row")
             }
 
             HStack(spacing: 8) {
@@ -299,6 +302,7 @@ private struct BulkRowCard: View {
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .tint(Color.brand500)
+                .accessibilityLabel("Deadline")
             }
         }
         .padding(14)

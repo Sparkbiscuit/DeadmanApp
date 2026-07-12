@@ -663,6 +663,12 @@ struct SchedulerService {
     /// (e.g. 100m with 30–90 becomes [70, 30], not [90, 10]).
     static func splitEffort(minutes: Int, minBlock: Int, maxBlock: Int) -> [Int] {
         guard minutes > 0 else { return [] }
+        // A non-positive max (corrupted settings, a misconfigured focus cap)
+        // must never reach the loop below — it would never shrink `remaining`.
+        // A min above max would make the sub-minimum-tail branch below produce
+        // a negative-sized "chunk" and grow `remaining` forever, so clamp both.
+        let maxBlock = max(1, maxBlock)
+        let minBlock = min(minBlock, maxBlock)
         guard minutes > maxBlock else { return [minutes] }
 
         var chunks: [Int] = []

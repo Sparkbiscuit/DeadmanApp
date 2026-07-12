@@ -28,7 +28,14 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Loom transcribes your voice to capture tasks hands-free.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Loom can export your scheduled work blocks to Apple Calendar so they appear alongside your other events.</string>
+	<string>Loom reads your Apple Calendar events to schedule your tasks around them, and can export your scheduled work blocks so they appear alongside your other events.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Nunito-Regular.ttf</string>

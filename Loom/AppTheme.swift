@@ -134,7 +134,9 @@ extension Color {
     static let loomSurface3 = Color(lightHex: 0xDEDEE3, darkHex: 0x2E2E33)
     static let loomText = Color(lightHex: 0x1C1C1E, darkHex: 0xF5F5F7)
     static let loomSubtle = Color(lightHex: 0x6E6E76, darkHex: 0x9A9AA2)
-    static let loomFaint = Color(lightHex: 0x9A9AA2, darkHex: 0x6E6E76)
+    // Dark value must stay ≥ 4.5:1 against loomBackground/loomSurface —
+    // loomFaint is used for real content (timestamps, counts), not decoration.
+    static let loomFaint = Color(lightHex: 0x9A9AA2, darkHex: 0x86868E)
 
     static let loomBorder = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
@@ -421,6 +423,7 @@ struct EmberField: View {
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .onAppear {
             guard embers.isEmpty else { return }
             birth = Date()
@@ -506,6 +509,7 @@ struct HearthScreenBackground: View {
             EmberField(emberCount: embers, intensity: emberIntensity)
         }
         .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
@@ -605,6 +609,9 @@ struct HearthProgressRing: View {
                 breathing = true
             }
         }
+        // Purely decorative: callers pair this with a text label/value and
+        // combine the accessibility element there.
+        .accessibilityHidden(true)
     }
 
     private func arc(_ style: AngularGradient) -> some View {
@@ -640,6 +647,7 @@ struct BreathingDot: View {
                     breathing = true
                 }
             }
+            .accessibilityHidden(true)
     }
 }
 
@@ -699,6 +707,7 @@ struct EmptyStateView: View {
                     .font(.system(size: 22, weight: .light))
                     .foregroundStyle(Color.brand300)
             }
+            .accessibilityHidden(true)
             .padding(.bottom, 6)
 
             Text(title)

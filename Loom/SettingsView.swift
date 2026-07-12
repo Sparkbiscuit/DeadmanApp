@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var exportFileURL: URL?
     @State private var isConnectingGoogle = false
     @State private var showGoogleConnectFailed = false
+    @State private var confirmGoogleDisconnect = false
 
     var body: some View {
         NavigationStack {
@@ -104,12 +105,14 @@ struct SettingsView: View {
                     hour: Binding(get: { settings.wakeHour }, set: { settings.wakeHour = $0 }),
                     minute: Binding(get: { settings.wakeMinute }, set: { settings.wakeMinute = $0 })
                 )
+                .accessibilityLabel("Wake time")
             }
             SettingsRow(icon: "moon.fill", tint: .schoolDisplay, label: "Sleep time") {
                 timePicker(
                     hour: Binding(get: { settings.sleepHour }, set: { settings.sleepHour = $0 }),
                     minute: Binding(get: { settings.sleepMinute }, set: { settings.sleepMinute = $0 })
                 )
+                .accessibilityLabel("Sleep time")
             }
         }
     }
@@ -206,9 +209,12 @@ struct SettingsView: View {
                 Text(display)
                     .font(AppFont.mono(13))
                     .foregroundStyle(Color.loomSubtle)
+                    .accessibilityHidden(true)
                 Stepper("", value: value, in: range, step: step)
                     .labelsHidden()
                     .fixedSize()
+                    .accessibilityLabel(label)
+                    .accessibilityValue(display)
             }
         }
     }
@@ -282,6 +288,7 @@ struct SettingsView: View {
                             }
                         )
                     )
+                    .accessibilityLabel("Wrap-up time")
                 }
             }
         }
@@ -480,11 +487,19 @@ struct SettingsView: View {
             if let email = settings.googleAccountEmail {
                 SettingsRow(icon: "person.crop.circle.fill", tint: .personalDisplay, label: email) {
                     Button("Disconnect") {
-                        disconnectGoogle()
+                        confirmGoogleDisconnect = true
                     }
                     .font(AppFont.caption(13))
                     .foregroundStyle(Color.loomRed)
                     .buttonStyle(.plain)
+                }
+                .confirmationDialog("Disconnect Google Calendar?", isPresented: $confirmGoogleDisconnect, titleVisibility: .visible) {
+                    Button("Disconnect", role: .destructive) {
+                        disconnectGoogle()
+                    }
+                    Button("Stay connected", role: .cancel) {}
+                } message: {
+                    Text("Imported Google events are removed and your schedule replans around the time they free up.")
                 }
 
                 if settings.googleNeedsReconnect {
@@ -707,6 +722,7 @@ private struct SettingsRow<Trailing: View>: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(tint)
             }
+            .accessibilityHidden(true)
 
             Text(label)
                 .font(AppFont.bodySemibold(15))
@@ -747,6 +763,7 @@ private struct AccentSwatch: View {
                 .shadow(color: isSelected ? accent.color.opacity(0.6) : .clear, radius: 8)
         }
         .buttonStyle(.plain)
+        .contentShape(Circle().inset(by: -10))
         .accessibilityLabel("\(accent.displayName) flame")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

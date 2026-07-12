@@ -189,10 +189,12 @@ private struct UpNextWidgetView: View {
                         Image(systemName: "bell.fill")
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(color)
+                            .accessibilityHidden(true)
                     } else {
                         Circle()
                             .fill(color)
                             .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
                     }
                     Text(itemLabel(item))
                         .font(AppFont.caption(10))
@@ -219,6 +221,7 @@ private struct UpNextWidgetView: View {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 15))
                             .foregroundStyle(color)
+                            .accessibilityHidden(true)
                         Text("Start")
                             .font(AppFont.caption(11))
                             .foregroundStyle(color)
@@ -236,6 +239,7 @@ private struct UpNextWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
         .widgetURL(next?.deepLink)
         .containerBackground(for: .widget) {
             HearthWidgetBackground()
@@ -266,6 +270,7 @@ private struct UpNextWidgetView: View {
                     .frame(maxHeight: .infinity)
                     .padding(.leading, 3)
                     .padding(.vertical, 4)
+                    .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(entry.items.prefix(4)) { item in
@@ -312,8 +317,22 @@ private struct UpNextWidgetView: View {
                     .frame(width: isActive ? 9 : 7, height: isActive ? 9 : 7)
                     .shadow(color: color.opacity(0.8), radius: 4)
                     .offset(x: -17)
+                    .accessibilityHidden(true)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(threadRowAccessibilityLabel(item, isActive: isActive))
+    }
+
+    private func threadRowAccessibilityLabel(_ item: UpNextEntry.ItemInfo, isActive: Bool) -> String {
+        var parts = [item.title]
+        if item.kind == .reminder {
+            parts.append("Reminder")
+        } else if !item.contextName.isEmpty {
+            parts.append(item.contextName)
+        }
+        parts.append(isActive ? "Now" : TimeFormatter.clock.string(from: item.start))
+        return parts.joined(separator: ", ")
     }
 
     private var emptyView: some View {

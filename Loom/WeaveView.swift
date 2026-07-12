@@ -223,9 +223,13 @@ struct WeaveView: View {
                                 selectedDay = selectedDay == day ? nil : day
                             }
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(detailLine(for: day))
+                        .accessibilityAddTraits(selectedDay == day ? [.isSelected] : [])
                 }
             }
-            .background(grid(color: Color.white.opacity(0.035)))
+            .background(grid(color: Color.white.opacity(0.035)).accessibilityHidden(true))
             .overlay(fireSweep)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
@@ -308,6 +312,7 @@ struct WeaveView: View {
             )
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func dayColumn(_ day: WeaveDay, index: Int, count: Int, maxTotal: Int) -> some View {
@@ -434,6 +439,7 @@ struct WeaveView: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(Color.personalDisplay)
                             .padding(.top, 2)
+                            .accessibilityHidden(true)
                         Text(line)
                             .font(AppFont.bodySemibold(14))
                             .foregroundStyle(Color.loomText)
@@ -506,6 +512,7 @@ struct WeaveView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(heat >= 1.2 ? Color.workColor : Color.personalColor)
                     .padding(.top, 1)
+                    .accessibilityHidden(true)
                 Text(heatLine(heat))
                     .font(AppFont.body(13))
                     .foregroundStyle(Color.loomText)
@@ -544,6 +551,7 @@ struct WeaveView: View {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.personalColor)
+                        .accessibilityHidden(true)
                     Text("Finished this week")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -552,12 +560,14 @@ struct WeaveView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
                 ForEach(wins) { task in
                     HStack(spacing: 10) {
                         Circle()
                             .fill(task.context.color)
                             .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
                         Text(task.title)
                             .font(AppFont.bodySemibold(14))
                             .foregroundStyle(Color.loomText)
@@ -569,6 +579,7 @@ struct WeaveView: View {
                                 .foregroundStyle(Color.loomSubtle)
                         }
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
             .padding(16)
@@ -628,5 +639,6 @@ private struct WeaveStatTile: View {
             RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
                 .stroke(Color.loomBorder, lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
     }
 }

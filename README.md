@@ -86,7 +86,7 @@ daily focus limit if you set one.
 
 ## Project
 
-SwiftUI + SwiftData, iOS 17.5+. Open `Loom.xcodeproj` in Xcode and run the `Loom`
+SwiftUI + SwiftData, iOS 18.0+. Open `Loom.xcodeproj` in Xcode and run the `Loom`
 scheme. The visual system (colors, type, spacing, per-screen specs) lives in
 `design-handoff/`.
 

@@ -66,6 +66,8 @@
 		0CA007172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */; };
 		0CA007182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */; };
 		0CA008012C6D3EF700D079F0 /* BlockNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */; };
+		474BDD6A700E1F0E62824C42 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */; };
+		515B330B47C0DFCB977ACC01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -161,6 +163,8 @@
 		0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgets.entitlements; sourceTree = "<group>"; };
 		0CA007002C6D3EF700D079F0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockNotificationService.swift; sourceTree = "<group>"; };
+		ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -250,6 +254,7 @@
 				0CA006082C6D3EF700D079F0 /* Loom.entitlements */,
 				0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */,
 				0CA002082C6D3EF700D079F0 /* Info.plist */,
+				ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */,
 				0CA002102C6D3EF700D079F0 /* Fonts */,
 				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
 				021ED3092C6D3EF800D079F0 /* Preview Content */,
@@ -307,6 +312,7 @@
 				0CAF00302D6D3EF700D079F0 /* TodayWidget.swift */,
 				0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */,
 				0CA003032C6D3EF700D079F0 /* Info.plist */,
+				D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */,
 			);
 			path = LoomWidgets;
 			sourceTree = "<group>";
@@ -438,6 +444,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				474BDD6A700E1F0E62824C42 /* PrivacyInfo.xcprivacy in Resources */,
 				021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */,
 				021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */,
 				0CA004012C6D3EF700D079F0 /* AppIcon.icon in Resources */,
@@ -470,6 +477,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				515B330B47C0DFCB977ACC01 /* PrivacyInfo.xcprivacy in Resources */,
 				0CA007112C6D3EF700D079F0 /* Nunito-Regular.ttf in Resources */,
 				0CA007122C6D3EF700D079F0 /* Nunito-SemiBold.ttf in Resources */,
 				0CA007132C6D3EF700D079F0 /* Nunito-Bold.ttf in Resources */,
@@ -705,8 +713,6 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -745,8 +751,6 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

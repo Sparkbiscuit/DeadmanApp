@@ -129,6 +129,7 @@ private struct LockScreenSessionView: View {
                     .fill(accent.color.opacity(0.3))
                     .blur(radius: 10)
                     .padding(-6)
+                    .accessibilityHidden(true)
 
                 ProgressView(
                     timerInterval: ringInterval(context),
@@ -170,7 +171,8 @@ private struct LockScreenSessionView: View {
 
             Spacer()
 
-            // Visual pause affordance — tapping the activity opens the timer.
+            // Held-flame mark — tapping the activity opens the timer, so the
+            // glyph must not promise an inline action (pause) it can't do.
             ZStack {
                 Circle()
                     .fill(
@@ -182,10 +184,11 @@ private struct LockScreenSessionView: View {
                     )
                     .frame(width: 44, height: 44)
                     .shadow(color: accent.color.opacity(0.5), radius: 8)
-                Image(systemName: "pause.fill")
+                Image(systemName: "flame.fill")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
             }
+            .accessibilityHidden(true)
         }
         .padding(16)
         // The hearth banked in the corner behind the flame, with a few
@@ -213,6 +216,7 @@ private struct LockScreenSessionView: View {
                     }
                 }
             }
+            .accessibilityHidden(true)
         }
     }
 

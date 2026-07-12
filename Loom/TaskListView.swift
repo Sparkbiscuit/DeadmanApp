@@ -174,6 +174,7 @@ struct TaskListView: View {
                     // Reach up past the section header to the hero card's
                     // glowing corner, so now → next reads as one thread.
                     .padding(.top, -44)
+                    .accessibilityHidden(true)
 
                     VStack(spacing: 10) {
                         ForEach(Array(upcoming)) { block in
@@ -205,6 +206,8 @@ struct TaskListView: View {
                 .onTapGesture {
                     withAnimation { pushNote = nil }
                 }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Dismisses this message")
         }
     }
 
@@ -296,6 +299,7 @@ struct TaskListView: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.loomRed)
+                        .accessibilityHidden(true)
                     Text("Needs a decision")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -304,6 +308,7 @@ struct TaskListView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
                 Text("These slipped past their deadline. It happens — pick a path for each and move on.")
                     .font(AppFont.body(12))
@@ -429,6 +434,8 @@ struct TaskListView: View {
             .onTapGesture {
                 withAnimation { replanSummary = CatchUpSummary() }
             }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Dismisses this message")
         }
     }
 
@@ -443,6 +450,7 @@ struct TaskListView: View {
                     Image(systemName: "bell.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.brand500)
+                        .accessibilityHidden(true)
                     Text("Reminders")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -451,6 +459,7 @@ struct TaskListView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
 
@@ -536,6 +545,7 @@ struct TaskListView: View {
                     Image(systemName: context.icon)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(context.color)
+                        .accessibilityHidden(true)
                     Text(context.rawValue)
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -547,11 +557,14 @@ struct TaskListView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.loomFaint)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(context.rawValue), \(tasks.count) tasks")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
             CollapsibleSectionBody(isExpanded: isExpanded) {
                 VStack(spacing: 10) {
@@ -586,6 +599,7 @@ struct TaskListView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color.personalColor)
+                            .accessibilityHidden(true)
                         Text("Completed")
                             .font(AppFont.heading(15))
                             .foregroundStyle(Color.loomText)
@@ -597,11 +611,14 @@ struct TaskListView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.loomFaint)
                             .rotationEffect(.degrees(showCompleted ? 90 : 0))
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Completed, \(completed.count + completedReminders.count) items")
+                .accessibilityValue(showCompleted ? "Expanded" : "Collapsed")
 
                 CollapsibleSectionBody(isExpanded: showCompleted) {
                     VStack(spacing: 10) {
@@ -711,6 +728,7 @@ private struct StatPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color.loomSurface2, in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -800,6 +818,8 @@ private struct UpNextThreadRow: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
         .onTapGesture(perform: onEdit)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
         .contextMenu {
             Button(action: onStart) {
                 Label("Start Session", systemImage: "play.fill")
@@ -854,13 +874,21 @@ private struct RightNowCard: View {
                             .font(AppFont.mono(15))
                             .foregroundStyle(Color.loomText)
                             .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                         Text(isActive ? "LEFT" : "UNTIL")
                             .font(AppFont.caption(8))
                             .foregroundStyle(Color.brand300)
                             .kerning(1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                     }
+                    .padding(.horizontal, 4)
                 }
                 .frame(width: 88, height: 88)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(isActive ? "Time left in block" : "Time until block")
+                .accessibilityValue(ringCountdown)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(isActive ? "RIGHT NOW" : "UP NEXT")
@@ -882,6 +910,7 @@ private struct RightNowCard: View {
                             .foregroundStyle(Color.loomSubtle)
                     }
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer(minLength: 0)
             }
@@ -959,6 +988,7 @@ private struct RightNowCard: View {
                 .offset(x: -0.5, y: 1.5)
                 .shadow(color: Color.brand500.opacity(0.6), radius: 6)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .shadow(color: Color.brand500.opacity(0.22), radius: 30, y: 12)
         .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
@@ -1040,6 +1070,7 @@ private struct OverdueTriageRow: View {
                         .foregroundStyle(task.context.color)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             HStack(spacing: 8) {
                 TriageButton(
@@ -1127,11 +1158,14 @@ private struct ReminderRow: View {
     var onComplete: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "bell.fill")
                 .font(.system(size: 13))
                 .foregroundStyle(isOverdue ? Color.loomRed : Color.brand500)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reminder.title)
@@ -1142,6 +1176,7 @@ private struct ReminderRow: View {
                     .font(AppFont.caption(11))
                     .foregroundStyle(isOverdue ? Color.loomRed : Color.loomSubtle)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -1151,15 +1186,25 @@ private struct ReminderRow: View {
                     .foregroundStyle(Color.loomFaint)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Mark reminder complete")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.loomSurface)
         .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
         .contextMenu {
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete this reminder?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(reminder.title)\" goes away for good. This can't be undone.")
         }
     }
 
@@ -1190,11 +1235,14 @@ private struct CompletedTaskRow: View {
     var onRestore: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 18))
                 .foregroundStyle(Color.personalColor)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
@@ -1213,6 +1261,7 @@ private struct CompletedTaskRow: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -1222,6 +1271,8 @@ private struct CompletedTaskRow: View {
                     .foregroundStyle(Color.loomSubtle)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Restore task")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -1231,9 +1282,17 @@ private struct CompletedTaskRow: View {
             Button(action: onRestore) {
                 Label("Restore", systemImage: "arrow.uturn.backward")
             }
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete Permanently", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete permanently?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(task.title)\" and its history go away for good. This can't be undone.")
         }
     }
 }
@@ -1245,11 +1304,14 @@ private struct CompletedReminderRow: View {
     var onRestore: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "bell.fill")
                 .font(.system(size: 15))
                 .foregroundStyle(Color.loomFaint)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reminder.title)
@@ -1261,6 +1323,7 @@ private struct CompletedReminderRow: View {
                     .font(AppFont.caption(11))
                     .foregroundStyle(Color.loomFaint)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -1270,6 +1333,8 @@ private struct CompletedReminderRow: View {
                     .foregroundStyle(Color.loomSubtle)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Restore reminder")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -1279,9 +1344,17 @@ private struct CompletedReminderRow: View {
             Button(action: onRestore) {
                 Label("Restore", systemImage: "arrow.uturn.backward")
             }
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete Permanently", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete permanently?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(reminder.title)\" goes away for good. This can't be undone.")
         }
     }
 

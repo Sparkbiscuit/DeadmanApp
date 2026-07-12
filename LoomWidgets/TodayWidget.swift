@@ -195,6 +195,9 @@ private struct TodayWidgetView: View {
                         .minimumScaleFactor(0.7)
                 }
                 .frame(width: 48, height: 48)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Blocks done today")
+                .accessibilityValue("\(entry.doneBlocks) of \(entry.totalBlocks)")
 
                 Spacer()
 
@@ -211,6 +214,8 @@ private struct TodayWidgetView: View {
                     .padding(.vertical, 4)
                     .background(Color.brand500.opacity(0.14), in: Capsule())
                     .overlay(Capsule().stroke(Color.brand500.opacity(0.35), lineWidth: 1))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(entry.streakDays) day streak")
                 }
             }
 
@@ -310,5 +315,6 @@ struct HearthWidgetBackground: View {
                 }
             }
         }
+        .accessibilityHidden(true)
     }
 }

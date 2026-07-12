@@ -164,7 +164,7 @@ private struct AddBlockedTimeSheet: View {
                                     selectedWeekdays.insert(weekday)
                                 }
                             } label: {
-                                Text(letter)
+                            Text(letter)
                                     .font(AppFont.caption(12))
                                     .foregroundStyle(isOn ? .white : Color.loomText)
                                     .frame(width: 34, height: 34)
@@ -173,6 +173,9 @@ private struct AddBlockedTimeSheet: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Circle().inset(by: -5))
+                            .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
+                            .accessibilityAddTraits(isOn ? [.isSelected] : [])
                         }
                     }
                     .frame(maxWidth: .infinity)

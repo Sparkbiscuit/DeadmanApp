@@ -125,6 +125,7 @@ struct TaskEditView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(context == ctx ? [.isSelected] : [])
                 }
             }
         }
@@ -145,6 +146,7 @@ struct TaskEditView: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(Color.brand500)
+            .accessibilityLabel(emphasizeDeadline ? "New deadline" : "Deadline")
 
             if emphasizeDeadline {
                 Text("Pick a time that feels genuinely doable — the schedule rebuilds around it when you save.")
