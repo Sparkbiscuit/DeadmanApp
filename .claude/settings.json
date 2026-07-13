@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild test:*)",
+      "Bash(xcodebuild build:*)",
+      "Bash(xcodebuild -list:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)"
+    ]
+  }
+}
