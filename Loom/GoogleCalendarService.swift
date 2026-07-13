@@ -484,13 +484,13 @@ enum GoogleCalendarService {
         return abs(a.timeIntervalSince(b)) < 1
     }
 
-    private static let rfc3339: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let rfc3339: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 
-    private static let rfc3339Fractional: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let rfc3339Fractional: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter
