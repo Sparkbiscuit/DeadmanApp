@@ -69,7 +69,7 @@ enum PaceCache {
         let settings = UserSettings.fetchOrCreate(in: context)
 
         for task in tasks where !task.isComplete && task.deadline > now {
-            if let pressure = SchedulerService.pressure(
+            if let pace = SchedulerService.pressureAndAvailableMinutes(
                 for: task,
                 allBlocks: allBlocks,
                 blockedTimes: blockedTimes,
@@ -77,21 +77,9 @@ enum PaceCache {
                 settings: settings,
                 now: now
             ) {
-                let windowEnd = task.deadline.addingTimeInterval(
-                    -Double(settings.deadlineBufferMinutes) * 60
-                )
-                let available = SchedulerService.availableMinutes(
-                    from: now,
-                    to: windowEnd,
-                    excludingTaskId: task.id,
-                    allBlocks: allBlocks,
-                    blockedTimes: blockedTimes,
-                    busyEvents: busyEvents,
-                    settings: settings
-                )
                 entries[task.id] = Entry(
-                    pressure: pressure,
-                    availableMinutes: available,
+                    pressure: pace.pressure,
+                    availableMinutes: pace.availableMinutes,
                     remainingMinutes: task.remainingMinutes
                 )
             }
