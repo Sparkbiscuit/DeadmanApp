@@ -152,6 +152,7 @@ struct ConfettiView: View {
 
     @State private var pieces: [Piece] = []
     @State private var startDate = Date()
+    @State private var finished = false
 
     var body: some View {
         Group {
@@ -162,7 +163,7 @@ struct ConfettiView: View {
                     draw(pieces, elapsed: 1.1, in: canvasContext, size: size)
                 }
             } else {
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(minimumInterval: nil, paused: finished)) { timeline in
                     Canvas { canvasContext, size in
                         let elapsed = timeline.date.timeIntervalSince(startDate)
                         draw(pieces, elapsed: elapsed, in: canvasContext, size: size)
@@ -184,6 +185,10 @@ struct ConfettiView: View {
                     drift: .random(in: 12...36)
                 )
             }
+        }
+        .task {
+            try? await Task.sleep(for: .seconds(5))
+            finished = true
         }
     }
 

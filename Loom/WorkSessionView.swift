@@ -30,9 +30,13 @@ struct WorkSessionView: View {
     // Immersion: the end of the currently running scheduled block, if the
     // session started inside one. Bounds the hyperfocus spurt from both sides.
     @State private var blockEndTarget: Date?
-    /// The ring's denominator, shared verbatim with the Live Activity ring:
-    /// the running block's duration, or the remaining budget when the
-    /// session floats outside any block.
+    /// The ring's anchor and denominator, shared verbatim with the Live
+    /// Activity ring. Inside a block the window is the block's own span, so
+    /// joining late starts the ring partway around and a restarted session
+    /// picks up where the block's clock is now. Outside a block it's the full
+    /// effort budget, backdated by time already spent — earlier sessions stay
+    /// on the ring.
+    @State private var ringStartTime: Date?
     @State private var ringWindowSeconds: Int?
     @State private var didWarnNearEnd = false
     @State private var didMarkBlockEnd = false
@@ -44,6 +48,12 @@ struct WorkSessionView: View {
     @State private var didHitMicroGoal = false
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    /// The wall clock the ring reads. A plain `Date()` in `body` would freeze
+    /// during a pause (nothing else invalidates the view then), making the
+    /// ring jump on resume; ticking it here keeps ring and Live Activity on
+    /// the same schedule clock through pauses.
+    @State private var now = Date()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,8 +70,12 @@ struct WorkSessionView: View {
         // The held flame at full strength: no top glow to compete with the
         // ring, a hot floor, and the densest ember field in the app.
         .hearthScreen(topGlow: 0.05, bottomGlow: 0.5, embers: 30, emberIntensity: 1.5)
-        .onReceive(timer) { _ in
-            if isRunning && !isPaused {
+        .onReceive(timer) { tick in
+            guard isRunning else { return }
+            // The ring carries the schedule, not the session: it keeps
+            // ticking through a pause (only the count-up freezes).
+            now = tick
+            if !isPaused {
                 syncElapsed()
                 checkBlockBoundary()
                 checkMicroGoal()
@@ -71,8 +85,16 @@ struct WorkSessionView: View {
         // ring and label catch up to the wall clock immediately instead of
         // resuming from wherever the last tick left them.
         .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active && isRunning && !isPaused {
-                syncElapsed()
+            if newPhase != .active {
+                UIApplication.shared.isIdleTimerDisabled = false
+            } else if isRunning {
+                UIApplication.shared.isIdleTimerDisabled = true
+            }
+            if newPhase == .active && isRunning {
+                now = Date()
+                if !isPaused {
+                    syncElapsed()
+                }
             }
         }
         .onDisappear {
@@ -404,14 +426,19 @@ struct WorkSessionView: View {
         return "WEAVING"
     }
 
-    /// How much of the flame is held: worked time as a fraction of the ring
-    /// window (block duration, or remaining budget outside a block) — the
-    /// same rule the Live Activity ring renders, so the two never disagree.
-    /// The ring starts empty and may exceed 1: it loops a second lap over
-    /// itself rather than clamping. Idle (pre-start) it shows budget burned.
+    /// How much of the flame is held: the wall-clock fraction of the ring
+    /// window (the block's own span, or the backdated budget outside a block)
+    /// — the same interval the Live Activity ring renders, so the two never
+    /// disagree. Starting mid-block picks the ring up partway around, and
+    /// restarting a session on the same block resumes it instead of resetting
+    /// to zero. May exceed 1: it loops a second lap over itself rather than
+    /// clamping. Idle (pre-start) it shows budget burned. Like the Live
+    /// Activity ring, it keeps advancing through a pause (the count-up label
+    /// carries the pause; the ring carries the schedule).
     private var ringProgress: Double {
-        if isRunning, let window = ringWindowSeconds, window > 0 {
-            return Double(elapsedSeconds) / Double(window)
+        if isRunning, let start = ringStartTime,
+           let window = ringWindowSeconds, window > 0 {
+            return max(0, now.timeIntervalSince(start)) / Double(window)
         }
         guard task.effortMinutes > 0 else { return 0 }
         return min(1, Double(spentTotalMinutes) / Double(task.effortMinutes))
@@ -435,6 +462,7 @@ struct WorkSessionView: View {
 
     private func startTapped(microMinutes: Int? = nil) {
         let now = Date()
+        self.now = now // the ring's clock starts at the same instant
         sessionStart = now
         elapsedSeconds = 0
         pausedAccumSeconds = 0
@@ -448,8 +476,23 @@ struct WorkSessionView: View {
         let runningBlock = task.scheduledBlocks
             .first { $0.startTime <= now && now < $0.endTime }
         blockEndTarget = runningBlock?.endTime
-        let window = runningBlock.map { $0.durationMinutes * 60 }
-            ?? max(task.effortMinutes - task.timeSpentMinutes, 1) * 60
+        let ringStart: Date
+        let window: Int
+        if let block = runningBlock {
+            // The ring is the block's own clock: empty at the block's start,
+            // full at its end, regardless of when this session joined it.
+            ringStart = block.startTime
+            window = max(block.durationMinutes, 1) * 60
+        } else {
+            // Floating session: the full budget, backdated by work already
+            // logged, so the ring resumes rather than resetting each session.
+            // An over-budget task starts past 1 and loops — the banked lap
+            // stays honest instead of stretching the denominator to hide it.
+            let spentSeconds = task.timeSpentMinutes * 60
+            ringStart = now.addingTimeInterval(TimeInterval(-spentSeconds))
+            window = max(task.effortMinutes, 1) * 60
+        }
+        ringStartTime = ringStart
         ringWindowSeconds = window
         didWarnNearEnd = false
         didMarkBlockEnd = false
@@ -463,7 +506,8 @@ struct WorkSessionView: View {
             effortMinutes: task.effortMinutes,
             startedAt: now,
             blockEndsAt: blockEndTarget,
-            ringEndsAt: now.addingTimeInterval(TimeInterval(window))
+            ringStartsAt: ringStart,
+            ringEndsAt: ringStart.addingTimeInterval(TimeInterval(window))
         )
     }
 

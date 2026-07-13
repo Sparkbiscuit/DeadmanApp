@@ -18,10 +18,16 @@ struct WorkSessionAttributes: ActivityAttributes {
     /// End of the scheduled block the session started inside, when there is
     /// one — the Live Activity counts down to it ("held flame" style).
     var blockEndsAt: Date? = nil
-    /// When the progress ring reads full: session start plus the scheduled
-    /// block's duration (or the remaining budget when the session floats
-    /// outside any block). The ring starts empty at `startedAt` and fills as
-    /// worked time accumulates — never from an arbitrary mid-point.
+    /// The moment the progress ring reads empty. Inside a scheduled block
+    /// this is the block's own start, so a session begun mid-block picks the
+    /// ring up partway around instead of resetting to zero — and restarting
+    /// a session in the same block resumes where the ring already was.
+    /// Outside a block it's backdated by the time already spent on the task,
+    /// so the budget ring carries earlier sessions too.
+    var ringStartsAt: Date? = nil
+    /// When the progress ring reads full: `ringStartsAt` plus the scheduled
+    /// block's duration (or the full effort budget when the session floats
+    /// outside any block).
     var ringEndsAt: Date? = nil
 }
 
@@ -51,6 +57,7 @@ enum WorkSessionActivityController {
         effortMinutes: Int,
         startedAt: Date,
         blockEndsAt: Date? = nil,
+        ringStartsAt: Date? = nil,
         ringEndsAt: Date? = nil
     ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
@@ -60,6 +67,7 @@ enum WorkSessionActivityController {
             contextName: contextName,
             effortMinutes: effortMinutes,
             blockEndsAt: blockEndsAt,
+            ringStartsAt: ringStartsAt,
             ringEndsAt: ringEndsAt
         )
         let content = ActivityContent(
