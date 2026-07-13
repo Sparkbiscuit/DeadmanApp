@@ -21,16 +21,20 @@ struct ScheduleView: View {
     private let calendar = Calendar.current
 
     var body: some View {
-        NavigationStack {
+        let stripDays = dayRange
+        let visibleDays = viewMode == .day ? stripDays + [selectedDate] : weekDays
+        let itemsByDay = dayItemsByDate(for: visibleDays)
+
+        return NavigationStack {
             VStack(spacing: 0) {
                 header
 
                 switch viewMode {
                 case .day:
-                    dayStrip
-                    dayList
+                    dayStrip(days: stripDays, itemsByDay: itemsByDay)
+                    dayList(items: itemsByDay[calendar.startOfDay(for: selectedDate)] ?? [])
                 case .week:
-                    weekGrid
+                    weekGrid(itemsByDay: itemsByDay)
                 }
             }
             .hearthScreen(topGlow: 0.26, bottomGlow: 0.32)
@@ -99,15 +103,15 @@ struct ScheduleView: View {
 
     // MARK: - Horizontal Day Strip
 
-    private var dayStrip: some View {
+    private func dayStrip(days: [Date], itemsByDay: [Date: [DayItem]]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(dayRange, id: \.self) { date in
+                    ForEach(days, id: \.self) { date in
                         DayPill(
                             date: date,
                             isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
-                            hasItems: !itemsForDate(date).isEmpty
+                            hasItems: !(itemsByDay[calendar.startOfDay(for: date)] ?? []).isEmpty
                         )
                         .id(date)
                         .onTapGesture {
@@ -135,10 +139,8 @@ struct ScheduleView: View {
 
     // MARK: - Day list
 
-    private var dayList: some View {
-        let items = itemsForDate(selectedDate)
-
-        return ScrollView {
+    private func dayList(items: [DayItem]) -> some View {
+        ScrollView {
             if items.isEmpty {
                 EmptyStateView(
                     icon: "calendar",
@@ -199,7 +201,7 @@ struct ScheduleView: View {
 
     // MARK: - Week grid
 
-    private var weekGrid: some View {
+    private func weekGrid(itemsByDay: [Date: [DayItem]]) -> some View {
         let week = weekDays
         let startHour = 7
         let endHour = 22
@@ -279,7 +281,7 @@ struct ScheduleView: View {
                                 ZStack(alignment: .topLeading) {
                                     Color.clear
 
-                                    ForEach(itemsForDate(day)) { item in
+                                    ForEach(itemsByDay[calendar.startOfDay(for: day)] ?? []) { item in
                                         weekItemView(
                                             item: item,
                                             day: day,
@@ -444,32 +446,50 @@ struct ScheduleView: View {
         }
     }
 
-    private func itemsForDate(_ date: Date) -> [DayItem] {
-        let start = calendar.startOfDay(for: date)
-        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+    private func dayItemsByDate(for dates: [Date]) -> [Date: [DayItem]] {
+        let requestedDays = Set(dates.map { calendar.startOfDay(for: $0) })
+        guard !requestedDays.isEmpty else { return [:] }
 
+        var itemsByDay: [Date: [DayItem]] = [:]
         // Blocks whose task is gone are data damage, not schedule — never
         // render them as "Unknown Task" rows (the foreground sweep in
         // MainTabView deletes them).
-        var items: [DayItem] = allBlocks
-            .filter { $0.task != nil && $0.startTime >= start && $0.startTime < end }
-            .map { .block($0) }
-
-        for blocked in blockedTimes {
-            items.append(contentsOf: blocked
-                .occurrences(from: start, to: end)
-                .map { .blocked($0, blocked.label) })
+        for block in allBlocks where block.task != nil {
+            let day = calendar.startOfDay(for: block.startTime)
+            if requestedDays.contains(day) {
+                itemsByDay[day, default: []].append(.block(block))
+            }
         }
 
-        items.append(contentsOf: busyEvents
-            .filter { $0.startTime >= start && $0.startTime < end }
-            .map { .busy($0) })
+        // Keep BlockedTime.occurrences as the single source of recurrence
+        // truth — same per-day window the old itemsForDate passed it.
+        for blocked in blockedTimes {
+            for day in requestedDays {
+                guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) else { continue }
+                itemsByDay[day, default: []].append(contentsOf: blocked
+                    .occurrences(from: day, to: dayEnd)
+                    .map { .blocked($0, blocked.label) })
+            }
+        }
 
-        items.append(contentsOf: reminders
-            .filter { $0.dueDate >= start && $0.dueDate < end }
-            .map { .reminder($0) })
+        for event in busyEvents {
+            let day = calendar.startOfDay(for: event.startTime)
+            if requestedDays.contains(day) {
+                itemsByDay[day, default: []].append(.busy(event))
+            }
+        }
 
-        return items.sorted { $0.start < $1.start }
+        for reminder in reminders {
+            let day = calendar.startOfDay(for: reminder.dueDate)
+            if requestedDays.contains(day) {
+                itemsByDay[day, default: []].append(.reminder(reminder))
+            }
+        }
+
+        for day in itemsByDay.keys {
+            itemsByDay[day]?.sort { $0.start < $1.start }
+        }
+        return itemsByDay
     }
 
     // MARK: - Completion

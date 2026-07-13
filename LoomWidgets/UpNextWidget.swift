@@ -70,20 +70,32 @@ struct UpNextProvider: TimelineProvider {
 
     private func fetchEntry() -> UpNextEntry {
         let now = Date()
-        guard let container = try? SharedStore.makeContainer() else {
+        guard let container = WidgetStore.container else {
             return UpNextEntry(date: now, items: [])
         }
         let context = ModelContext(container)
 
-        let blockDescriptor = FetchDescriptor<ScheduledBlock>(
+        let activeDescriptor = FetchDescriptor<ScheduledBlock>(
+            predicate: #Predicate { block in
+                !block.isComplete && block.durationMinutes > 0
+                    && block.startTime < now && block.task?.isComplete == false
+            },
             sortBy: [SortDescriptor(\ScheduledBlock.startTime)]
         )
-        let blocks = ((try? context.fetch(blockDescriptor)) ?? [])
-            .filter { block in
-                guard !block.isComplete, block.endTime > now else { return false }
-                guard let task = block.task, !task.isComplete else { return false }
-                return true
-            }
+        let activeBlocks = ((try? context.fetch(activeDescriptor)) ?? [])
+            .filter { $0.endTime > now }
+
+        var upcomingDescriptor = FetchDescriptor<ScheduledBlock>(
+            predicate: #Predicate { block in
+                !block.isComplete && block.durationMinutes > 0
+                    && block.startTime >= now && block.task?.isComplete == false
+            },
+            sortBy: [SortDescriptor(\ScheduledBlock.startTime)]
+        )
+        upcomingDescriptor.fetchLimit = 4
+        let upcomingBlocks = (try? context.fetch(upcomingDescriptor)) ?? []
+
+        let blocks = (activeBlocks + upcomingBlocks)
             .map { block in
                 UpNextEntry.ItemInfo(
                     id: block.id,
@@ -96,11 +108,12 @@ struct UpNextProvider: TimelineProvider {
                 )
             }
 
-        let reminderDescriptor = FetchDescriptor<Reminder>(
+        var reminderDescriptor = FetchDescriptor<Reminder>(
+            predicate: #Predicate { !$0.isComplete && $0.dueDate > now },
             sortBy: [SortDescriptor(\Reminder.dueDate)]
         )
+        reminderDescriptor.fetchLimit = 4
         let reminders = ((try? context.fetch(reminderDescriptor)) ?? [])
-            .filter { !$0.isComplete && $0.dueDate > now }
             .map { reminder in
                 UpNextEntry.ItemInfo(
                     id: reminder.id,

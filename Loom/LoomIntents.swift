@@ -32,7 +32,11 @@ struct CaptureTaskIntent: AppIntent {
         let context = ModelContext(container)
         let settings = UserSettings.fetchOrCreate(in: context)
 
-        let deadline = Date().addingTimeInterval(Double(daysUntilDue) * 86_400)
+        let deadline = Calendar.current.date(
+            byAdding: .day,
+            value: daysUntilDue,
+            to: Date()
+        ) ?? Date()
         let task = LoomTask(
             title: trimmed,
             context: .personal,
