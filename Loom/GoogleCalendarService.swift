@@ -28,6 +28,12 @@ enum GoogleCalendarService {
 
     private static var isImporting = false
     private static var isExporting = false
+    private static var importGeneration: UInt = 0
+    private static var exportGeneration: UInt = 0
+    private static var cleanupGeneration: UInt = 0
+    private static var foregroundSyncTask: Task<Void, Never>?
+    private static var foregroundSyncTaskId: UUID?
+    private static var exportCleanupTask: Task<Void, Never>?
     /// The pending debounced export, so a burst of scheduling changes (bulk
     /// entry, a replan) coalesces into one network reconcile instead of one
     /// per change — unlike the Apple export, this one leaves the device.
@@ -78,11 +84,20 @@ enum GoogleCalendarService {
         let settings = UserSettings.fetchOrCreate(in: context)
         guard settings.googleAccountEmail != nil,
               settings.importFromGoogleCalendar || settings.exportToGoogleCalendar else { return }
-        Task {
+        guard foregroundSyncTask == nil else { return }
+        let taskId = UUID()
+        foregroundSyncTaskId = taskId
+        foregroundSyncTask = Task {
+            defer {
+                if foregroundSyncTaskId == taskId {
+                    foregroundSyncTask = nil
+                    foregroundSyncTaskId = nil
+                }
+            }
             if settings.importFromGoogleCalendar {
                 await importNow(context: context, settings: settings)
             }
-            if settings.exportToGoogleCalendar {
+            if !Task.isCancelled, settings.exportToGoogleCalendar {
                 // Debounced, so this coalesces with the export the import's
                 // replan may have already queued.
                 scheduleExport(context: context, settings: settings)
@@ -101,10 +116,13 @@ enum GoogleCalendarService {
     /// Trailing debounce: each call cancels the previous pending export and
     /// arms a fresh one two seconds out, so the last change in a burst wins.
     private static func scheduleExport(context: ModelContext, settings: UserSettings) {
+        cancelExportCleanup()
         pendingExport?.cancel()
         pendingExport = Task {
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  settings.exportToGoogleCalendar,
+                  settings.googleAccountEmail != nil else { return }
             await exportNow(context: context, settings: settings)
         }
     }
@@ -112,12 +130,15 @@ enum GoogleCalendarService {
     // MARK: - Import (Google → Loom)
 
     static func importNow(context: ModelContext, settings: UserSettings) async {
+        let generation = importGeneration
+        guard settings.importFromGoogleCalendar, settings.googleAccountEmail != nil else { return }
         guard !isImporting else { return }
         isImporting = true
         defer { isImporting = false }
 
         do {
             let accessToken = try await GoogleOAuth.validAccessToken(urlSession: urlSession)
+            try ensureImportIsCurrent(generation, settings: settings)
             settings.googleNeedsReconnect = false
 
             var fullSync = settings.googleSyncToken == nil
@@ -127,24 +148,37 @@ enum GoogleCalendarService {
                     accessToken: accessToken,
                     syncToken: settings.googleSyncToken
                 )
+                try ensureImportIsCurrent(generation, settings: settings)
             } catch GoogleCalendarError.syncTokenExpired {
                 fullSync = true
                 page = try await fetchEvents(accessToken: accessToken, syncToken: nil)
+                try ensureImportIsCurrent(generation, settings: settings)
             }
 
             let changes = reconcileImport(events: page.events, fullSync: fullSync, context: context)
+            pruneStaleBusyEvents(context: context)
+            let previousSyncToken = settings.googleSyncToken
             if let nextSyncToken = page.nextSyncToken {
                 settings.googleSyncToken = nextSyncToken
             }
-            pruneStaleBusyEvents(context: context)
-            try? context.save()
+            do {
+                try context.save()
+            } catch {
+                settings.googleSyncToken = previousSyncToken
+                throw error
+            }
 
             if changes > 0 {
                 // Scheduled work moves out of the way of the imported events.
                 replanAfterBusyChange(context: context)
             }
         } catch GoogleAuthError.needsReconnect {
-            settings.googleNeedsReconnect = true
+            if generation == importGeneration,
+               settings.importFromGoogleCalendar,
+               settings.googleAccountEmail != nil,
+               !Task.isCancelled {
+                settings.googleNeedsReconnect = true
+            }
         } catch {
             // Network hiccup: silent, the next foreground poll retries.
         }
@@ -226,12 +260,28 @@ enum GoogleCalendarService {
 
     /// Drop all imported Google busy events (import switched off).
     static func removeImportedEvents(context: ModelContext) {
+        importGeneration &+= 1
+        foregroundSyncTask?.cancel()
+        foregroundSyncTask = nil
+        foregroundSyncTaskId = nil
         let imported = ((try? context.fetch(FetchDescriptor<BusyEvent>())) ?? [])
             .filter { $0.source == .googleCalendar }
         for event in imported {
             context.delete(event)
         }
         try? context.save()
+    }
+
+    private static func ensureImportIsCurrent(
+        _ generation: UInt,
+        settings: UserSettings
+    ) throws {
+        try Task.checkCancellation()
+        guard generation == importGeneration,
+              settings.importFromGoogleCalendar,
+              settings.googleAccountEmail != nil else {
+            throw CancellationError()
+        }
     }
 
     // MARK: - Export (Loom → Google)
@@ -241,12 +291,16 @@ enum GoogleCalendarService {
     /// on time changes, insert what's missing, delete what no longer matches
     /// a block.
     static func exportNow(context: ModelContext, settings: UserSettings) async {
+        let generation = exportGeneration
+        guard settings.exportToGoogleCalendar, settings.googleAccountEmail != nil else { return }
+        cancelExportCleanup()
         guard !isExporting else { return }
         isExporting = true
         defer { isExporting = false }
 
         do {
             let accessToken = try await GoogleOAuth.validAccessToken(urlSession: urlSession)
+            try ensureExportIsCurrent(generation, settings: settings)
             settings.googleNeedsReconnect = false
 
             let now = Date()
@@ -265,6 +319,7 @@ enum GoogleCalendarService {
                 timeMax: horizon,
                 loomTaggedOnly: true
             ).events
+            try ensureExportIsCurrent(generation, settings: settings)
             var eventsById = Dictionary(
                 existing.filter { $0.status != "cancelled" }.map { ($0.id, $0) },
                 uniquingKeysWith: { first, _ in first }
@@ -282,23 +337,32 @@ enum GoogleCalendarService {
                             title: title, start: block.startTime, end: block.endTime,
                             accessToken: accessToken
                         )
+                        try ensureExportIsCurrent(generation, settings: settings)
                     }
                 } else {
-                    block.googleCalendarEventId = try await writeEvent(
+                    let eventId = try await writeEvent(
                         path: nil, method: "POST",
                         title: title, start: block.startTime, end: block.endTime,
                         accessToken: accessToken
                     )
+                    try ensureExportIsCurrent(generation, settings: settings)
+                    block.googleCalendarEventId = eventId
                 }
             }
 
             // Whatever is left no longer matches a block — remove it.
             for (eventId, _) in eventsById {
                 try? await deleteEvent(id: eventId, accessToken: accessToken)
+                try ensureExportIsCurrent(generation, settings: settings)
             }
-            try? context.save()
+            try ensureExportIsCurrent(generation, settings: settings)
+            try context.save()
         } catch GoogleAuthError.needsReconnect {
-            settings.googleNeedsReconnect = true
+            if generation == exportGeneration,
+               settings.exportToGoogleCalendar,
+               settings.googleAccountEmail != nil {
+                settings.googleNeedsReconnect = true
+            }
         } catch {
             // Silent; reconciled again after the next scheduling change.
         }
@@ -308,9 +372,18 @@ enum GoogleCalendarService {
     /// (export switched off). Best effort — matching Apple's behavior of not
     /// blocking the toggle on network success.
     static func removeExportedEvents(context: ModelContext) {
+        exportGeneration &+= 1
         pendingExport?.cancel()
-        Task {
+        pendingExport = nil
+        foregroundSyncTask?.cancel()
+        foregroundSyncTask = nil
+        foregroundSyncTaskId = nil
+        exportCleanupTask?.cancel()
+        cleanupGeneration &+= 1
+        let generation = cleanupGeneration
+        exportCleanupTask = Task {
             if let accessToken = try? await GoogleOAuth.validAccessToken(urlSession: urlSession) {
+                guard cleanupIsCurrent(generation, context: context) else { return }
                 let now = Date()
                 let horizon = Calendar.current.date(byAdding: .day, value: exportHorizonDays, to: now) ?? now
                 if let existing = try? await fetchEvents(
@@ -320,13 +393,43 @@ enum GoogleCalendarService {
                     timeMax: horizon,
                     loomTaggedOnly: true
                 ).events {
+                    guard cleanupIsCurrent(generation, context: context) else { return }
                     for event in existing where event.status != "cancelled" {
                         try? await deleteEvent(id: event.id, accessToken: accessToken)
+                        guard cleanupIsCurrent(generation, context: context) else { return }
                     }
                 }
             }
+            guard cleanupIsCurrent(generation, context: context) else { return }
             clearExportIds(context: context)
+            if cleanupGeneration == generation { exportCleanupTask = nil }
         }
+    }
+
+    private static func ensureExportIsCurrent(
+        _ generation: UInt,
+        settings: UserSettings
+    ) throws {
+        try Task.checkCancellation()
+        guard generation == exportGeneration,
+              settings.exportToGoogleCalendar,
+              settings.googleAccountEmail != nil else {
+            throw CancellationError()
+        }
+    }
+
+    private static func cleanupIsCurrent(_ generation: UInt, context: ModelContext) -> Bool {
+        let settings = UserSettings.fetchOrCreate(in: context)
+        return !Task.isCancelled
+            && generation == cleanupGeneration
+            && !settings.exportToGoogleCalendar
+            && settings.googleAccountEmail != nil
+    }
+
+    private static func cancelExportCleanup() {
+        cleanupGeneration &+= 1
+        exportCleanupTask?.cancel()
+        exportCleanupTask = nil
     }
 
     private static func clearExportIds(context: ModelContext) {
@@ -342,7 +445,14 @@ enum GoogleCalendarService {
     /// sync state. Exported events are left on the calendar (the user can
     /// switch export off first to clean those up).
     static func disconnect(context: ModelContext) {
+        importGeneration &+= 1
+        exportGeneration &+= 1
+        cancelExportCleanup()
+        foregroundSyncTask?.cancel()
+        foregroundSyncTask = nil
+        foregroundSyncTaskId = nil
         pendingExport?.cancel()
+        pendingExport = nil
         GoogleOAuth.disconnect()
         let settings = UserSettings.fetchOrCreate(in: context)
         settings.importFromGoogleCalendar = false
@@ -403,8 +513,8 @@ enum GoogleCalendarService {
             var request = URLRequest(url: components.url!)
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
-            let (data, response) = try await urlSession.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let (data, response) = try await performRequest(request)
+            let status = response.statusCode
             if status == 410 {
                 throw GoogleCalendarError.syncTokenExpired
             }
@@ -455,8 +565,8 @@ enum GoogleCalendarService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await urlSession.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let (data, response) = try await performRequest(request)
+        let status = response.statusCode
         guard (200..<300).contains(status) else {
             throw GoogleCalendarError.http(status)
         }
@@ -467,12 +577,94 @@ enum GoogleCalendarService {
         var request = URLRequest(url: eventsURL.appendingPathComponent(id))
         request.httpMethod = "DELETE"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        let (_, response) = try await urlSession.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let (_, response) = try await performRequest(request)
+        let status = response.statusCode
         // 404/410: already gone — the goal state, not a failure.
         guard (200..<300).contains(status) || status == 404 || status == 410 else {
             throw GoogleCalendarError.http(status)
         }
+    }
+
+    /// Shared Calendar API transport: one forced refresh for a rejected token,
+    /// and bounded retries for the statuses Google documents as transient.
+    private static func performRequest(
+        _ originalRequest: URLRequest
+    ) async throws -> (Data, HTTPURLResponse) {
+        var request = originalRequest
+        var retriedUnauthorized = false
+        var transientAttempts = 0
+
+        // A prior request in this reconciliation may already have refreshed
+        // the token. Start with that value instead of provoking another 401.
+        if let sentToken = bearerToken(in: request),
+           let stored = GoogleTokenStore.load(),
+           stored.accessToken != sentToken,
+           stored.isFresh() {
+            request.setValue("Bearer \(stored.accessToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        while true {
+            try Task.checkCancellation()
+            let (data, response) = try await urlSession.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw GoogleCalendarError.http(0)
+            }
+
+            if http.statusCode == 401,
+               !retriedUnauthorized,
+               let rejectedToken = bearerToken(in: request) {
+                let refreshedToken = try await GoogleOAuth.refreshAccessToken(
+                    rejectedAccessToken: rejectedToken,
+                    urlSession: urlSession
+                )
+                request.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
+                retriedUnauthorized = true
+                continue
+            }
+
+            // 429 means the request was rejected before processing — safe to
+            // retry any method. A 5xx may have landed AFTER the server
+            // committed the work, so only idempotent methods retry: replaying
+            // an insert POST could duplicate the calendar event.
+            let method = request.httpMethod?.uppercased() ?? "GET"
+            let isIdempotent = method != "POST" && method != "PATCH"
+            if http.statusCode == 429
+                || ((500...599).contains(http.statusCode) && isIdempotent) {
+                transientAttempts += 1
+                if transientAttempts < 3 {
+                    let delay = retryDelay(response: http, attempt: transientAttempts)
+                    try await Task.sleep(for: .seconds(delay))
+                    continue
+                }
+            }
+
+            return (data, http)
+        }
+    }
+
+    private static func bearerToken(in request: URLRequest) -> String? {
+        guard let authorization = request.value(forHTTPHeaderField: "Authorization"),
+              authorization.hasPrefix("Bearer ") else { return nil }
+        return String(authorization.dropFirst("Bearer ".count))
+    }
+
+    private static func retryDelay(response: HTTPURLResponse, attempt: Int) -> TimeInterval {
+        if let retryAfter = response.value(forHTTPHeaderField: "Retry-After") {
+            if let seconds = TimeInterval(retryAfter) {
+                return min(max(0, seconds), 30)
+            }
+
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+            if let date = formatter.date(from: retryAfter) {
+                return min(max(0, date.timeIntervalSinceNow), 30)
+            }
+        }
+
+        let backoff = 0.5 * pow(2, Double(attempt - 1))
+        return min(backoff + Double.random(in: 0...0.25), 8)
     }
 
     // MARK: - Dates

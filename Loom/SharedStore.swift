@@ -49,6 +49,17 @@ enum SharedStore {
         let legacyBase = URL.applicationSupportDirectory.appendingPathComponent("default.store")
         guard fileManager.fileExists(atPath: legacyBase.path) else { return }
 
+        // A migration attempt that died mid-install can leave orphan sidecars
+        // at the destination (the main file installs last). With the main
+        // file absent they're garbage — clear them so this retry's moves
+        // can't collide with them.
+        for suffix in ["-shm", "-wal"] {
+            let orphan = URL(fileURLWithPath: destination.path + suffix)
+            if fileManager.fileExists(atPath: orphan.path) {
+                try? fileManager.removeItem(at: orphan)
+            }
+        }
+
         // SQLite sidecars must travel with the main file. Install the main file
         // last so its presence marks a complete migration.
         let files = ["-shm", "-wal", ""].compactMap { suffix -> (URL, URL)? in
