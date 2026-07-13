@@ -6,6 +6,7 @@ import AVFoundation
 struct CaptureSheetView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var title = ""
     @State private var firstStep = ""
@@ -106,6 +107,9 @@ struct CaptureSheetView: View {
                 if estimateAccepted && newValue == estimateAdvice?.suggestedMinutes { return }
                 estimateAccepted = false
                 refreshEstimateAdvice()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase != .active && isListening { stopListening() }
             }
             .onDisappear { if isListening { stopListening() } }
         }
@@ -702,6 +706,11 @@ struct CaptureSheetView: View {
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 guard status == .authorized else { return }
+                // Don't open the microphone if the user has left for another
+                // app while the permission dialog sat waiting. (`.inactive`
+                // must stay allowed — the dialog itself holds the scene there
+                // while this callback races the grant tap.)
+                guard scenePhase != .background else { return }
                 beginRecognition()
             }
         }

@@ -83,10 +83,14 @@ struct WeaveView: View {
     // travels corner to corner across the finished cloth. Plays once per
     // visit to the tab.
     @State private var barsRevealed = false
-    /// 0 = the chart's top-left corner, 1 = its bottom-right corner.
-    @State private var sweepProgress: CGFloat = 0
-    /// The spark's bloom: near-zero at both corners, full mid-travel.
-    @State private var sweepBloom: CGFloat = 0.001
+    /// The fire sweep's single driver: 0 = a point in the chart's top-left
+    /// corner, 1 = a point in its bottom-right corner. Position and bloom
+    /// both derive from this one animatable value inside `FireSweepReveal`,
+    /// so the two can never fall out of sync.
+    @State private var sweepT: CGFloat = 0
+    /// Re-entry guard for `playReveal` (it hops off the insertion transaction
+    /// asynchronously, so `barsRevealed` alone can't serve as the guard).
+    @State private var revealQueued = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -115,22 +119,25 @@ struct WeaveView: View {
     /// at the chart's top-left corner, blooms as it travels the diagonal, and
     /// gutters out to a point at the bottom-right corner. Reduce Motion skips
     /// straight to the woven state.
+    ///
+    /// The tab shell rebuilds this view on every tab switch, so `onAppear`
+    /// fires inside the tab-switch (insertion) transaction — and state changed
+    /// while a view is being inserted renders at its final value instead of
+    /// animating. Hop off that transaction and let the first frame land
+    /// before starting the show.
     private func playReveal() {
-        guard !barsRevealed else { return }
+        guard !revealQueued else { return }
+        revealQueued = true
         if reduceMotion {
             barsRevealed = true
             return
         }
-        barsRevealed = true // animations hang off this via per-column delays
-        withAnimation(.easeInOut(duration: 3.8).delay(0.6)) {
-            sweepProgress = 1
-        }
-        // Bloom while leaving the corner, gutter back down before arriving.
-        withAnimation(.easeIn(duration: 1.7).delay(0.6)) {
-            sweepBloom = 1
-        }
-        withAnimation(.easeOut(duration: 1.7).delay(0.6 + 2.1)) {
-            sweepBloom = 0.001
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            barsRevealed = true // bar animations hang off this via per-column delays
+            withAnimation(.easeInOut(duration: 3.8).delay(0.55)) {
+                sweepT = 1
+            }
         }
     }
 
@@ -277,40 +284,16 @@ struct WeaveView: View {
     /// chart's top-left corner — the corner of the whole plot area, not
     /// wherever the bars happen to start — spreads across warp and weft as
     /// it rides the diagonal, and gutters out to a single point in the
-    /// bottom-right corner. Position and scale are both animatable, so the
-    /// spark genuinely departs from (0, 0) and arrives at (w, h).
+    /// bottom-right corner. `FireSweepReveal` interpolates in presentation
+    /// space, so the spark genuinely departs from (0, 0) and arrives at (w, h).
     private var fireSweep: some View {
-        GeometryReader { geo in
-            let glowDiameter = max(geo.size.width, geo.size.height) * 1.5
-
-            ZStack {
-                grid(color: Color.brand300.opacity(0.75))
-                grid(color: Color.brand300.opacity(0.75))
-                    .blur(radius: 3)
-                    .opacity(0.7)
-            }
-            .mask(
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black.opacity(0.85), location: 0.45),
-                                .init(color: .clear, location: 1)
-                            ],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: glowDiameter / 2
-                        )
-                    )
-                    .frame(width: glowDiameter, height: glowDiameter)
-                    .scaleEffect(sweepBloom)
-                    .position(
-                        x: sweepProgress * geo.size.width,
-                        y: sweepProgress * geo.size.height
-                    )
-            )
+        ZStack {
+            grid(color: Color.brand300.opacity(0.75))
+            grid(color: Color.brand300.opacity(0.75))
+                .blur(radius: 3)
+                .opacity(0.7)
         }
+        .modifier(FireSweepReveal(t: sweepT))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -587,6 +570,55 @@ struct WeaveView: View {
             .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
             .padding(.horizontal, 20)
         }
+    }
+}
+
+// MARK: - Fire sweep reveal
+
+/// The traveling spark, as one animatable mask. A single parameter `t` drives
+/// both where the glow sits (0 = the chart's top-left corner, 1 = its
+/// bottom-right corner) and how far it has bloomed (a point at both ends,
+/// full mid-travel, via a sine arch). Because `animatableData` interpolates
+/// `t` in presentation space, position and bloom stay locked together for the
+/// whole ride — unlike separately-delayed animations on two state values,
+/// which SwiftUI was free to drop or desync.
+private struct FireSweepReveal: ViewModifier, Animatable {
+    var t: CGFloat
+
+    var animatableData: CGFloat {
+        get { t }
+        set { t = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        content.mask(
+            GeometryReader { geo in
+                let clamped = min(max(t, 0), 1)
+                let glowDiameter = max(geo.size.width, geo.size.height) * 1.5
+                // Blooms while leaving the corner, gutters out on approach.
+                let bloom = max(0.001, CGFloat(sin(Double(clamped) * .pi)))
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black.opacity(0.85), location: 0.45),
+                                .init(color: .clear, location: 1)
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: glowDiameter / 2
+                        )
+                    )
+                    .frame(width: glowDiameter, height: glowDiameter)
+                    .scaleEffect(bloom)
+                    .position(
+                        x: clamped * geo.size.width,
+                        y: clamped * geo.size.height
+                    )
+            }
+        )
     }
 }
 

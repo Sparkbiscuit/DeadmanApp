@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codex_executor": {
+      "command": "python3",
+      "args": [".claude/mcp/codex_executor.py"],
+      "env": {
+        "CODEX_BIN": "/Applications/ChatGPT.app/Contents/Resources/codex",
+        "CODEX_FIXED_MODEL": "gpt-5.6-sol",
+        "CODEX_REASONING_EFFORT": "high"
+      }
+    }
+  }
+}

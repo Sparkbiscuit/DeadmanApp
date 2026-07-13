@@ -399,6 +399,7 @@ struct EmberField: View {
     var intensity: Double = 1.0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private struct Ember {
         let x: Double        // 0…1 horizontal anchor
@@ -409,35 +410,39 @@ struct EmberField: View {
         let brightness: Double
     }
 
-    @State private var embers: [Ember] = []
+    @State private var embers: [Ember]
     @State private var birth = Date()
+
+    /// Seeds at init, not in `onAppear`: this view lives inside screens'
+    /// `.background`, where SwiftUI never delivers `onAppear` — the field
+    /// stayed empty and not a single ember ever drew.
+    init(emberCount: Int = 16, intensity: Double = 1.0) {
+        self.emberCount = emberCount
+        self.intensity = intensity
+        _embers = State(initialValue: (0..<emberCount).map { _ in
+            Ember(
+                x: .random(in: 0.03...0.97),
+                drift: .random(in: 6...22),
+                speed: .random(in: 0.55...1.4),
+                size: .random(in: 2.2...5.0),
+                phase: .random(in: 0...1),
+                brightness: .random(in: 0.4...0.95)
+            )
+        })
+    }
 
     var body: some View {
         Group {
             if reduceMotion {
                 canvas(at: 0)
             } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 12, paused: scenePhase != .active)) { timeline in
                     canvas(at: timeline.date.timeIntervalSince(birth))
                 }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear {
-            guard embers.isEmpty else { return }
-            birth = Date()
-            embers = (0..<emberCount).map { _ in
-                Ember(
-                    x: .random(in: 0.03...0.97),
-                    drift: .random(in: 6...22),
-                    speed: .random(in: 0.55...1.4),
-                    size: .random(in: 2.2...5.0),
-                    phase: .random(in: 0...1),
-                    brightness: .random(in: 0.4...0.95)
-                )
-            }
-        }
     }
 
     private func canvas(at elapsed: TimeInterval) -> some View {
@@ -599,19 +604,30 @@ struct HearthProgressRing: View {
             // `animation: breathe` on the blurred conic layer.
             arc(arcGradient)
                 .blur(radius: lineWidth * 0.9)
-                .opacity(reduceMotion ? 0.8 : (breathing ? 1.0 : 0.55))
+                .opacity(showsHalo && !reduceMotion ? (breathing ? 1.0 : 0.55) : 0.8)
 
             arc(arcGradient)
         }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: showsHalo ? 3.2 : 3.5).repeatForever(autoreverses: true)) {
-                breathing = true
-            }
-        }
+        .onAppear(perform: startBreathingIfNeeded)
+        // `showsHalo` is live (running/paused, upcoming/active): a ring that
+        // appears idle must start breathing the moment its flame is held,
+        // and restart cleanly after a pause interrupted the repeat-forever.
+        .onChange(of: showsHalo) { _, _ in startBreathingIfNeeded() }
         // Purely decorative: callers pair this with a text label/value and
         // combine the accessibility element there.
         .accessibilityHidden(true)
+    }
+
+    /// Breathing runs only while the halo shows — idle rings sit still (a
+    /// blurred layer animating forever on every list row was a battery tax).
+    private func startBreathingIfNeeded() {
+        guard showsHalo && !reduceMotion else { return }
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { breathing = false }
+        withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+            breathing = true
+        }
     }
 
     private func arc(_ style: AngularGradient) -> some View {

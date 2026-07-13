@@ -78,15 +78,22 @@ private func timerText(
     }
     .font(.custom("JetBrainsMono-SemiBold", size: size))
     .monospacedDigit()
+    // Past the hour the string grows to h:mm:ss; without these it wraps to a
+    // second line inside its fixed frame and rides up off-center. One line,
+    // scaled down to fit, stays centered at any duration.
+    .lineLimit(1)
+    .minimumScaleFactor(0.5)
 }
 
-/// The ring's fill window: worked time over the scheduled block's duration.
-/// `ringEndsAt` is precomputed by the controller; the effort budget covers
-/// activities started before it existed.
+/// The ring's fill window: the running block's own span (so joining a block
+/// late starts the ring partway around, and restarting a session in the same
+/// block resumes it), or the task's effort budget backdated by time already
+/// spent. `ringStartsAt`/`ringEndsAt` are precomputed by the controller; the
+/// session-start fallbacks cover activities started before they existed.
 private func ringInterval(
     _ context: ActivityViewContext<WorkSessionAttributes>
 ) -> ClosedRange<Date> {
-    let start = context.state.startedAt
+    let start = context.attributes.ringStartsAt ?? context.state.startedAt
     let end = context.attributes.ringEndsAt
         ?? start.addingTimeInterval(TimeInterval(context.attributes.effortMinutes * 60))
     // A degenerate window would crash the range; hold at least one minute.
