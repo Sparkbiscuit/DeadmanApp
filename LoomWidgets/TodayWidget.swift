@@ -179,84 +179,142 @@ private struct TodayWidgetView: View {
 
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(Color.brand500)
-                    .frame(width: 7, height: 7)
-                Text("TODAY")
-                    .font(AppFont.caption(10))
-                    .foregroundStyle(Color.brand500)
-                    .kerning(0.5)
+            HStack(alignment: .top) {
+                // Mini flame ring: blocks done vs planned.
+                ZStack {
+                    HearthProgressRing(
+                        progress: entry.totalBlocks > 0
+                            ? Double(entry.doneBlocks) / Double(entry.totalBlocks)
+                            : 0,
+                        size: 44,
+                        lineWidth: 5
+                    )
+                    Text("\(entry.doneBlocks)/\(entry.totalBlocks)")
+                        .font(AppFont.mono(11))
+                        .foregroundStyle(Color.loomText)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(width: 48, height: 48)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Blocks done today")
+                .accessibilityValue("\(entry.doneBlocks) of \(entry.totalBlocks)")
+
                 Spacer()
+
                 if entry.streakDays >= 2 {
-                    HStack(spacing: 2) {
+                    HStack(spacing: 3) {
                         Image(systemName: "flame.fill")
                             .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Color.brand300)
                         Text("\(entry.streakDays)")
-                            .font(AppFont.caption(10))
+                            .font(AppFont.mono(11))
+                            .foregroundStyle(Color.brand100)
                     }
-                    .foregroundStyle(Color.brand500)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.brand500.opacity(0.14), in: Capsule())
+                    .overlay(Capsule().stroke(Color.brand500.opacity(0.35), lineWidth: 1))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(entry.streakDays) day streak")
                 }
             }
-            .padding(.bottom, 8)
 
-            if entry.totalBlocks > 0 {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text("\(entry.doneBlocks)")
-                        .font(AppFont.title(24))
+            Spacer(minLength: 4)
+
+            if entry.allDone {
+                Text("All woven for today.")
+                    .font(AppFont.cardTitle(13))
+                    .foregroundStyle(Color.personalDisplay)
+            } else if let title = entry.nextTitle, let start = entry.nextStart {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("NEXT · \(TimeFormatter.clock.string(from: start))")
+                        .font(AppFont.caption(9))
+                        .foregroundStyle(Color.brand300)
+                        .kerning(0.5)
+                    Text(title)
+                        .font(AppFont.cardTitle(13))
                         .foregroundStyle(Color.loomText)
-                    Text("of \(entry.totalBlocks) blocks")
-                        .font(AppFont.body(12))
+                        .lineLimit(2)
+                    let left = entry.totalBlocks - entry.doneBlocks
+                    Text(left == 1 ? "1 block left today" : "\(left) blocks left today")
+                        .font(AppFont.caption(10))
                         .foregroundStyle(Color.loomSubtle)
                 }
-                .padding(.bottom, 6)
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.loomSurface3)
-                            .frame(height: 5)
-                        Capsule()
-                            .fill(Color.brand500)
-                            .frame(
-                                width: geo.size.width
-                                    * CGFloat(entry.doneBlocks)
-                                    / CGFloat(max(entry.totalBlocks, 1)),
-                                height: 5
-                            )
-                    }
-                }
-                .frame(height: 5)
-                .padding(.bottom, 8)
-
-                if entry.allDone {
-                    Text("All woven for today.")
-                        .font(AppFont.bodySemibold(12))
-                        .foregroundStyle(Color.personalColor)
-                } else if let title = entry.nextTitle, let start = entry.nextStart {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Next · \(TimeFormatter.clock.string(from: start))")
-                            .font(AppFont.caption(10))
-                            .foregroundStyle(Color.loomSubtle)
-                        Text(title)
-                            .font(AppFont.heading(13))
-                            .foregroundStyle(Color.loomText)
-                            .lineLimit(2)
-                    }
-                }
             } else {
-                Text("Nothing scheduled")
-                    .font(AppFont.heading(14))
-                    .foregroundStyle(Color.loomText)
-                Text("A clear day is a valid plan.")
-                    .font(AppFont.body(11))
-                    .foregroundStyle(Color.loomSubtle)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Nothing scheduled")
+                        .font(AppFont.cardTitle(13))
+                        .foregroundStyle(Color.loomText)
+                    Text("A clear day is a valid plan.")
+                        .font(AppFont.caption(10))
+                        .foregroundStyle(Color.loomSubtle)
+                }
             }
-
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .environment(\.colorScheme, .dark)
         .widgetURL(deepLink)
-        .containerBackground(Color.loomSurface, for: .widget)
+        .containerBackground(for: .widget) {
+            HearthWidgetBackground()
+        }
+    }
+}
+
+// MARK: - Widget backdrop
+
+/// Dark hearth surface with the flame banked at the bottom and a scatter of
+/// ember sparks — the widget-sized version of the app's ambient background.
+/// WidgetKit renders are static, so the embers are a frozen moment of the
+/// rising fire rather than an animation. Widgets always render the dark look;
+/// the dark environment override upstream keeps adaptive text legible on it.
+struct HearthWidgetBackground: View {
+    private struct Spark: Identifiable {
+        let id: Int
+        let x: CGFloat
+        let y: CGFloat
+        let size: CGFloat
+        let alpha: Double
+    }
+
+    /// Deterministic spark field (unit coordinates, biased toward the hearth
+    /// at the bottom) so every render looks alive but identical.
+    private static let sparks: [Spark] = [
+        Spark(id: 0, x: 0.14, y: 0.82, size: 3.0, alpha: 0.55),
+        Spark(id: 1, x: 0.32, y: 0.64, size: 2.2, alpha: 0.35),
+        Spark(id: 2, x: 0.47, y: 0.88, size: 3.6, alpha: 0.6),
+        Spark(id: 3, x: 0.63, y: 0.72, size: 2.4, alpha: 0.4),
+        Spark(id: 4, x: 0.78, y: 0.9, size: 3.0, alpha: 0.5),
+        Spark(id: 5, x: 0.88, y: 0.58, size: 2.0, alpha: 0.3)
+    ]
+
+    var body: some View {
+        let accent = HearthAccent.current
+        ZStack {
+            Color(hex: 0x131316)
+
+            // The held flame below, per the design's widget frames.
+            RadialGradient(
+                colors: [Color.brand500.opacity(0.34), .clear],
+                center: UnitPoint(x: 0.5, y: 1.12),
+                startRadius: 0,
+                endRadius: 260
+            )
+
+            GeometryReader { geo in
+                ForEach(Self.sparks) { spark in
+                    Circle()
+                        .fill(accent.soft)
+                        .frame(width: spark.size, height: spark.size)
+                        .blur(radius: 0.5)
+                        .shadow(color: accent.color.opacity(0.7), radius: 3)
+                        .opacity(spark.alpha)
+                        .position(
+                            x: spark.x * geo.size.width,
+                            y: spark.y * geo.size.height
+                        )
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

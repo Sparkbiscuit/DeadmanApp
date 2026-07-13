@@ -20,7 +20,7 @@ struct BulkEntryView: View {
             rowList
             bottomBar
         }
-        .background(Color.loomBackground)
+        .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
         .toolbar(.hidden, for: .navigationBar)
         .alert("Scheduled", isPresented: $showSummary) {
             Button("Done") {
@@ -42,6 +42,7 @@ struct BulkEntryView: View {
             Button("Back") { dismiss() }
                 .font(AppFont.caption(14))
                 .foregroundStyle(Color.loomSubtle)
+                .contentShape(Rectangle().inset(by: -14))
 
             Spacer()
 
@@ -199,6 +200,7 @@ struct BulkEntryView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         if warningCount > 0 {
@@ -241,6 +243,8 @@ private struct BulkRowCard: View {
                         .foregroundStyle(Color.loomFaint)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle().inset(by: -10))
+                .accessibilityLabel("Remove row")
             }
 
             HStack(spacing: 8) {
@@ -298,6 +302,7 @@ private struct BulkRowCard: View {
                 .labelsHidden()
                 .datePickerStyle(.compact)
                 .tint(Color.brand500)
+                .accessibilityLabel("Deadline")
             }
         }
         .padding(14)

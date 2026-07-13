@@ -28,13 +28,12 @@ struct ScheduleView: View {
                 switch viewMode {
                 case .day:
                     dayStrip
-                    Divider().overlay(Color.loomBorder)
                     dayList
                 case .week:
                     weekGrid
                 }
             }
-            .background(Color.loomBackground)
+            .hearthScreen(topGlow: 0.26, bottomGlow: 0.32)
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(item: $celebrationTask) { task in
                 TaskCompletionView(task: task) {
@@ -64,9 +63,7 @@ struct ScheduleView: View {
 
     private var header: some View {
         HStack {
-            Text("Schedule")
-                .font(AppFont.title(26))
-                .foregroundStyle(Color.loomText)
+            HearthTitle(text: "Schedule", size: 30)
 
             Spacer()
 
@@ -79,23 +76,21 @@ struct ScheduleView: View {
                         }
                     } label: {
                         Text(mode.rawValue)
-                            .font(AppFont.caption(12))
-                            .foregroundStyle(viewMode == mode ? Color.loomText : Color.loomSubtle)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .font(AppFont.caption(13))
+                            .foregroundStyle(viewMode == mode ? Color.brand300 : Color.loomSubtle)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
                             .background(
-                                RoundedRectangle(cornerRadius: LoomRadius.sm, style: .continuous)
-                                    .fill(viewMode == mode ? Color.loomSurface : Color.clear)
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(viewMode == mode ? Color.brand500.opacity(0.2) : Color.clear)
                             )
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(2)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.loomSurface2)
-            )
+            .padding(3)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Color.loomBorder, lineWidth: 1))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -152,27 +147,52 @@ struct ScheduleView: View {
                 )
                 .padding(.top, 40)
             } else {
-                LazyVStack(spacing: 10) {
-                    ForEach(items) { item in
-                        switch item {
-                        case .block(let block):
-                            BlockCard(block: block) {
-                                toggleBlock(block)
+                // Minute cadence so the now-line drifts and past rows dim
+                // without any interaction.
+                TimelineView(.periodic(from: .now, by: 60)) { timeline in
+                    let now = timeline.date
+                    let nowLineIndex = nowLineIndex(in: items, at: now)
+
+                    LazyVStack(spacing: 10) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            if index == nowLineIndex {
+                                NowLine(now: now)
                             }
-                        case .blocked(let interval, let label):
-                            BlockedTimeCard(interval: interval, label: label)
-                        case .busy(let event):
-                            BusyEventCard(event: event)
-                        case .reminder(let reminder):
-                            ReminderScheduleCard(reminder: reminder) {
-                                toggleReminder(reminder)
-                            }
+                            timelineRow(for: item, at: now)
+                        }
+                        if nowLineIndex == items.count {
+                            NowLine(now: now)
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 110)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 100)
+            }
+        }
+    }
+
+    /// Where the thread of light sits: after everything that has ended,
+    /// before whatever is running or still to come. Only shown for today.
+    private func nowLineIndex(in items: [DayItem], at now: Date) -> Int? {
+        guard calendar.isDate(selectedDate, inSameDayAs: now) else { return nil }
+        return items.firstIndex { $0.end > now } ?? items.count
+    }
+
+    @ViewBuilder
+    private func timelineRow(for item: DayItem, at now: Date) -> some View {
+        switch item {
+        case .block(let block):
+            BlockCard(block: block, now: now) {
+                toggleBlock(block)
+            }
+        case .blocked(let interval, let label):
+            BlockedTimeCard(interval: interval, label: label, now: now)
+        case .busy(let event):
+            BusyEventCard(event: event, now: now)
+        case .reminder(let reminder):
+            ReminderScheduleCard(reminder: reminder, now: now) {
+                toggleReminder(reminder)
             }
         }
     }
@@ -203,7 +223,7 @@ struct ScheduleView: View {
                             }
                         }
                         .font(AppFont.caption(12))
-                        .foregroundStyle(Color.brand500)
+                        .foregroundStyle(Color.brand300)
                     }
                 }
                 .padding(.horizontal, 6)
@@ -219,10 +239,10 @@ struct ScheduleView: View {
                             VStack(spacing: 1) {
                                 Text(TimeFormatter.dayOfWeek.string(from: day).uppercased())
                                     .font(AppFont.caption(9))
-                                    .foregroundStyle(calendar.isDate(day, inSameDayAs: selectedDate) ? Color.loomRed : Color.loomSubtle)
+                                    .foregroundStyle(calendar.isDate(day, inSameDayAs: selectedDate) ? Color.brand300 : Color.loomSubtle)
                                 Text("\(calendar.component(.day, from: day))")
-                                    .font(AppFont.heading(13))
-                                    .foregroundStyle(calendar.isDateInToday(day) ? Color.loomRed : Color.loomText)
+                                    .font(AppFont.mono(13))
+                                    .foregroundStyle(calendar.isDateInToday(day) ? Color.brand300 : Color.loomText)
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -335,6 +355,15 @@ struct ScheduleView: View {
         let top = max(0, (startMinutes / 60 - Double(startHour)) * pointsPerHour)
         let height = max(6, interval.duration / 3600 * pointsPerHour)
 
+        let title: String = {
+            switch item {
+            case .block(let block): return block.task?.title ?? "Task"
+            case .blocked(_, let label): return label
+            case .busy(let event): return event.title
+            case .reminder(let reminder): return reminder.title
+            }
+        }()
+
         return RoundedRectangle(cornerRadius: 4, style: .continuous)
             .fill(color)
             .frame(height: min(height, gridHeight - top))
@@ -343,6 +372,10 @@ struct ScheduleView: View {
             .onTapGesture {
                 jumpToDay(day)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(title)
+            .accessibilityHint("Jumps to this day")
     }
 
     private func hourLabel(_ hour: Int) -> String {
@@ -400,14 +433,26 @@ struct ScheduleView: View {
             case .reminder(let reminder): return reminder.dueDate
             }
         }
+
+        var end: Date {
+            switch self {
+            case .block(let block): return block.endTime
+            case .blocked(let interval, _): return interval.end
+            case .busy(let event): return event.endTime
+            case .reminder(let reminder): return reminder.dueDate
+            }
+        }
     }
 
     private func itemsForDate(_ date: Date) -> [DayItem] {
         let start = calendar.startOfDay(for: date)
         guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
 
+        // Blocks whose task is gone are data damage, not schedule — never
+        // render them as "Unknown Task" rows (the foreground sweep in
+        // MainTabView deletes them).
         var items: [DayItem] = allBlocks
-            .filter { $0.startTime >= start && $0.startTime < end }
+            .filter { $0.task != nil && $0.startTime >= start && $0.startTime < end }
             .map { .block($0) }
 
         for blocked in blockedTimes {
@@ -441,6 +486,7 @@ struct ScheduleView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -461,8 +507,12 @@ struct ScheduleView: View {
         for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
             modelContext.delete(block)
         }
+        // Persist the released blocks immediately — unsaved deletes have
+        // historically resurfaced as orphaned "Unknown Task" rows.
+        try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 }
@@ -479,24 +529,93 @@ private struct DayPill: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(TimeFormatter.dayOfWeek.string(from: date).uppercased())
-                .font(AppFont.caption(11))
-                .foregroundStyle(isSelected ? .white : Color.loomSubtle)
+                .font(AppFont.caption(10))
+                .foregroundStyle(isSelected ? Color.brand300 : Color.loomSubtle)
+                .kerning(0.5)
             Text("\(calendar.component(.day, from: date))")
-                .font(AppFont.heading(17))
-                .foregroundStyle(isSelected ? .white : isToday ? Color.loomRed : Color.loomText)
+                .font(AppFont.mono(16))
+                .foregroundStyle(isSelected ? Color.brand100 : isToday ? Color.brand300 : Color.loomText)
             Circle()
-                .fill(hasItems ? (isSelected ? .white : Color.loomSubtle) : .clear)
-                .frame(width: 5, height: 5)
+                .fill(hasItems ? (isSelected ? Color.brand300 : Color.brand500.opacity(0.7)) : .clear)
+                .frame(width: 4, height: 4)
         }
-        .frame(width: 44, height: 64)
+        .frame(width: 46, height: 66)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isSelected ? Color.loomRed : Color.clear)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isSelected ? Color.brand500.opacity(0.16) : Color.loomSurface)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isSelected ? Color.brand500.opacity(0.5) : Color.loomBorder, lineWidth: 1)
+        )
+        .shadow(color: isSelected ? Color.brand500.opacity(0.3) : .clear, radius: 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityLabel(dayLabel)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private var isToday: Bool {
         calendar.isDateInToday(date)
+    }
+
+    private var dayLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        var label = isToday ? "Today, \(formatter.string(from: date))" : formatter.string(from: date)
+        if hasItems { label += ", has scheduled items" }
+        return label
+    }
+}
+
+// MARK: - Timeline time gutter
+
+/// Mono start-time label sitting in the left gutter of the day timeline.
+private struct TimeGutter: View {
+    let date: Date
+    var dimmed: Bool = false
+    var tint: Color? = nil
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        Text(Self.formatter.string(from: date))
+            .font(AppFont.mono(12))
+            .foregroundStyle(tint ?? (dimmed ? Color.loomFaint : Color.loomSubtle))
+            .frame(width: 44, alignment: .trailing)
+    }
+}
+
+// MARK: - Now line
+
+/// The thread of light marking this exact minute: mono time, a breathing dot,
+/// and a gradient bar fading out to the right.
+private struct NowLine: View {
+    let now: Date
+
+    var body: some View {
+        HStack(spacing: 14) {
+            TimeGutter(date: now, tint: .brand300)
+
+            ZStack(alignment: .leading) {
+                LinearGradient(
+                    colors: [Color.brand300.opacity(0.9), Color.brand500.opacity(0)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: 2)
+                .hearthGlow(.brand500, radius: 6, opacity: 0.6)
+
+                BreathingDot(color: .brand300, size: 10)
+                    .offset(x: -4)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityLabel("Now, \(TimeFormatter.clock.string(from: now))")
     }
 }
 
@@ -504,69 +623,150 @@ private struct DayPill: View {
 
 private struct BlockCard: View {
     let block: ScheduledBlock
+    let now: Date
     var onToggle: () -> Void
 
-    var body: some View {
-        HStack(spacing: 14) {
-            // Time column
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(TimeFormatter.clock.string(from: block.startTime))
-                    .font(AppFont.mono(13))
-                    .foregroundStyle(Color.loomText)
-                Text(TimeFormatter.clock.string(from: block.endTime))
-                    .font(AppFont.monoMedium(11))
-                    .foregroundStyle(Color.loomSubtle)
-            }
-            .frame(width: 56, alignment: .trailing)
-
-            // Color bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(contextColor)
-                .frame(width: 4)
-
-            // Content
-            VStack(alignment: .leading, spacing: 4) {
-                Text(block.task?.title ?? "Unknown Task")
-                    .font(AppFont.bodySemibold(15))
-                    .strikethrough(block.isComplete)
-                    .foregroundStyle(block.isComplete ? Color.loomSubtle : Color.loomText)
-
-                HStack(spacing: 8) {
-                    if let ctx = block.task?.context {
-                        Text(ctx.rawValue)
-                            .font(AppFont.caption(11))
-                            .foregroundStyle(ctx.color)
-                    }
-                    Text(CountdownFormatter.effortString(minutes: block.durationMinutes))
-                        .font(AppFont.monoMedium(11))
-                        .foregroundStyle(Color.loomSubtle)
-                    if block.isLocked {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Color.loomSubtle)
-                    }
-                }
-            }
-
-            Spacer()
-
-            // Complete button
-            Button(action: onToggle) {
-                Image(systemName: block.isComplete ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(block.isComplete ? Color.personalColor : Color.loomFaint)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
+    private var isInSession: Bool {
+        !block.isComplete && block.startTime <= now && now < block.endTime
     }
 
-    private var contextColor: Color {
-        block.task?.context.color ?? Color.loomFaint
+    private var isPast: Bool {
+        block.isComplete || block.endTime <= now
+    }
+
+    private var hasStarted: Bool {
+        block.isComplete || block.startTime <= now
+    }
+
+    private static let shortTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return formatter
+    }()
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            TimeGutter(date: block.startTime, dimmed: isPast && !isInSession)
+
+            HStack(spacing: 10) {
+                Group {
+                    if isInSession {
+                        BreathingDot(color: .brand300, size: 9)
+                    } else if block.isComplete {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.personalDisplay)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(block.task?.title ?? "Unknown Task")
+                            .font(AppFont.cardTitle(15))
+                            .strikethrough(block.isComplete)
+                            .foregroundStyle(block.isComplete ? Color.loomFaint : Color.loomText)
+                            .lineLimit(1)
+
+                        if isInSession {
+                            Text("In session · \(minutesLeftLabel) left in block")
+                                .font(AppFont.bodySemibold(12))
+                                .foregroundStyle(Color.brand300)
+                        } else {
+                            HStack(spacing: 6) {
+                                Text("\(Self.shortTime.string(from: block.startTime))–\(Self.shortTime.string(from: block.endTime)) · \(CountdownFormatter.effortString(minutes: block.durationMinutes))")
+                                    .font(AppFont.monoMedium(11))
+                                    .foregroundStyle(Color.loomSubtle)
+                                if block.isLocked {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(Color.loomFaint)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 6)
+
+                    if isInSession {
+                        Text("\(Self.shortTime.string(from: block.startTime))-\(Self.shortTime.string(from: block.endTime))")
+                            .font(AppFont.mono(12))
+                            .foregroundStyle(Color.brand300)
+                    } else if let ctx = block.task?.context, !isPast {
+                        Text(ctx.rawValue)
+                            .contextTag(ctx)
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityDescription)
+
+                // The check control only surfaces once the block has started —
+                // future rows stay clean, per the design. Early birds can
+                // still check off from the context menu.
+                if hasStarted && !isInSession {
+                    Button(action: onToggle) {
+                        Image(systemName: block.isComplete ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20, weight: .light))
+                            .foregroundStyle(block.isComplete ? Color.personalColor : Color.loomFaint.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle().inset(by: -12))
+                    .accessibilityLabel(block.isComplete ? "Mark incomplete" : "Mark complete")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                    .stroke(
+                        isInSession ? Color.brand500.opacity(0.45) : Color.loomBorder,
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: isInSession ? Color.brand500.opacity(0.3) : .clear, radius: 16)
+            .opacity(isPast && !block.isComplete ? 0.55 : 1)
+            .contextMenu {
+                Button(action: onToggle) {
+                    Label(
+                        block.isComplete ? "Mark Incomplete" : "Mark Complete",
+                        systemImage: block.isComplete ? "arrow.uturn.backward" : "checkmark.circle"
+                    )
+                }
+            }
+        }
+    }
+
+    private var accessibilityDescription: String {
+        var parts = [block.task?.title ?? "Unknown Task"]
+        if block.isComplete { parts.append("Complete") }
+        if isInSession {
+            parts.append("In session, \(minutesLeftLabel) left in block")
+        } else {
+            parts.append("\(Self.shortTime.string(from: block.startTime)) to \(Self.shortTime.string(from: block.endTime))")
+            if block.isLocked { parts.append("Locked") }
+            if let ctx = block.task?.context, !isPast { parts.append(ctx.rawValue) }
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    @ViewBuilder
+    private var cardBackground: some View {
+        if isInSession {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand500.opacity(0.24), location: 0),
+                    .init(color: Color(hex: 0x1A1A1E), location: 0.6)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            Color.loomSurface.opacity(block.isComplete ? 0.6 : 1)
+        }
+    }
+
+    private var minutesLeftLabel: String {
+        let seconds = max(0, Int(block.endTime.timeIntervalSince(now)))
+        return CountdownFormatter.effortString(minutes: max(1, seconds / 60))
     }
 }
 
@@ -575,47 +775,48 @@ private struct BlockCard: View {
 private struct BlockedTimeCard: View {
     let interval: DateInterval
     let label: String
+    let now: Date
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(TimeFormatter.clock.string(from: interval.start))
-                    .font(AppFont.mono(13))
-                    .foregroundStyle(Color.loomText)
-                Text(TimeFormatter.clock.string(from: interval.end))
-                    .font(AppFont.monoMedium(11))
-                    .foregroundStyle(Color.loomSubtle)
-            }
-            .frame(width: 56, alignment: .trailing)
+        HStack(alignment: .center, spacing: 14) {
+            TimeGutter(date: interval.start, dimmed: interval.end <= now)
 
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.loomFaint)
-                .frame(width: 4)
+            HStack(spacing: 10) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.loomFaint)
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label)
-                    .font(AppFont.bodySemibold(15))
-                    .foregroundStyle(Color.loomSubtle)
-                HStack(spacing: 5) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(label)
+                        .font(AppFont.bodySemibold(15))
+                        .foregroundStyle(Color.loomSubtle)
                     Text("Blocked")
                         .font(AppFont.caption(11))
+                        .foregroundStyle(Color.loomFaint)
                 }
-                .foregroundStyle(Color.loomFaint)
-            }
 
-            Spacer()
+                Spacer(minLength: 6)
+
+                Text(rangeLabel)
+                    .font(AppFont.monoMedium(11))
+                    .foregroundStyle(Color.loomFaint)
+            }
+            .accessibilityElement(children: .combine)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                    .strokeBorder(Color.loomFaint.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            )
+            .opacity(interval.end <= now ? 0.55 : 1)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.loomFaint, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-        )
+    }
+
+    private var rangeLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return "\(formatter.string(from: interval.start))-\(formatter.string(from: interval.end))"
     }
 }
 
@@ -623,47 +824,47 @@ private struct BlockedTimeCard: View {
 
 private struct BusyEventCard: View {
     let event: BusyEvent
+    let now: Date
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(TimeFormatter.clock.string(from: event.startTime))
-                    .font(AppFont.mono(13))
-                    .foregroundStyle(Color.loomText)
-                Text(TimeFormatter.clock.string(from: event.endTime))
-                    .font(AppFont.monoMedium(11))
-                    .foregroundStyle(Color.loomSubtle)
-            }
-            .frame(width: 56, alignment: .trailing)
+        HStack(alignment: .center, spacing: 14) {
+            TimeGutter(date: event.startTime, dimmed: event.endTime <= now)
 
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.loomFaint)
-                .frame(width: 4)
+            HStack(spacing: 10) {
+                Image(systemName: "clock")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.loomFaint)
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.title)
-                    .font(AppFont.bodySemibold(15))
-                    .foregroundStyle(Color.loomSubtle)
-                HStack(spacing: 5) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 9))
-                    Text(event.calendarName ?? "Calendar")
-                        .font(AppFont.caption(11))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(event.title) — busy from \(event.calendarName ?? "Calendar")")
+                        .font(AppFont.bodySemibold(14))
+                        .foregroundStyle(Color.loomSubtle)
+                        .lineLimit(2)
                 }
-                .foregroundStyle(Color.loomFaint)
-            }
 
-            Spacer()
+                Spacer(minLength: 6)
+
+                Text(rangeLabel)
+                    .font(AppFont.monoMedium(11))
+                    .foregroundStyle(Color.loomFaint)
+                    .multilineTextAlignment(.trailing)
+            }
+            .accessibilityElement(children: .combine)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                    .strokeBorder(Color.loomFaint.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            )
+            .opacity(event.endTime <= now ? 0.55 : 1)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.loomBorder, lineWidth: 1)
-        )
+    }
+
+    private var rangeLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return "\(formatter.string(from: event.startTime))-\(formatter.string(from: event.endTime))"
     }
 }
 
@@ -671,49 +872,51 @@ private struct BusyEventCard: View {
 
 private struct ReminderScheduleCard: View {
     let reminder: Reminder
+    let now: Date
     var onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(TimeFormatter.clock.string(from: reminder.dueDate))
-                    .font(AppFont.mono(13))
-                    .foregroundStyle(Color.loomText)
-            }
-            .frame(width: 56, alignment: .trailing)
+        HStack(alignment: .center, spacing: 14) {
+            TimeGutter(date: reminder.dueDate, dimmed: reminder.isComplete)
 
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.brand500)
-                .frame(width: 4)
+            HStack(spacing: 10) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.brand300)
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(reminder.title)
-                    .font(AppFont.bodySemibold(15))
-                    .strikethrough(reminder.isComplete)
-                    .foregroundStyle(reminder.isComplete ? Color.loomSubtle : Color.loomText)
-                HStack(spacing: 5) {
-                    Image(systemName: "bell.fill")
-                        .font(.system(size: 9))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(reminder.title)
+                        .font(AppFont.cardTitle(15))
+                        .strikethrough(reminder.isComplete)
+                        .foregroundStyle(reminder.isComplete ? Color.loomFaint : Color.loomText)
+                        .lineLimit(1)
                     Text("Reminder")
                         .font(AppFont.caption(11))
+                        .foregroundStyle(Color.brand300)
                 }
-                .foregroundStyle(Color.brand500)
-            }
+                .accessibilityElement(children: .combine)
 
-            Spacer()
+                Spacer(minLength: 6)
 
-            Button(action: onToggle) {
-                Image(systemName: reminder.isComplete ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(reminder.isComplete ? Color.personalColor : Color.loomFaint)
+                Button(action: onToggle) {
+                    Image(systemName: reminder.isComplete ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(reminder.isComplete ? Color.personalColor : Color.loomFaint)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle().inset(by: -11))
+                .accessibilityLabel(reminder.isComplete ? "Mark incomplete" : "Mark complete")
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Color.loomSurface.opacity(reminder.isComplete ? 0.6 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                    .stroke(Color.loomBorder, lineWidth: 1)
+            )
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
     }
 }
 

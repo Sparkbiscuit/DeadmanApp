@@ -78,7 +78,7 @@ struct CaptureSheetView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .background(Color.loomBackground)
+            .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showBulk) {
                 BulkEntryView {
@@ -121,12 +121,14 @@ struct CaptureSheetView: View {
             Button("Cancel") { dismiss() }
                 .font(AppFont.caption(14))
                 .foregroundStyle(Color.loomSubtle)
+                .contentShape(Rectangle().inset(by: -14))
 
             Spacer()
 
             Button("Bulk add") { showBulk = true }
                 .font(AppFont.caption(14))
-                .foregroundStyle(Color.brand500)
+                .foregroundStyle(Color.brand300)
+                .contentShape(Rectangle().inset(by: -14))
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
@@ -144,23 +146,21 @@ struct CaptureSheetView: View {
                     }
                 } label: {
                     Text(mode.rawValue)
-                        .font(AppFont.caption(12))
-                        .foregroundStyle(captureMode == mode ? Color.loomText : Color.loomSubtle)
+                        .font(AppFont.caption(13))
+                        .foregroundStyle(captureMode == mode ? Color.brand100 : Color.loomSubtle)
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 7)
                         .background(
-                            RoundedRectangle(cornerRadius: LoomRadius.sm, style: .continuous)
-                                .fill(captureMode == mode ? Color.loomSurface : Color.clear)
+                            Capsule()
+                                .fill(captureMode == mode ? Color.brand500.opacity(0.28) : Color.clear)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.loomSurface2)
-        )
+        .padding(3)
+        .background(Capsule().fill(Color.loomSurface))
+        .overlay(Capsule().stroke(Color.loomBorder, lineWidth: 1))
     }
 
     // MARK: - Reminder form
@@ -180,6 +180,7 @@ struct CaptureSheetView: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(Color.brand500)
+            .accessibilityLabel("Remind me at")
 
             if showNotificationsDeniedNote {
                 Text("Notifications are off for Loom. The reminder is saved, but no alert will fire; enable notifications in Settings.")
@@ -251,6 +252,8 @@ struct CaptureSheetView: View {
                                 .fill(isListening ? Color.loomRed.opacity(0.13) : Color.loomSurface2)
                         )
                 }
+                .contentShape(Rectangle().inset(by: -2))
+                .accessibilityLabel(isListening ? "Stop voice input" : "Start voice input")
             }
         }
     }
@@ -299,6 +302,7 @@ struct CaptureSheetView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(context == ctx ? [.isSelected] : [])
                 }
             }
         }
@@ -321,6 +325,7 @@ struct CaptureSheetView: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(Color.brand500)
+            .accessibilityLabel("Deadline")
         }
     }
 
@@ -411,6 +416,7 @@ struct CaptureSheetView: View {
                     .datePickerStyle(.compact)
                     .labelsHidden()
                     .tint(Color.brand500)
+                    .accessibilityLabel("Repeat until")
                     Spacer()
                 }
                 .padding(.top, 4)
@@ -433,6 +439,7 @@ struct CaptureSheetView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.personalColor)
+                        .accessibilityHidden(true)
                     Text("Planned for \(CountdownFormatter.effortString(minutes: effortMinutes)) — future you says thanks.")
                         .font(AppFont.body(12))
                         .foregroundStyle(Color.loomSubtle)
@@ -445,6 +452,7 @@ struct CaptureSheetView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color.workColor)
                             .padding(.top, 1)
+                            .accessibilityHidden(true)
                         Text("Your last \(advice.sampleCount) \(context.rawValue) tasks ran about \(advice.ratioLabel) over their estimates.")
                             .font(AppFont.body(13))
                             .foregroundStyle(Color.loomText)
@@ -528,6 +536,7 @@ struct CaptureSheetView: View {
                 .datePickerStyle(.compact)
                 .labelsHidden()
                 .tint(Color.brand500)
+                .accessibilityLabel("Earliest start")
                 .padding(.top, 4)
             } else {
                 Text("Leaves a short gap before your first block so you can settle in.")
@@ -618,6 +627,7 @@ struct CaptureSheetView: View {
         pendingTask = nil
         pendingBlocks = []
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
         dismiss()
     }
@@ -664,6 +674,7 @@ struct CaptureSheetView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
         dismiss()
     }
@@ -770,5 +781,6 @@ private struct EffortChip: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }

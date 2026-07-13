@@ -43,7 +43,7 @@ struct TaskEditView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 40)
             }
-            .background(Color.loomBackground)
+            .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
             .navigationTitle("Edit Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -125,6 +125,7 @@ struct TaskEditView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(context == ctx ? [.isSelected] : [])
                 }
             }
         }
@@ -145,6 +146,7 @@ struct TaskEditView: View {
             .datePickerStyle(.compact)
             .labelsHidden()
             .tint(Color.brand500)
+            .accessibilityLabel(emphasizeDeadline ? "New deadline" : "Deadline")
 
             if emphasizeDeadline {
                 Text("Pick a time that feels genuinely doable — the schedule rebuilds around it when you save.")
@@ -219,6 +221,7 @@ struct TaskEditView: View {
         }
 
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         switch result {

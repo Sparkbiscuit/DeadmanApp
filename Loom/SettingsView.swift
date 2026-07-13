@@ -9,6 +9,9 @@ struct SettingsView: View {
     @State private var showNotificationsDeniedAlert = false
     @State private var didPushNow = false
     @State private var exportFileURL: URL?
+    @State private var isConnectingGoogle = false
+    @State private var showGoogleConnectFailed = false
+    @State private var confirmGoogleDisconnect = false
 
     var body: some View {
         NavigationStack {
@@ -21,24 +24,35 @@ struct SettingsView: View {
                         .onAppear { _ = UserSettings.fetchOrCreate(in: modelContext) }
                 }
             }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
     private func settingsList(_ settings: UserSettings) -> some View {
-        List {
-            scheduleSection(settings)
-            nudgeSection(settings)
-            blockedTimesSection
-            focusSection(settings)
-            blockSizeSection(settings)
-            bufferSection(settings)
-            calendarSection(settings)
-            aboutSection
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HearthTitle(text: "Settings", size: 30)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 18)
+
+                hearthSection
+                dailyScheduleSection(settings)
+                planningSection(settings)
+                nudgeSection(settings)
+                calendarSection(settings)
+                googleCalendarSection(settings)
+                aboutSection
+
+                Text("Loom \(appVersion) · woven with care")
+                    .font(AppFont.monoMedium(12))
+                    .foregroundStyle(Color.loomFaint)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+            }
+            .padding(.bottom, 110)
         }
-        .scrollContentBackground(.hidden)
-        .background(Color.loomBackground)
+        .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
         .alert("Calendar access needed", isPresented: $showCalendarDeniedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -49,53 +63,61 @@ struct SettingsView: View {
         } message: {
             Text("Enable notifications for Loom in Settings to get block start nudges.")
         }
+        .alert("Couldn't connect Google", isPresented: $showGoogleConnectFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Something went wrong signing in to Google. Check your connection and try again.")
+        }
+    }
+
+    // MARK: - Hearth (accent hue)
+
+    /// The hearth itself: which color the flame burns. Every glow, ring,
+    /// ember, and gradient in the app follows this choice live.
+    private var hearthSection: some View {
+        SettingsGroup(title: "Hearth", footer: "The color your hearth burns. Everything warm follows it.") {
+            SettingsRow(icon: "flame.fill", tint: .brand500, label: "Flame") {
+                HStack(spacing: 10) {
+                    ForEach(HearthAccent.allCases) { accent in
+                        AccentSwatch(
+                            accent: accent,
+                            isSelected: HearthTheme.shared.accent == accent
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                HearthTheme.shared.accent = accent
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Daily Schedule
 
-    private func scheduleSection(_ settings: UserSettings) -> some View {
-        Section {
-            timePicker(
-                label: "Wake time",
-                icon: "sunrise.fill",
-                color: .workColor,
-                hour: Binding(
-                    get: { settings.wakeHour },
-                    set: { settings.wakeHour = $0 }
-                ),
-                minute: Binding(
-                    get: { settings.wakeMinute },
-                    set: { settings.wakeMinute = $0 }
+    private func dailyScheduleSection(_ settings: UserSettings) -> some View {
+        SettingsGroup(
+            title: "Daily Schedule",
+            footer: "Tasks are scheduled between these hours. A sleep time past midnight is fine; Loom treats it as the next day."
+        ) {
+            SettingsRow(icon: "sunrise.fill", tint: .workDisplay, label: "Wake time") {
+                timePicker(
+                    hour: Binding(get: { settings.wakeHour }, set: { settings.wakeHour = $0 }),
+                    minute: Binding(get: { settings.wakeMinute }, set: { settings.wakeMinute = $0 })
                 )
-            )
-            timePicker(
-                label: "Sleep time",
-                icon: "moon.fill",
-                color: .schoolColor,
-                hour: Binding(
-                    get: { settings.sleepHour },
-                    set: { settings.sleepHour = $0 }
-                ),
-                minute: Binding(
-                    get: { settings.sleepMinute },
-                    set: { settings.sleepMinute = $0 }
+                .accessibilityLabel("Wake time")
+            }
+            SettingsRow(icon: "moon.fill", tint: .schoolDisplay, label: "Sleep time") {
+                timePicker(
+                    hour: Binding(get: { settings.sleepHour }, set: { settings.sleepHour = $0 }),
+                    minute: Binding(get: { settings.sleepMinute }, set: { settings.sleepMinute = $0 })
                 )
-            )
-        } header: {
-            Text("Daily Schedule")
-        } footer: {
-            Text("Tasks are scheduled between these hours. A sleep time past midnight is fine; Loom treats it as the next day.")
+                .accessibilityLabel("Sleep time")
+            }
         }
-        .listRowBackground(Color.loomSurface)
     }
 
-    private func timePicker(
-        label: String,
-        icon: String,
-        color: Color,
-        hour: Binding<Int>,
-        minute: Binding<Int>
-    ) -> some View {
+    private func timePicker(hour: Binding<Int>, minute: Binding<Int>) -> some View {
         let date = Binding<Date>(
             get: {
                 var components = DateComponents()
@@ -110,97 +132,166 @@ struct SettingsView: View {
             }
         )
 
-        return HStack {
-            Label(label, systemImage: icon)
-                .foregroundStyle(color)
-                .font(AppFont.body(15))
-            Spacer()
-            DatePicker("", selection: date, displayedComponents: .hourAndMinute)
-                .labelsHidden()
+        return DatePicker("", selection: date, displayedComponents: .hourAndMinute)
+            .labelsHidden()
+    }
+
+    // MARK: - Planning
+
+    private func planningSection(_ settings: UserSettings) -> some View {
+        SettingsGroup(
+            title: "Planning",
+            footer: "Tasks are split into blocks within the size range. The focus limit caps how much work lands on any single day; buffers keep plans honest around deadlines and fresh starts."
+        ) {
+            stepperRow(
+                icon: "gauge.with.needle", tint: .brand300, label: "Daily focus limit",
+                value: Binding(
+                    get: { settings.dailyFocusMinutes },
+                    set: { settings.dailyFocusMinutes = $0 }
+                ),
+                range: 0...720, step: 30,
+                display: settings.dailyFocusMinutes == 0
+                    ? "Off"
+                    : CountdownFormatter.effortString(minutes: settings.dailyFocusMinutes)
+            )
+            stepperRow(
+                icon: "rectangle.compress.vertical", tint: .schoolDisplay, label: "Minimum block",
+                value: Binding(
+                    get: { settings.minBlockMinutes },
+                    set: { settings.minBlockMinutes = $0 }
+                ),
+                range: 15...60, step: 15,
+                display: CountdownFormatter.effortString(minutes: settings.minBlockMinutes)
+            )
+            stepperRow(
+                icon: "rectangle.expand.vertical", tint: .schoolDisplay, label: "Maximum block",
+                value: Binding(
+                    get: { settings.maxBlockMinutes },
+                    set: { settings.maxBlockMinutes = $0 }
+                ),
+                range: 60...180, step: 30,
+                display: CountdownFormatter.effortString(minutes: settings.maxBlockMinutes)
+            )
+            stepperRow(
+                icon: "shield.fill", tint: .personalDisplay, label: "Deadline buffer",
+                value: Binding(
+                    get: { settings.deadlineBufferMinutes },
+                    set: { settings.deadlineBufferMinutes = $0 }
+                ),
+                range: 0...480, step: 30,
+                display: CountdownFormatter.effortString(minutes: settings.deadlineBufferMinutes)
+            )
+            stepperRow(
+                icon: "hourglass.bottomhalf.filled", tint: .personalDisplay, label: "Start buffer",
+                value: Binding(
+                    get: { settings.startBufferMinutes },
+                    set: { settings.startBufferMinutes = $0 }
+                ),
+                range: 0...60, step: 5,
+                display: settings.startBufferMinutes == 0
+                    ? "None"
+                    : CountdownFormatter.effortString(minutes: settings.startBufferMinutes)
+            )
         }
     }
 
-    // MARK: - Block nudges
+    private func stepperRow(
+        icon: String,
+        tint: Color,
+        label: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        step: Int,
+        display: String
+    ) -> some View {
+        SettingsRow(icon: icon, tint: tint, label: label) {
+            HStack(spacing: 10) {
+                Text(display)
+                    .font(AppFont.mono(13))
+                    .foregroundStyle(Color.loomSubtle)
+                    .accessibilityHidden(true)
+                Stepper("", value: value, in: range, step: step)
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel(label)
+                    .accessibilityValue(display)
+            }
+        }
+    }
+
+    // MARK: - Nudges
 
     private func nudgeSection(_ settings: UserSettings) -> some View {
-        Section {
-            Toggle(isOn: Binding(
-                get: { settings.blockRemindersEnabled },
-                set: { enabled in
-                    setBlockReminders(enabled, settings: settings)
-                }
-            )) {
-                Label("Block start nudges", systemImage: "bell.badge.fill")
-                    .font(AppFont.body(15))
+        SettingsGroup(
+            title: "Nudges",
+            footer: "Block nudges fire when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. The morning preview (30 minutes after wake time) pre-loads the day's shape; the evening wrap-up closes it out and names tomorrow's first block."
+        ) {
+            SettingsRow(icon: "bell.badge.fill", tint: .brand300, label: "Block start nudges") {
+                Toggle("", isOn: Binding(
+                    get: { settings.blockRemindersEnabled },
+                    set: { enabled in setBlockReminders(enabled, settings: settings) }
+                ))
+                .labelsHidden()
+                .toggleStyle(HearthToggleStyle())
             }
-            .tint(Color.brand500)
 
             if settings.blockRemindersEnabled {
-                Stepper(value: Binding(
-                    get: { settings.blockReminderLeadMinutes },
-                    set: {
-                        settings.blockReminderLeadMinutes = $0
-                        BlockNotificationService.resync(context: modelContext)
-                    }
-                ), in: 0...15, step: 5) {
-                    HStack {
-                        Label("Early heads-up", systemImage: "clock.badge")
-                            .font(AppFont.body(15))
-                        Spacer()
-                        Text(settings.blockReminderLeadMinutes == 0
-                             ? "Off"
-                             : "\(settings.blockReminderLeadMinutes) min")
-                            .font(AppFont.mono(14))
-                            .foregroundStyle(Color.loomSubtle)
-                    }
-                }
-            }
-
-            Toggle(isOn: notificationToggleBinding(
-                get: { settings.morningPreviewEnabled },
-                set: { settings.morningPreviewEnabled = $0 }
-            )) {
-                Label("Morning preview", systemImage: "sun.horizon.fill")
-                    .font(AppFont.body(15))
-            }
-            .tint(Color.brand500)
-
-            Toggle(isOn: notificationToggleBinding(
-                get: { settings.eveningReviewEnabled },
-                set: { settings.eveningReviewEnabled = $0 }
-            )) {
-                Label("Evening wrap-up", systemImage: "moon.stars.fill")
-                    .font(AppFont.body(15))
-            }
-            .tint(Color.brand500)
-
-            if settings.eveningReviewEnabled {
-                timePicker(
-                    label: "Wrap-up time",
-                    icon: "clock.fill",
-                    color: .loomSubtle,
-                    hour: Binding(
-                        get: { settings.eveningReviewHour },
+                stepperRow(
+                    icon: "clock.badge", tint: .brand300, label: "Early heads-up",
+                    value: Binding(
+                        get: { settings.blockReminderLeadMinutes },
                         set: {
-                            settings.eveningReviewHour = $0
+                            settings.blockReminderLeadMinutes = $0
                             BlockNotificationService.resync(context: modelContext)
                         }
                     ),
-                    minute: Binding(
-                        get: { settings.eveningReviewMinute },
-                        set: {
-                            settings.eveningReviewMinute = $0
-                            BlockNotificationService.resync(context: modelContext)
-                        }
-                    )
+                    range: 0...15, step: 5,
+                    display: settings.blockReminderLeadMinutes == 0
+                        ? "Off"
+                        : "\(settings.blockReminderLeadMinutes) min"
                 )
             }
-        } header: {
-            Text("Nudges")
-        } footer: {
-            Text("Block nudges fire when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. The morning preview (30 minutes after wake time) pre-loads the day's shape; the evening wrap-up closes it out and names tomorrow's first block.")
+
+            SettingsRow(icon: "sun.horizon.fill", tint: .workDisplay, label: "Morning preview") {
+                Toggle("", isOn: notificationToggleBinding(
+                    get: { settings.morningPreviewEnabled },
+                    set: { settings.morningPreviewEnabled = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(HearthToggleStyle())
+            }
+
+            SettingsRow(icon: "moon.stars.fill", tint: .schoolDisplay, label: "Evening wrap-up") {
+                Toggle("", isOn: notificationToggleBinding(
+                    get: { settings.eveningReviewEnabled },
+                    set: { settings.eveningReviewEnabled = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(HearthToggleStyle())
+            }
+
+            if settings.eveningReviewEnabled {
+                SettingsRow(icon: "clock.fill", tint: .loomSubtle, label: "Wrap-up time") {
+                    timePicker(
+                        hour: Binding(
+                            get: { settings.eveningReviewHour },
+                            set: {
+                                settings.eveningReviewHour = $0
+                                BlockNotificationService.resync(context: modelContext)
+                            }
+                        ),
+                        minute: Binding(
+                            get: { settings.eveningReviewMinute },
+                            set: {
+                                settings.eveningReviewMinute = $0
+                                BlockNotificationService.resync(context: modelContext)
+                            }
+                        )
+                    )
+                    .accessibilityLabel("Wrap-up time")
+                }
+            }
         }
-        .listRowBackground(Color.loomSurface)
     }
 
     /// A notification-backed toggle: turning it on asks for permission first
@@ -249,192 +340,73 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Blocked Times
+    // MARK: - Calendar
 
-    private var blockedTimesSection: some View {
-        Section {
+    private func calendarSection(_ settings: UserSettings) -> some View {
+        SettingsGroup(
+            title: "Calendar",
+            footer: "Blocked times are recurring windows (classes, meetings, commutes) Loom schedules around. Export mirrors your blocks into a dedicated \u{201C}Loom\u{201D} calendar; import treats other calendars' events as busy time. They never become tasks."
+        ) {
             NavigationLink {
                 BlockedTimeView()
             } label: {
-                Label("Blocked Times", systemImage: "lock.fill")
-                    .font(AppFont.body(15))
-            }
-        } header: {
-            Text("Calendar Blocking")
-        } footer: {
-            Text("Recurring events like classes, meetings, and commutes that Loom schedules around.")
-        }
-        .listRowBackground(Color.loomSurface)
-    }
-
-    // MARK: - Daily Focus
-
-    private func focusSection(_ settings: UserSettings) -> some View {
-        Section {
-            Stepper(value: Binding(
-                get: { settings.dailyFocusMinutes },
-                set: { settings.dailyFocusMinutes = $0 }
-            ), in: 0...720, step: 30) {
-                HStack {
-                    Label("Daily focus limit", systemImage: "gauge.with.needle")
-                        .font(AppFont.body(15))
-                    Spacer()
-                    Text(settings.dailyFocusMinutes == 0
-                         ? "Off"
-                         : CountdownFormatter.effortString(minutes: settings.dailyFocusMinutes))
-                        .font(AppFont.mono(14))
-                        .foregroundStyle(Color.loomSubtle)
+                SettingsRow(icon: "lock.fill", tint: .loomSubtle, label: "Blocked Times") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.loomFaint)
                 }
             }
-        } header: {
-            Text("Daily Focus")
-        } footer: {
-            Text("Caps how much task work Loom books on any single day, so one bad deadline can't flood your week.")
-        }
-        .listRowBackground(Color.loomSurface)
-    }
+            .buttonStyle(.plain)
 
-    // MARK: - Block Size
-
-    private func blockSizeSection(_ settings: UserSettings) -> some View {
-        Section {
-            Stepper(value: Binding(
-                get: { settings.minBlockMinutes },
-                set: { settings.minBlockMinutes = $0 }
-            ), in: 15...60, step: 15) {
-                HStack {
-                    Label("Minimum block", systemImage: "rectangle.compress.vertical")
-                        .font(AppFont.body(15))
-                    Spacer()
-                    Text(CountdownFormatter.effortString(minutes: settings.minBlockMinutes))
-                        .font(AppFont.mono(14))
-                        .foregroundStyle(Color.loomSubtle)
-                }
+            SettingsRow(icon: "calendar.badge.clock", tint: .schoolDisplay, label: "Import busy times") {
+                Toggle("", isOn: Binding(
+                    get: { settings.importFromAppleCalendar },
+                    set: { enabled in setCalendarImport(enabled, settings: settings) }
+                ))
+                .labelsHidden()
+                .toggleStyle(HearthToggleStyle())
             }
-
-            Stepper(value: Binding(
-                get: { settings.maxBlockMinutes },
-                set: { settings.maxBlockMinutes = $0 }
-            ), in: 60...180, step: 30) {
-                HStack {
-                    Label("Maximum block", systemImage: "rectangle.expand.vertical")
-                        .font(AppFont.body(15))
-                    Spacer()
-                    Text(CountdownFormatter.effortString(minutes: settings.maxBlockMinutes))
-                        .font(AppFont.mono(14))
-                        .foregroundStyle(Color.loomSubtle)
-                }
-            }
-        } header: {
-            Text("Block Size")
-        } footer: {
-            Text("Tasks are split into blocks within this range.")
-        }
-        .listRowBackground(Color.loomSurface)
-    }
-
-    // MARK: - Buffer
-
-    private func bufferSection(_ settings: UserSettings) -> some View {
-        Section {
-            Stepper(value: Binding(
-                get: { settings.deadlineBufferMinutes },
-                set: { settings.deadlineBufferMinutes = $0 }
-            ), in: 0...480, step: 30) {
-                HStack {
-                    Label("Deadline buffer", systemImage: "shield.fill")
-                        .font(AppFont.body(15))
-                    Spacer()
-                    Text(CountdownFormatter.effortString(minutes: settings.deadlineBufferMinutes))
-                        .font(AppFont.mono(14))
-                        .foregroundStyle(Color.loomSubtle)
-                }
-            }
-            Stepper(value: Binding(
-                get: { settings.startBufferMinutes },
-                set: { settings.startBufferMinutes = $0 }
-            ), in: 0...60, step: 5) {
-                HStack {
-                    Label("Start buffer", systemImage: "hourglass.bottomhalf.filled")
-                        .font(AppFont.body(15))
-                    Spacer()
-                    Text(settings.startBufferMinutes == 0
-                         ? "None"
-                         : CountdownFormatter.effortString(minutes: settings.startBufferMinutes))
-                        .font(AppFont.mono(14))
-                        .foregroundStyle(Color.loomSubtle)
-                }
-            }
-        } header: {
-            Text("Safety Buffer")
-        } footer: {
-            Text("Work blocks finish at least the deadline buffer before the due time, and newly scheduled work starts no sooner than the start buffer from now.")
-        }
-        .listRowBackground(Color.loomSurface)
-    }
-
-    // MARK: - Calendar export
-
-    private func calendarSection(_ settings: UserSettings) -> some View {
-        Section {
-            Toggle(isOn: Binding(
-                get: { settings.exportToAppleCalendar },
-                set: { enabled in
-                    setCalendarExport(enabled, settings: settings)
-                }
-            )) {
-                Label("Export to Apple Calendar", systemImage: "calendar.badge.plus")
-                    .font(AppFont.body(15))
-            }
-            .tint(Color.brand500)
-
-            Toggle(isOn: Binding(
-                get: { settings.importFromAppleCalendar },
-                set: { enabled in
-                    setCalendarImport(enabled, settings: settings)
-                }
-            )) {
-                Label("Import busy times", systemImage: "calendar.badge.clock")
-                    .font(AppFont.body(15))
-            }
-            .tint(Color.brand500)
 
             if settings.importFromAppleCalendar {
                 NavigationLink {
                     CalendarPickerView(settings: settings)
                 } label: {
-                    HStack {
-                        Label("Calendars", systemImage: "list.bullet")
-                            .font(AppFont.body(15))
-                        Spacer()
-                        Text(includedCalendarsLabel(settings))
-                            .font(AppFont.body(13))
-                            .foregroundStyle(Color.loomSubtle)
+                    SettingsRow(icon: "list.bullet", tint: .schoolDisplay, label: "Calendars") {
+                        HStack(spacing: 8) {
+                            Text(includedCalendarsLabel(settings))
+                                .font(AppFont.body(13))
+                                .foregroundStyle(Color.loomSubtle)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.loomFaint)
+                        }
                     }
                 }
+                .buttonStyle(.plain)
+            }
+
+            SettingsRow(icon: "arrow.up", tint: .schoolDisplay, label: "Export blocks to Calendar") {
+                Toggle("", isOn: Binding(
+                    get: { settings.exportToAppleCalendar },
+                    set: { enabled in setCalendarExport(enabled, settings: settings) }
+                ))
+                .labelsHidden()
+                .toggleStyle(HearthToggleStyle())
             }
 
             Button {
                 pushBlocksNow(settings: settings)
             } label: {
-                HStack {
-                    Label("Push blocks to Calendar now", systemImage: "arrow.up.circle")
-                        .font(AppFont.body(15))
-                        .foregroundStyle(Color.brand500)
-                    Spacer()
+                SettingsRow(icon: "arrow.up.circle", tint: .brand300, label: "Push blocks to Calendar now", labelTint: .brand300) {
                     if didPushNow {
                         Image(systemName: "checkmark")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.personalColor)
+                            .foregroundStyle(Color.personalDisplay)
                     }
                 }
             }
-        } header: {
-            Text("Apple Calendar")
-        } footer: {
-            Text("Export mirrors your blocks into a dedicated \u{201C}Loom\u{201D} calendar. Import treats your other calendars' events as busy time the scheduler works around. They never become tasks.")
+            .buttonStyle(.plain)
         }
-        .listRowBackground(Color.loomSurface)
     }
 
     private func setCalendarExport(_ enabled: Bool, settings: UserSettings) {
@@ -500,46 +472,300 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Google Calendar
+
+    /// Google Calendar, treated the same as the Apple pair: one connect
+    /// button, then the identical import/export toggles. Connection state
+    /// lives in the Keychain; `googleAccountEmail` mirrors it for display.
+    private func googleCalendarSection(_ settings: UserSettings) -> some View {
+        SettingsGroup(
+            title: "Google Calendar",
+            footer: settings.googleAccountEmail == nil
+                ? "Sign in once and Google Calendar joins the loom: its events become busy time Loom schedules around, and export mirrors your blocks into your primary Google calendar. Events never become tasks."
+                : "Import treats Google events as busy time; export mirrors your blocks into your primary Google calendar, marked so they're never re-imported."
+        ) {
+            if let email = settings.googleAccountEmail {
+                SettingsRow(icon: "person.crop.circle.fill", tint: .personalDisplay, label: email) {
+                    Button("Disconnect") {
+                        confirmGoogleDisconnect = true
+                    }
+                    .font(AppFont.caption(13))
+                    .foregroundStyle(Color.loomRed)
+                    .buttonStyle(.plain)
+                }
+                .confirmationDialog("Disconnect Google Calendar?", isPresented: $confirmGoogleDisconnect, titleVisibility: .visible) {
+                    Button("Disconnect", role: .destructive) {
+                        disconnectGoogle()
+                    }
+                    Button("Stay connected", role: .cancel) {}
+                } message: {
+                    Text("Imported Google events are removed and your schedule replans around the time they free up.")
+                }
+
+                if settings.googleNeedsReconnect {
+                    Button {
+                        connectGoogle(settings)
+                    } label: {
+                        SettingsRow(
+                            icon: "exclamationmark.arrow.circlepath",
+                            tint: .loomRed,
+                            label: "Reconnect Google",
+                            labelTint: .loomRed
+                        ) {
+                            if isConnectingGoogle {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.loomFaint)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isConnectingGoogle)
+                }
+
+                SettingsRow(icon: "calendar.badge.clock", tint: .workDisplay, label: "Import busy times") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.importFromGoogleCalendar },
+                        set: { enabled in setGoogleImport(enabled, settings: settings) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(HearthToggleStyle())
+                }
+
+                SettingsRow(icon: "arrow.up", tint: .workDisplay, label: "Export blocks to Google") {
+                    Toggle("", isOn: Binding(
+                        get: { settings.exportToGoogleCalendar },
+                        set: { enabled in setGoogleExport(enabled, settings: settings) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(HearthToggleStyle())
+                }
+            } else {
+                Button {
+                    connectGoogle(settings)
+                } label: {
+                    SettingsRow(
+                        icon: "link",
+                        tint: .brand300,
+                        label: "Connect Google Calendar",
+                        labelTint: .brand300
+                    ) {
+                        if isConnectingGoogle {
+                            ProgressView()
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(isConnectingGoogle)
+            }
+        }
+    }
+
+    private func connectGoogle(_ settings: UserSettings) {
+        guard !isConnectingGoogle else { return }
+        isConnectingGoogle = true
+        Task { @MainActor in
+            defer { isConnectingGoogle = false }
+            do {
+                let tokens = try await GoogleOAuth.shared.connect()
+                settings.googleAccountEmail = tokens.email ?? "Google account"
+                settings.googleNeedsReconnect = false
+                settings.googleSyncToken = nil
+                // Connecting is the ask to import; export stays opt-in.
+                settings.importFromGoogleCalendar = true
+                await GoogleCalendarService.importNow(context: modelContext, settings: settings)
+            } catch GoogleAuthError.cancelled {
+                // The user backed out of the consent screen — not an error.
+            } catch {
+                showGoogleConnectFailed = true
+            }
+        }
+    }
+
+    private func disconnectGoogle() {
+        GoogleCalendarService.disconnect(context: modelContext)
+    }
+
+    private func setGoogleImport(_ enabled: Bool, settings: UserSettings) {
+        settings.importFromGoogleCalendar = enabled
+        // Either direction invalidates the incremental cursor: re-enabling
+        // must start from a full window fetch.
+        settings.googleSyncToken = nil
+        if enabled {
+            Task { @MainActor in
+                await GoogleCalendarService.importNow(context: modelContext, settings: settings)
+            }
+        } else {
+            GoogleCalendarService.removeImportedEvents(context: modelContext)
+            replanAfterBusyChange(context: modelContext)
+        }
+    }
+
+    private func setGoogleExport(_ enabled: Bool, settings: UserSettings) {
+        settings.exportToGoogleCalendar = enabled
+        if enabled {
+            Task { @MainActor in
+                await GoogleCalendarService.exportNow(context: modelContext, settings: settings)
+            }
+        } else {
+            GoogleCalendarService.removeExportedEvents(context: modelContext)
+        }
+    }
+
     // MARK: - About
 
     private var aboutSection: some View {
-        Section {
-            HStack {
-                Text("Version")
-                    .font(AppFont.body(15))
-                Spacer()
+        SettingsGroup(
+            title: "About",
+            footer: "Export writes everything Loom knows — tasks, blocks, sessions, reminders, history — to a plain JSON file. Your data is yours."
+        ) {
+            SettingsRow(icon: "info.circle", tint: .loomSubtle, label: "Version") {
                 Text(appVersion)
-                    .font(AppFont.body(14))
+                    .font(AppFont.monoMedium(13))
                     .foregroundStyle(Color.loomSubtle)
             }
 
             if let url = exportFileURL {
                 ShareLink(item: url) {
-                    Label("Share the export", systemImage: "square.and.arrow.up")
-                        .font(AppFont.body(15))
-                        .foregroundStyle(Color.brand500)
+                    SettingsRow(icon: "square.and.arrow.up", tint: .brand300, label: "Share the export", labelTint: .brand300) {
+                        EmptyView()
+                    }
                 }
+                .buttonStyle(.plain)
             } else {
                 Button {
                     exportFileURL = try? DataExporter.writeExportFile(context: modelContext)
                 } label: {
-                    Label("Export my data", systemImage: "shippingbox")
-                        .font(AppFont.body(15))
-                        .foregroundStyle(Color.brand500)
+                    SettingsRow(icon: "shippingbox", tint: .brand300, label: "Export my data", labelTint: .brand300) {
+                        EmptyView()
+                    }
                 }
+                .buttonStyle(.plain)
             }
-        } header: {
-            Text("About")
-        } footer: {
-            Text("Export writes everything Loom knows — tasks, blocks, sessions, reminders, history — to a plain JSON file. Your data is yours.")
         }
-        .listRowBackground(Color.loomSurface)
     }
 
     private var appVersion: String {
         let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0"
         let build = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "1"
         return "\(version) (\(build))"
+    }
+}
+
+// MARK: - Group container
+
+/// A Hearthlight settings section: caption header, 18pt rounded container,
+/// hairline dividers between rows, quiet footer.
+private struct SettingsGroup<Content: View>: View {
+    let title: String
+    var footer: String? = nil
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(AppFont.caption(11))
+                .foregroundStyle(Color.loomSubtle)
+                .kerning(1.2)
+                .padding(.leading, 4)
+
+            VStack(spacing: 0) {
+                Group(subviews: content) { subviews in
+                    ForEach(Array(subviews.enumerated()), id: \.offset) { index, subview in
+                        if index > 0 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.05))
+                                .padding(.leading, 56)
+                        }
+                        subview
+                    }
+                }
+            }
+            .background(Color.loomSurface)
+            .clipShape(RoundedRectangle(cornerRadius: LoomRadius.group, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.group, style: .continuous)
+                    .stroke(Color.loomBorder, lineWidth: 1)
+            )
+
+            if let footer {
+                Text(footer)
+                    .font(AppFont.body(12))
+                    .foregroundStyle(Color.loomFaint)
+                    .padding(.horizontal, 4)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 22)
+    }
+}
+
+// MARK: - Row
+
+/// Icon tile + label + trailing control, the Hearthlight settings row.
+private struct SettingsRow<Trailing: View>: View {
+    let icon: String
+    let tint: Color
+    let label: String
+    var labelTint: Color = .loomText
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(tint.opacity(0.14))
+                    .frame(width: 30, height: 30)
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(tint)
+            }
+            .accessibilityHidden(true)
+
+            Text(label)
+                .font(AppFont.bodySemibold(15))
+                .foregroundStyle(labelTint)
+
+            Spacer(minLength: 8)
+
+            trailing
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Accent swatch
+
+private struct AccentSwatch: View {
+    let accent: HearthAccent
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [accent.soft, accent.color],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Circle()
+                        .stroke(isSelected ? accent.hi : Color.white.opacity(0.1), lineWidth: 2)
+                )
+                .shadow(color: isSelected ? accent.color.opacity(0.6) : .clear, radius: 8)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle().inset(by: -10))
+        .accessibilityLabel("\(accent.displayName) flame")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
@@ -569,7 +795,7 @@ private struct CalendarPickerView: View {
                                     .foregroundStyle(Color.loomText)
                             }
                         }
-                        .tint(Color.brand500)
+                        .toggleStyle(HearthToggleStyle())
                     }
                 } header: {
                     Text(group.source)

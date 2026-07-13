@@ -15,6 +15,14 @@ struct WorkSessionAttributes: ActivityAttributes {
     /// need the SwiftData models.
     var contextName: String
     var effortMinutes: Int
+    /// End of the scheduled block the session started inside, when there is
+    /// one — the Live Activity counts down to it ("held flame" style).
+    var blockEndsAt: Date? = nil
+    /// When the progress ring reads full: session start plus the scheduled
+    /// block's duration (or the remaining budget when the session floats
+    /// outside any block). The ring starts empty at `startedAt` and fills as
+    /// worked time accumulates — never from an arbitrary mid-point.
+    var ringEndsAt: Date? = nil
 }
 
 extension WorkSessionAttributes {
@@ -37,20 +45,35 @@ extension WorkSessionAttributes {
 @MainActor
 enum WorkSessionActivityController {
 
-    static func start(taskTitle: String, contextName: String, effortMinutes: Int, startedAt: Date) {
+    static func start(
+        taskTitle: String,
+        contextName: String,
+        effortMinutes: Int,
+        startedAt: Date,
+        blockEndsAt: Date? = nil,
+        ringEndsAt: Date? = nil
+    ) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        endAll()
 
         let attributes = WorkSessionAttributes(
             taskTitle: taskTitle,
             contextName: contextName,
-            effortMinutes: effortMinutes
+            effortMinutes: effortMinutes,
+            blockEndsAt: blockEndsAt,
+            ringEndsAt: ringEndsAt
         )
         let content = ActivityContent(
             state: WorkSessionAttributes.ContentState(startedAt: startedAt),
             staleDate: nil
         )
-        _ = try? Activity.request(attributes: attributes, content: content)
+        // End-then-request inside one Task so a rapid restart can't leave two
+        // activities alive.
+        Task {
+            for activity in Activity<WorkSessionAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            _ = try? Activity.request(attributes: attributes, content: content)
+        }
     }
 
     static func end() {

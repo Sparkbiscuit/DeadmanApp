@@ -20,7 +20,7 @@ struct BlockedTimeView: View {
                     )
                     .padding(.top, 60)
                 }
-                .background(Color.loomBackground)
+                .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
             } else {
                 List {
                     Section {
@@ -63,6 +63,7 @@ struct BlockedTimeView: View {
         // Freed-up windows don't require moving anything, but the calendar
         // mirror may reference stale state.
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
     }
 }
 
@@ -85,6 +86,7 @@ func replanAfterBusyChange(context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
+    GoogleCalendarService.exportIfEnabled(context: context)
     scheduleDidChange(context: context)
 }
 
@@ -162,7 +164,7 @@ private struct AddBlockedTimeSheet: View {
                                     selectedWeekdays.insert(weekday)
                                 }
                             } label: {
-                                Text(letter)
+                            Text(letter)
                                     .font(AppFont.caption(12))
                                     .foregroundStyle(isOn ? .white : Color.loomText)
                                     .frame(width: 34, height: 34)
@@ -171,6 +173,9 @@ private struct AddBlockedTimeSheet: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Circle().inset(by: -5))
+                            .accessibilityLabel(Calendar.current.weekdaySymbols[weekday - 1])
+                            .accessibilityAddTraits(isOn ? [.isSelected] : [])
                         }
                     }
                     .frame(maxWidth: .infinity)

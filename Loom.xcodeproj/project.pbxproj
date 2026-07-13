@@ -19,6 +19,9 @@
 		0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00102D6D3EF700D079F0 /* WeaveView.swift */; };
 		0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */; };
 		0CAF00412D6D3EF700D079F0 /* DataExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00402D6D3EF700D079F0 /* DataExporter.swift */; };
+		0CAF00512D6D3EF700D079F0 /* GoogleAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */; };
+		0CAF00532D6D3EF700D079F0 /* GoogleCalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */; };
+		0CAF00552D6D3EF700D079F0 /* GoogleCalendarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */; };
 		0CA001052C6D3EF700D079F0 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001042C6D3EF700D079F0 /* AppTheme.swift */; };
 		0CA001072C6D3EF700D079F0 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001062C6D3EF700D079F0 /* TaskListView.swift */; };
 		0CA001092C6D3EF700D079F0 /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001082C6D3EF700D079F0 /* TaskRowView.swift */; };
@@ -63,6 +66,8 @@
 		0CA007172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002172C6D3EF700D079F0 /* JetBrainsMono-SemiBold.ttf */; };
 		0CA007182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CA002182C6D3EF700D079F0 /* JetBrainsMono-Bold.ttf */; };
 		0CA008012C6D3EF700D079F0 /* BlockNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */; };
+		474BDD6A700E1F0E62824C42 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */; };
+		515B330B47C0DFCB977ACC01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -119,6 +124,9 @@
 		0CAF00102D6D3EF700D079F0 /* WeaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeaveView.swift; sourceTree = "<group>"; };
 		0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomIntents.swift; sourceTree = "<group>"; };
 		0CAF00402D6D3EF700D079F0 /* DataExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataExporter.swift; sourceTree = "<group>"; };
+		0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleAuth.swift; sourceTree = "<group>"; };
+		0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarService.swift; sourceTree = "<group>"; };
+		0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarTests.swift; sourceTree = "<group>"; };
 		0CA001042C6D3EF700D079F0 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		0CA001062C6D3EF700D079F0 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		0CA001082C6D3EF700D079F0 /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowView.swift; sourceTree = "<group>"; };
@@ -155,6 +163,8 @@
 		0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LoomWidgets.entitlements; sourceTree = "<group>"; };
 		0CA007002C6D3EF700D079F0 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockNotificationService.swift; sourceTree = "<group>"; };
+		ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -234,6 +244,8 @@
 				0CA002042C6D3EF700D079F0 /* ConfettiView.swift */,
 				0CA002062C6D3EF700D079F0 /* CalendarExportService.swift */,
 				0CA005022C6D3EF700D079F0 /* CalendarImportService.swift */,
+				0CAF00502D6D3EF700D079F0 /* GoogleAuth.swift */,
+				0CAF00522D6D3EF700D079F0 /* GoogleCalendarService.swift */,
 				0CA007002C6D3EF700D079F0 /* NotificationService.swift */,
 				0CA008002C6D3EF700D079F0 /* BlockNotificationService.swift */,
 				0CA005002C6D3EF700D079F0 /* OnboardingView.swift */,
@@ -242,6 +254,7 @@
 				0CA006082C6D3EF700D079F0 /* Loom.entitlements */,
 				0CA003042C6D3EF700D079F0 /* WorkSessionAttributes.swift */,
 				0CA002082C6D3EF700D079F0 /* Info.plist */,
+				ED345FA2EF5393B21BC69600 /* PrivacyInfo.xcprivacy */,
 				0CA002102C6D3EF700D079F0 /* Fonts */,
 				021ED3062C6D3EF800D079F0 /* Assets.xcassets */,
 				021ED3092C6D3EF800D079F0 /* Preview Content */,
@@ -261,6 +274,7 @@
 			isa = PBXGroup;
 			children = (
 				021ED3142C6D3EF800D079F0 /* LoomTests.swift */,
+				0CAF00542D6D3EF700D079F0 /* GoogleCalendarTests.swift */,
 			);
 			path = LoomTests;
 			sourceTree = "<group>";
@@ -298,6 +312,7 @@
 				0CAF00302D6D3EF700D079F0 /* TodayWidget.swift */,
 				0CA006092C6D3EF700D079F0 /* LoomWidgets.entitlements */,
 				0CA003032C6D3EF700D079F0 /* Info.plist */,
+				D31763024BD6C76ABBB705B9 /* PrivacyInfo.xcprivacy */,
 			);
 			path = LoomWidgets;
 			sourceTree = "<group>";
@@ -429,6 +444,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				474BDD6A700E1F0E62824C42 /* PrivacyInfo.xcprivacy in Resources */,
 				021ED30B2C6D3EF800D079F0 /* Preview Assets.xcassets in Resources */,
 				021ED3072C6D3EF800D079F0 /* Assets.xcassets in Resources */,
 				0CA004012C6D3EF700D079F0 /* AppIcon.icon in Resources */,
@@ -461,6 +477,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				515B330B47C0DFCB977ACC01 /* PrivacyInfo.xcprivacy in Resources */,
 				0CA007112C6D3EF700D079F0 /* Nunito-Regular.ttf in Resources */,
 				0CA007122C6D3EF700D079F0 /* Nunito-SemiBold.ttf in Resources */,
 				0CA007132C6D3EF700D079F0 /* Nunito-Bold.ttf in Resources */,
@@ -500,6 +517,8 @@
 				0CA003102C6D3EF700D079F0 /* WorkSessionAttributes.swift in Sources */,
 				0CA005012C6D3EF700D079F0 /* OnboardingView.swift in Sources */,
 				0CA005032C6D3EF700D079F0 /* CalendarImportService.swift in Sources */,
+				0CAF00512D6D3EF700D079F0 /* GoogleAuth.swift in Sources */,
+				0CAF00532D6D3EF700D079F0 /* GoogleCalendarService.swift in Sources */,
 				0CA006012C6D3EF700D079F0 /* SharedStore.swift in Sources */,
 				0CA006042C6D3EF700D079F0 /* TaskEditView.swift in Sources */,
 				0CA007012C6D3EF700D079F0 /* NotificationService.swift in Sources */,
@@ -512,6 +531,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				021ED3152C6D3EF800D079F0 /* LoomTests.swift in Sources */,
+				0CAF00552D6D3EF700D079F0 /* GoogleCalendarTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -693,13 +713,11 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -733,13 +751,11 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -763,7 +779,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
@@ -786,7 +802,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomTests;
@@ -808,7 +824,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
@@ -830,7 +846,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 8G2SF9YU87;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.LoomUITests;
@@ -854,7 +870,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Loom;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;
@@ -878,7 +894,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LoomWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Loom;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks @executable_path/../../Frameworks";
 				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.christoforakis.Loom.LoomWidgets;

@@ -79,7 +79,18 @@ struct WeaveView: View {
 
     @State private var selectedDay: WeaveDay?
 
-    private static let columnHeight: CGFloat = 110
+    // One-shot reveal state: bars grow in staggered, then a spark of fire
+    // travels corner to corner across the finished cloth. Plays once per
+    // visit to the tab.
+    @State private var barsRevealed = false
+    /// 0 = the chart's top-left corner, 1 = its bottom-right corner.
+    @State private var sweepProgress: CGFloat = 0
+    /// The spark's bloom: near-zero at both corners, full mid-travel.
+    @State private var sweepBloom: CGFloat = 0.001
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let columnHeight: CGFloat = 130
 
     var body: some View {
         NavigationStack {
@@ -88,12 +99,38 @@ struct WeaveView: View {
                     header
                     tapestryCard
                     statTiles
+                    threadsCard
                     estimateHeatLine
                     winsSection
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 110)
             }
-            .background(Color.loomBackground)
+            .hearthScreen(topGlow: 0.22, bottomGlow: 0.30)
+        }
+        .onAppear(perform: playReveal)
+    }
+
+    /// The "just wove itself" reveal — bars rise left to right (the far past
+    /// lands first, today finishes the weave), while a spark of fire catches
+    /// at the chart's top-left corner, blooms as it travels the diagonal, and
+    /// gutters out to a point at the bottom-right corner. Reduce Motion skips
+    /// straight to the woven state.
+    private func playReveal() {
+        guard !barsRevealed else { return }
+        if reduceMotion {
+            barsRevealed = true
+            return
+        }
+        barsRevealed = true // animations hang off this via per-column delays
+        withAnimation(.easeInOut(duration: 3.8).delay(0.6)) {
+            sweepProgress = 1
+        }
+        // Bloom while leaving the corner, gutter back down before arriving.
+        withAnimation(.easeIn(duration: 1.7).delay(0.6)) {
+            sweepBloom = 1
+        }
+        withAnimation(.easeOut(duration: 1.7).delay(0.6 + 2.1)) {
+            sweepBloom = 0.001
         }
     }
 
@@ -106,11 +143,9 @@ struct WeaveView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Two weeks of showing up")
-                .font(AppFont.caption(12))
-                .foregroundStyle(Color.loomSubtle)
-            Text("Your Weave")
-                .font(AppFont.title(26))
-                .foregroundStyle(Color.loomText)
+                .font(AppFont.caption(13))
+                .foregroundStyle(Color.brand300)
+            HearthTitle(text: "Your Weave", size: 30)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -134,7 +169,7 @@ struct WeaveView: View {
                         .foregroundStyle(Color.loomSubtle)
                         .transition(.opacity)
                 } else {
-                    Text("Tap a day to read its thread.")
+                    Text("Tap a day to read its thread. Rest days hold the cloth together.")
                         .font(AppFont.caption(11))
                         .foregroundStyle(Color.loomFaint)
                 }
@@ -148,8 +183,28 @@ struct WeaveView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
+        // An ember pooled in the card's top-right corner (applied before the
+        // surface fill so it renders in front of it, behind the content).
+        .background(alignment: .topTrailing) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.brand500.opacity(0.22), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 70
+                    )
+                )
+                .frame(width: 140, height: 140)
+                .blur(radius: 10)
+                .offset(x: 30, y: -40)
+        }
         .background(Color.loomSurface)
-        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.loomBorder, lineWidth: 1)
+        )
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
     }
@@ -159,8 +214,8 @@ struct WeaveView: View {
 
         return VStack(spacing: 6) {
             HStack(alignment: .bottom, spacing: 5) {
-                ForEach(days) { day in
-                    dayColumn(day, maxTotal: maxTotal)
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    dayColumn(day, index: index, count: days.count, maxTotal: maxTotal)
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -168,15 +223,23 @@ struct WeaveView: View {
                                 selectedDay = selectedDay == day ? nil : day
                             }
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(detailLine(for: day))
+                        .accessibilityAddTraits(selectedDay == day ? [.isSelected] : [])
                 }
             }
+            .background(grid(color: Color.white.opacity(0.035)).accessibilityHidden(true))
+            .overlay(fireSweep)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
             HStack(spacing: 5) {
                 ForEach(days) { day in
                     Text(weekdayLetter(day.date))
                         .font(AppFont.caption(9))
                         .foregroundStyle(
                             Calendar.current.isDateInToday(day.date)
-                                ? Color.brand500
+                                ? Color.brand300
                                 : Color.loomFaint
                         )
                         .frame(maxWidth: .infinity)
@@ -185,27 +248,123 @@ struct WeaveView: View {
         }
     }
 
-    private func dayColumn(_ day: WeaveDay, maxTotal: Int) -> some View {
-        VStack(spacing: 2) {
+    /// The warp behind the weft: fine grid lines the cloth hangs on
+    /// (horizontal every 9pt, vertical every 12pt, per the prototype).
+    private func grid(color: Color) -> some View {
+        Canvas { context, size in
+            var x: CGFloat = 0
+            while x <= size.width {
+                context.stroke(
+                    Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: size.height)) },
+                    with: .color(color), lineWidth: 1
+                )
+                x += 12
+            }
+            var y: CGFloat = size.height
+            while y > 0 {
+                context.stroke(
+                    Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
+                    with: .color(color), lineWidth: 1
+                )
+                y -= 9
+            }
+        }
+    }
+
+    /// Fire spreading down the gridlines, once per visit: the same grid drawn
+    /// in accentSoft (crisp layer + blurred halo layer), revealed through a
+    /// traveling radial glow. The fire catches at a single point in the
+    /// chart's top-left corner — the corner of the whole plot area, not
+    /// wherever the bars happen to start — spreads across warp and weft as
+    /// it rides the diagonal, and gutters out to a single point in the
+    /// bottom-right corner. Position and scale are both animatable, so the
+    /// spark genuinely departs from (0, 0) and arrives at (w, h).
+    private var fireSweep: some View {
+        GeometryReader { geo in
+            let glowDiameter = max(geo.size.width, geo.size.height) * 1.5
+
+            ZStack {
+                grid(color: Color.brand300.opacity(0.75))
+                grid(color: Color.brand300.opacity(0.75))
+                    .blur(radius: 3)
+                    .opacity(0.7)
+            }
+            .mask(
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black.opacity(0.85), location: 0.45),
+                                .init(color: .clear, location: 1)
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: glowDiameter / 2
+                        )
+                    )
+                    .frame(width: glowDiameter, height: glowDiameter)
+                    .scaleEffect(sweepBloom)
+                    .position(
+                        x: sweepProgress * geo.size.width,
+                        y: sweepProgress * geo.size.height
+                    )
+            )
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func dayColumn(_ day: WeaveDay, index: Int, count: Int, maxTotal: Int) -> some View {
+        let isToday = Calendar.current.isDateInToday(day.date)
+        // The far past lands first; today finishes the weave.
+        let revealDelay = 0.05 + Double(index) * 0.06
+
+        return VStack(spacing: 2) {
             if day.totalMinutes == 0 {
                 // The bare warp: a rest day still holds the cloth together.
                 Circle()
-                    .fill(Color.loomSurface3)
+                    .fill(Color.white.opacity(0.18))
                     .frame(width: 5, height: 5)
+                    .padding(.bottom, 2)
             } else {
                 ForEach(TaskContext.allCases) { context in
                     if let minutes = day.minutesByContext[context], minutes > 0 {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(context.color.opacity(selectedDay == nil || selectedDay == day ? 1 : 0.35))
+                        Capsule(style: .continuous)
+                            .fill(barFill(context: context, isToday: isToday))
                             .frame(height: max(
-                                6,
+                                12,
                                 CGFloat(minutes) / CGFloat(maxTotal) * Self.columnHeight
                             ))
+                            .shadow(
+                                color: isToday ? Color.brand500.opacity(0.55) : .clear,
+                                radius: 5
+                            )
+                            .opacity(selectedDay == nil || selectedDay == day ? 1 : 0.35)
                     }
                 }
             }
         }
         .frame(height: Self.columnHeight + 10, alignment: .bottom)
+        .scaleEffect(y: barsRevealed ? 1 : 0.001, anchor: .bottom)
+        .animation(
+            reduceMotion
+                ? nil
+                : .spring(response: 0.55, dampingFraction: 0.65).delay(revealDelay),
+            value: barsRevealed
+        )
+        .background {
+            if isToday {
+                TodayColumnGlow()
+            }
+        }
+    }
+
+    private func barFill(context: TaskContext, isToday: Bool) -> AnyShapeStyle {
+        if isToday {
+            return AnyShapeStyle(LinearGradient.hearthBar)
+        }
+        return AnyShapeStyle(context.color)
     }
 
     private func weekdayLetter(_ date: Date) -> String {
@@ -234,33 +393,113 @@ struct WeaveView: View {
     // MARK: Stat tiles
 
     private var statTiles: some View {
-        let week = Array(days.suffix(7))
-        let weekMinutes = week.reduce(0) { $0 + $1.totalMinutes }
-        let weekStarts = week.reduce(0) { $0 + $1.sessionCount }
+        let all = days
+        let totalMinutes = all.reduce(0) { $0 + $1.totalMinutes }
+        let totalStarts = all.reduce(0) { $0 + $1.sessionCount }
         let streak = StreakCalculator.startStreak(startDates: sessions.map(\.startedAt))
 
         return HStack(spacing: 10) {
             WeaveStatTile(
-                value: CountdownFormatter.effortString(minutes: weekMinutes),
-                label: "woven this week",
-                icon: "clock.fill",
-                tint: .schoolColor
+                value: CountdownFormatter.effortString(minutes: totalMinutes),
+                label: "woven",
+                tint: .loomText
             )
             WeaveStatTile(
-                value: "\(weekStarts)",
-                label: weekStarts == 1 ? "start this week" : "starts this week",
-                icon: "play.fill",
-                tint: .personalColor
+                value: "\(totalStarts)",
+                label: totalStarts == 1 ? "session" : "sessions",
+                tint: .loomText
             )
             WeaveStatTile(
                 value: "\(streak)",
-                label: streak == 1 ? "day streak" : "days streak",
-                icon: "flame.fill",
-                tint: .brand500
+                label: "day streak",
+                tint: .personalDisplay
             )
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)
+    }
+
+    // MARK: - This week's threads
+
+    /// One or two specific, true things worth saying out loud — generated
+    /// from the record, never canned praise.
+    @ViewBuilder
+    private var threadsCard: some View {
+        let lines = threadLines
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("THIS WEEK'S THREADS")
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(Color.brand300)
+                    .kerning(1.4)
+
+                ForEach(lines, id: \.self) { line in
+                    HStack(alignment: .top, spacing: 9) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.personalDisplay)
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                        Text(line)
+                            .font(AppFont.bodySemibold(14))
+                            .foregroundStyle(Color.loomText)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.loomSurface)
+            .clipShape(RoundedRectangle(cornerRadius: LoomRadius.group, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: LoomRadius.group, style: .continuous)
+                    .stroke(Color.brand500.opacity(0.18), lineWidth: 1)
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var threadLines: [String] {
+        var lines: [String] = []
+        let calendar = Calendar.current
+        let now = Date()
+        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) else { return lines }
+
+        // Most recent task finished ahead of its deadline.
+        if let earlyWin = tasks
+            .filter({ $0.isComplete })
+            .compactMap({ task -> (LoomTask, Date)? in
+                guard let done = task.completedAt, done >= weekAgo, done < task.deadline else { return nil }
+                return (task, done)
+            })
+            .max(by: { $0.1 < $1.1 }) {
+            let lead = earlyWin.0.deadline.timeIntervalSince(earlyWin.1)
+            let leadLabel: String
+            if lead >= 172_800 { leadLabel = "\(Int(lead) / 86_400) days early" }
+            else if lead >= 86_400 { leadLabel = "a day early" }
+            else if lead >= 3600 { leadLabel = "\(Int(lead) / 3600)h early" }
+            else { leadLabel = "ahead of the deadline" }
+            lines.append("Finished \(earlyWin.0.title) \(leadLabel)")
+        }
+
+        // Attendance: of the last 7 days that had planned blocks, how many
+        // saw you actually show up (a session started that day).
+        let weekDays = (0..<7).compactMap {
+            calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: now))
+        }
+        let plannedDays = weekDays.filter { day in
+            blocks.contains { calendar.isDate($0.startTime, inSameDayAs: day) }
+        }
+        if plannedDays.count >= 2 {
+            let showedUp = plannedDays.filter { day in
+                sessions.contains { calendar.isDate($0.startedAt, inSameDayAs: day) }
+            }.count
+            if showedUp > 0 {
+                lines.append("Showed up \(showedUp) of \(plannedDays.count) planned days")
+            }
+        }
+
+        return Array(lines.prefix(2))
     }
 
     // MARK: Estimate heat
@@ -273,6 +512,7 @@ struct WeaveView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(heat >= 1.2 ? Color.workColor : Color.personalColor)
                     .padding(.top, 1)
+                    .accessibilityHidden(true)
                 Text(heatLine(heat))
                     .font(AppFont.body(13))
                     .foregroundStyle(Color.loomText)
@@ -311,6 +551,7 @@ struct WeaveView: View {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.personalColor)
+                        .accessibilityHidden(true)
                     Text("Finished this week")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -319,12 +560,14 @@ struct WeaveView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
                 ForEach(wins) { task in
                     HStack(spacing: 10) {
                         Circle()
                             .fill(task.context.color)
                             .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
                         Text(task.title)
                             .font(AppFont.bodySemibold(14))
                             .foregroundStyle(Color.loomText)
@@ -336,6 +579,7 @@ struct WeaveView: View {
                                 .foregroundStyle(Color.loomSubtle)
                         }
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
             .padding(16)
@@ -346,31 +590,55 @@ struct WeaveView: View {
     }
 }
 
+// MARK: - Today column glow
+
+/// The breathing accent-tinted backdrop behind today's tapestry column.
+private struct TodayColumnGlow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.brand500.opacity(0.14))
+            .shadow(color: Color.brand500.opacity(0.3), radius: 16)
+            .padding(.horizontal, -3)
+            .padding(.vertical, -6)
+            .opacity(breathing ? 1 : 0.55)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                    breathing = true
+                }
+            }
+    }
+}
+
 // MARK: - Stat tile
 
 private struct WeaveStatTile: View {
     let value: String
     let label: String
-    let icon: String
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(tint)
+        VStack(spacing: 3) {
             Text(value)
-                .font(AppFont.heading(17))
-                .foregroundStyle(Color.loomText)
+                .font(AppFont.mono(20))
+                .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(AppFont.caption(10))
+                .font(AppFont.caption(11))
                 .foregroundStyle(Color.loomSubtle)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
         .background(Color.loomSurface)
         .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                .stroke(Color.loomBorder, lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
     }
 }

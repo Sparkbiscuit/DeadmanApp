@@ -13,7 +13,6 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \LoomTask.deadline) private var tasks: [LoomTask]
     @Query(sort: \Reminder.dueDate) private var reminders: [Reminder]
-    @Query private var workSessions: [WorkSession]
     @Binding var replanSummary: CatchUpSummary
     @Binding var sessionRequestTaskId: UUID?
     @State private var showingCapture = false
@@ -32,6 +31,7 @@ struct TaskListView: View {
                     VStack(spacing: 0) {
                         headerSection
                         heroSection
+                        upNextThreadSection
                         pushBanner
                         statsBar
                         replanBanner
@@ -40,16 +40,14 @@ struct TaskListView: View {
                         taskSections
                         completedSection
                     }
-                    .padding(.bottom, 100)
+                    .padding(.bottom, 110)
                 }
-                .background(Color.loomBackground)
-
-                captureButton
+                .hearthScreen()
             }
             .sheet(isPresented: $showingCapture) {
                 CaptureSheetView()
             }
-            .sheet(item: $workSessionTask) { task in
+            .fullScreenCover(item: $workSessionTask) { task in
                 WorkSessionView(task: task) { completed in
                     workSessionTask = nil
                     if completed {
@@ -91,27 +89,20 @@ struct TaskListView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(greeting)
-                    .font(AppFont.caption(12))
-                    .foregroundStyle(Color.loomSubtle)
-                Text("Your Tasks")
-                    .font(AppFont.title(26))
-                    .foregroundStyle(Color.loomText)
+                    .font(AppFont.caption(13))
+                    .foregroundStyle(Color.brand300)
+                HearthTitle(text: "Your Tasks", size: 32)
             }
             Spacer()
-            // Start-based streak: days you *began* — starting is the actual
-            // battle, so that's what earns the flame. A "1" is noise; the
-            // thread appears once there's something to protect.
-            if startStreak >= 2 {
-                StreakBadge(days: startStreak)
+            // The flame pill counts what's alive on the loom right now.
+            let activeCount = tasks.filter { !$0.isComplete }.count
+            if activeCount > 0 {
+                ActiveCountPill(count: activeCount)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 8)
-    }
-
-    private var startStreak: Int {
-        StreakCalculator.startStreak(startDates: workSessions.map(\.startedAt))
     }
 
     private var greeting: String {
@@ -127,7 +118,8 @@ struct TaskListView: View {
     /// running block if there is one, else the next upcoming block, with a
     /// single big Start button. Opening the app should never require a decision.
     private var heroSection: some View {
-        TimelineView(.periodic(from: .now, by: 30)) { timeline in
+        // One-second cadence: the hero ring carries a live mm:ss countdown.
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
             if let block = currentOrNextBlock(at: timeline.date), let task = block.task {
                 RightNowCard(
                     task: task,
@@ -137,8 +129,70 @@ struct TaskListView: View {
                     onPush: { choice in push(task: task, choice: choice) }
                 )
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
+                .padding(.bottom, 4)
             }
+        }
+    }
+
+    // MARK: - Up next (the glowing thread)
+
+    /// The thread of light connecting "now" to what comes after: the next few
+    /// scheduled blocks beyond the hero, each row's context dot breaking
+    /// through the thread.
+    @ViewBuilder
+    private var upNextThreadSection: some View {
+        let now = Date()
+        let heroBlock = currentOrNextBlock(at: now)
+        let upcoming = tasks
+            .filter { !$0.isComplete }
+            .flatMap(\.scheduledBlocks)
+            .filter { !$0.isComplete && $0.endTime > now && $0.id != heroBlock?.id }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(3)
+
+        if !upcoming.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("UP NEXT")
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(Color.loomSubtle)
+                    .kerning(1.2)
+                    .padding(.leading, 34)
+                    .padding(.bottom, 10)
+
+                ZStack(alignment: .topLeading) {
+                    // The thread itself: accentSoft fading to nothing.
+                    LinearGradient(
+                        colors: [Color.brand300.opacity(0.75), Color.brand300.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .hearthGlow(.brand500, radius: 5, opacity: 0.5)
+                    .padding(.leading, 6)
+                    .padding(.bottom, 10)
+                    // Reach up past the section header to the hero card's
+                    // glowing corner, so now → next reads as one thread.
+                    .padding(.top, -44)
+                    .accessibilityHidden(true)
+
+                    VStack(spacing: 10) {
+                        ForEach(Array(upcoming)) { block in
+                            if let task = block.task {
+                                UpNextThreadRow(task: task, block: block) {
+                                    workSessionTask = task
+                                } onEdit: {
+                                    editingTask = task
+                                }
+                            }
+                        }
+                    }
+                    .padding(.leading, 20)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 16)
         }
     }
 
@@ -152,6 +206,8 @@ struct TaskListView: View {
                 .onTapGesture {
                     withAnimation { pushNote = nil }
                 }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Dismisses this message")
         }
     }
 
@@ -192,6 +248,7 @@ struct TaskListView: View {
             context: modelContext
         )
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
 
         withAnimation {
@@ -242,6 +299,7 @@ struct TaskListView: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.loomRed)
+                        .accessibilityHidden(true)
                     Text("Needs a decision")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -250,6 +308,7 @@ struct TaskListView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
 
                 Text("These slipped past their deadline. It happens — pick a path for each and move on.")
                     .font(AppFont.body(12))
@@ -278,9 +337,10 @@ struct TaskListView: View {
     /// Deliberately dropping a task is a decision, not a failure.
     private func letGo(_ task: LoomTask) {
         withAnimation {
-            modelContext.delete(task)
+            deleteTask(task, context: modelContext)
         }
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
@@ -374,6 +434,8 @@ struct TaskListView: View {
             .onTapGesture {
                 withAnimation { replanSummary = CatchUpSummary() }
             }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Dismisses this message")
         }
     }
 
@@ -388,6 +450,7 @@ struct TaskListView: View {
                     Image(systemName: "bell.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.brand500)
+                        .accessibilityHidden(true)
                     Text("Reminders")
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -396,6 +459,7 @@ struct TaskListView: View {
                         .foregroundStyle(Color.loomFaint)
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
 
@@ -481,6 +545,7 @@ struct TaskListView: View {
                     Image(systemName: context.icon)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(context.color)
+                        .accessibilityHidden(true)
                     Text(context.rawValue)
                         .font(AppFont.heading(15))
                         .foregroundStyle(Color.loomText)
@@ -492,13 +557,16 @@ struct TaskListView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.loomFaint)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(context.rawValue), \(tasks.count) tasks")
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
 
-            if isExpanded {
+            CollapsibleSectionBody(isExpanded: isExpanded) {
                 VStack(spacing: 10) {
                     ForEach(tasks) { task in
                         TaskRowView(
@@ -510,8 +578,6 @@ struct TaskListView: View {
                         .padding(.horizontal, 20)
                     }
                 }
-                .padding(.bottom, 16)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
@@ -533,6 +599,7 @@ struct TaskListView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Color.personalColor)
+                            .accessibilityHidden(true)
                         Text("Completed")
                             .font(AppFont.heading(15))
                             .foregroundStyle(Color.loomText)
@@ -544,13 +611,16 @@ struct TaskListView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color.loomFaint)
                             .rotationEffect(.degrees(showCompleted ? 90 : 0))
+                            .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Completed, \(completed.count + completedReminders.count) items")
+                .accessibilityValue(showCompleted ? "Expanded" : "Collapsed")
 
-                if showCompleted {
+                CollapsibleSectionBody(isExpanded: showCompleted) {
                     VStack(spacing: 10) {
                         ForEach(completed.sorted {
                             ($0.completedAt ?? $0.deadline) > ($1.completedAt ?? $1.deadline)
@@ -561,7 +631,7 @@ struct TaskListView: View {
                                 }
                             } onDelete: {
                                 withAnimation {
-                                    modelContext.delete(task)
+                                    deleteTask(task, context: modelContext)
                                 }
                                 scheduleDidChange(context: modelContext)
                             }
@@ -578,8 +648,6 @@ struct TaskListView: View {
                             .padding(.horizontal, 20)
                         }
                     }
-                    .padding(.bottom, 16)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -608,26 +676,36 @@ struct TaskListView: View {
                 modelContext.delete(block)
             }
         }
+        // Persist the released blocks immediately — unsaved deletes have
+        // historically resurfaced as orphaned "Unknown Task" rows.
+        try? modelContext.save()
         celebrationTask = task
         CalendarExportService.syncIfEnabled(context: modelContext)
+        GoogleCalendarService.exportIfEnabled(context: modelContext)
         scheduleDidChange(context: modelContext)
     }
 
-    // MARK: - Capture FAB
+}
 
-    private var captureButton: some View {
-        Button {
-            showingCapture = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(Color.brand500, in: Circle())
-                .shadow(color: Color.brand500.opacity(0.33), radius: 10, y: 10)
+// MARK: - Collapsible section body
+
+/// The stable clipping frame that makes a disclosure's rows fold up into the
+/// header when collapsed: without it, the removed rows slide up across the
+/// whole screen instead of disappearing under the disclosure. Every
+/// expandable section on this screen should collapse through this wrapper.
+private struct CollapsibleSectionBody<Content: View>: View {
+    let isExpanded: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isExpanded {
+                content
+                    .padding(.bottom, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(.trailing, 20)
-        .padding(.bottom, 24)
+        .clipped()
     }
 }
 
@@ -650,35 +728,121 @@ private struct StatPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color.loomSurface2, in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 }
 
-// MARK: - Streak Badge
+// MARK: - Active count pill
 
-/// Days-you-started counter with mend days built in (see StreakCalculator) —
-/// momentum without the shame mechanics of completion streaks.
-private struct StreakBadge: View {
-    let days: Int
+/// Flame-and-count capsule in the header: how many tasks are on the loom.
+private struct ActiveCountPill: View {
+    let count: Int
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.brand500)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("\(days)")
-                    .font(AppFont.heading(15))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.brand300)
+            Text("\(count)")
+                .font(AppFont.mono(14))
+                .foregroundStyle(Color.brand300)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .background(Color.brand500.opacity(0.12), in: Capsule())
+        .overlay(Capsule().stroke(Color.brand500.opacity(0.35), lineWidth: 1))
+        .hearthGlow(.brand500, radius: 12, opacity: 0.3)
+        .accessibilityLabel("\(count) active tasks")
+    }
+}
+
+// MARK: - Thread connector
+
+/// The prototype's corner-glow path (`M1 0 V54 Q1 76 23 76 H86`): a vertical
+/// drop from the hero card that curves into the "Up next" list.
+private struct ThreadConnector: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 1, y: 0))
+        path.addLine(to: CGPoint(x: 1, y: 54))
+        path.addQuadCurve(to: CGPoint(x: 23, y: 76), control: CGPoint(x: 1, y: 76))
+        path.addLine(to: CGPoint(x: 86, y: 76))
+        return path
+    }
+}
+
+// MARK: - Up next thread row
+
+/// One bead on the thread of light: context dot breaking through the line,
+/// task title, meta line, and a mono start-time badge.
+private struct UpNextThreadRow: View {
+    let task: LoomTask
+    let block: ScheduledBlock
+    var onStart: () -> Void
+    var onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(task.title)
+                    .font(AppFont.cardTitle(14))
                     .foregroundStyle(Color.loomText)
-                Text("day streak")
-                    .font(AppFont.caption(9))
-                    .foregroundStyle(Color.loomSubtle)
+                    .lineLimit(1)
+                Text(metaLine)
+                    .font(AppFont.caption(11))
+                    .foregroundStyle(isUrgent ? Color.loomRed : Color.loomSubtle)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(TimeFormatter.clock.string(from: block.startTime))
+                .font(AppFont.mono(12))
+                .foregroundStyle(task.context.displayColor)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous)
+                .stroke(Color.loomBorder, lineWidth: 1)
+        )
+        // The context dot breaks through the thread at the row's heart line.
+        .overlay(alignment: .leading) {
+            Circle()
+                .fill(task.context.color)
+                .frame(width: 10, height: 10)
+                .hearthGlow(task.context.color, radius: 7, opacity: 0.8)
+                .offset(x: -18)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: LoomRadius.row, style: .continuous))
+        .onTapGesture(perform: onEdit)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .contextMenu {
+            Button(action: onStart) {
+                Label("Start Session", systemImage: "play.fill")
+            }
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.loomSurface, in: Capsule())
-        .overlay(Capsule().stroke(Color.brand500.opacity(0.25), lineWidth: 1))
-        .accessibilityLabel("\(days) day start streak")
+    }
+
+    private var isUrgent: Bool {
+        task.deadline.timeIntervalSinceNow < 24 * 3600
+    }
+
+    private var metaLine: String {
+        var parts = [task.context.rawValue]
+        let due = CountdownFormatter.deadlineString(from: Date(), to: task.deadline)
+            .replacingOccurrences(of: "Due", with: "due")
+        parts.append(due)
+        if task.progressPercent > 0 {
+            parts.append("\(task.progressPercent)%")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -699,62 +863,65 @@ private struct RightNowCard: View {
     private var isActive: Bool { block.startTime <= now }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isActive ? Color.loomRed : task.context.color)
-                    .frame(width: 8, height: 8)
-                Text(isActive ? "RIGHT NOW" : "UP NEXT")
-                    .font(AppFont.caption(11))
-                    .foregroundStyle(isActive ? Color.loomRed : task.context.color)
-                    .kerning(0.8)
-                Spacer()
-                Text(task.context.rawValue)
-                    .contextTag(task.context)
-            }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                // The held flame in miniature: ring + live countdown, with the
+                // same pulsing halo as the full-size session flame.
+                ZStack {
+                    HearthProgressRing(progress: ringProgress, size: 74, lineWidth: 7, showsHalo: isActive)
+                    VStack(spacing: 0) {
+                        Text(ringCountdown)
+                            .font(AppFont.mono(15))
+                            .foregroundStyle(Color.loomText)
+                            .contentTransition(.numericText())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                        Text(isActive ? "LEFT" : "UNTIL")
+                            .font(AppFont.caption(8))
+                            .foregroundStyle(Color.brand300)
+                            .kerning(1)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .frame(width: 88, height: 88)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(isActive ? "Time left in block" : "Time until block")
+                .accessibilityValue(ringCountdown)
 
-            Text(task.title)
-                .font(AppFont.title(22))
-                .foregroundStyle(Color.loomText)
-                .lineLimit(2)
-
-            Text(timelineLabel)
-                .font(AppFont.monoMedium(12))
-                .foregroundStyle(Color.loomSubtle)
-
-            if isActive {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.loomSurface3)
-                            .frame(height: 4)
-                        Capsule()
-                            .fill(task.context.color)
-                            .frame(width: geo.size.width * elapsedFraction, height: 4)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(isActive ? "RIGHT NOW" : "UP NEXT")
+                        .font(AppFont.caption(11))
+                        .foregroundStyle(Color.brand300)
+                        .kerning(1.4)
+                    Text(task.title)
+                        .font(AppFont.cardTitle(18))
+                        .foregroundStyle(Color.loomText)
+                        .lineLimit(2)
+                    if let step = task.firstStep, !step.isEmpty {
+                        Text("First step: \(step)")
+                            .font(AppFont.bodySemibold(12))
+                            .foregroundStyle(Color.loomSubtle)
+                            .lineLimit(2)
+                    } else {
+                        Text(timelineLabel)
+                            .font(AppFont.monoMedium(11))
+                            .foregroundStyle(Color.loomSubtle)
                     }
                 }
-                .frame(height: 4)
-            }
+                .accessibilityElement(children: .combine)
 
-            if let step = task.firstStep, !step.isEmpty {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.brand500)
-                        .padding(.top, 2)
-                    Text("First step: \(step)")
-                        .font(AppFont.bodySemibold(13))
-                        .foregroundStyle(Color.loomText)
-                }
+                Spacer(minLength: 0)
             }
 
             Button(action: onStart) {
                 HStack(spacing: 8) {
                     Image(systemName: "play.fill")
                         .font(.system(size: 14, weight: .semibold))
-                    Text(isActive ? "Start Session" : "Start Early")
+                    Text(isActive ? "Continue session" : "Start early")
                 }
-                .primaryButtonStyle(fill: task.context.color)
+                .primaryButtonStyle()
             }
 
             Button {
@@ -768,13 +935,62 @@ private struct RightNowCard: View {
             .buttonStyle(.plain)
         }
         .padding(18)
-        .background(Color.loomSurface)
-        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
-                .stroke(task.context.color.opacity(0.35), lineWidth: 1.5)
+        // A soft ember pooled in the top-right corner (applied before the
+        // gradient fill so it renders in front of it, behind the content)…
+        .background(alignment: .topTrailing) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.brand500.opacity(0.3), .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 75
+                    )
+                )
+                .frame(width: 150, height: 150)
+                .blur(radius: 10)
+                .offset(x: 30, y: -40)
+        }
+        // …over accent light banked into the top-left one.
+        .background(
+            LinearGradient(
+                stops: [
+                    .init(color: Color.brand500.opacity(0.22), location: 0),
+                    .init(color: Color(hex: 0x1A1A1E), location: 0.58)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         )
-        .shadow(color: task.context.color.opacity(0.12), radius: 12, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.hero, style: .continuous)
+                .stroke(Color.brand300.opacity(0.28), lineWidth: 1)
+        )
+        // The thread's origin: light rims the card's bottom-left corner —
+        // down the left edge, around the corner, along the bottom — and the
+        // Up Next thread below picks it up. "Now → next" is one thread.
+        .overlay(alignment: .bottomLeading) {
+            ThreadConnector()
+                .stroke(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.brand300.opacity(0), location: 0),
+                            .init(color: Color.brand300.opacity(0.95), location: 0.45),
+                            .init(color: Color.brand300.opacity(0), location: 1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                )
+                .frame(width: 90, height: 78)
+                .offset(x: -0.5, y: 1.5)
+                .shadow(color: Color.brand500.opacity(0.6), radius: 6)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .shadow(color: Color.brand500.opacity(0.22), radius: 30, y: 12)
         .confirmationDialog("Can't right now?", isPresented: $showPushOptions, titleVisibility: .visible) {
             Button("Push 30 minutes") { onPush(.thirtyMinutes) }
             Button("Push 1 hour") { onPush(.oneHour) }
@@ -789,6 +1005,23 @@ private struct RightNowCard: View {
         let total = block.endTime.timeIntervalSince(block.startTime)
         guard total > 0 else { return 0 }
         return min(1, max(0, now.timeIntervalSince(block.startTime) / total))
+    }
+
+    /// Active: how far through the block the flame has burned. Upcoming: a
+    /// faint spark so the ring never reads as empty.
+    private var ringProgress: Double {
+        isActive ? elapsedFraction : 0.03
+    }
+
+    /// mm:ss (or h:mm:ss) left in the block when active, or until it starts.
+    private var ringCountdown: String {
+        let target = isActive ? block.endTime : block.startTime
+        let seconds = max(0, Int(target.timeIntervalSince(now)))
+        if seconds >= 3600 * 10 {
+            // Far-future block: mm:ss would be absurd, show hours.
+            return "\(seconds / 3600)h"
+        }
+        return CountdownFormatter.timerString(seconds: seconds)
     }
 
     private var timelineLabel: String {
@@ -837,6 +1070,7 @@ private struct OverdueTriageRow: View {
                         .foregroundStyle(task.context.color)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             HStack(spacing: 8) {
                 TriageButton(
@@ -924,11 +1158,14 @@ private struct ReminderRow: View {
     var onComplete: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "bell.fill")
                 .font(.system(size: 13))
                 .foregroundStyle(isOverdue ? Color.loomRed : Color.brand500)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reminder.title)
@@ -939,6 +1176,7 @@ private struct ReminderRow: View {
                     .font(AppFont.caption(11))
                     .foregroundStyle(isOverdue ? Color.loomRed : Color.loomSubtle)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -948,15 +1186,25 @@ private struct ReminderRow: View {
                     .foregroundStyle(Color.loomFaint)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Mark reminder complete")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.loomSurface)
         .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
         .contextMenu {
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete this reminder?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(reminder.title)\" goes away for good. This can't be undone.")
         }
     }
 
@@ -987,11 +1235,14 @@ private struct CompletedTaskRow: View {
     var onRestore: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 18))
                 .foregroundStyle(Color.personalColor)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
@@ -1010,6 +1261,7 @@ private struct CompletedTaskRow: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -1019,6 +1271,8 @@ private struct CompletedTaskRow: View {
                     .foregroundStyle(Color.loomSubtle)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Restore task")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -1028,9 +1282,17 @@ private struct CompletedTaskRow: View {
             Button(action: onRestore) {
                 Label("Restore", systemImage: "arrow.uturn.backward")
             }
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete Permanently", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete permanently?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(task.title)\" and its history go away for good. This can't be undone.")
         }
     }
 }
@@ -1042,11 +1304,14 @@ private struct CompletedReminderRow: View {
     var onRestore: () -> Void
     var onDelete: () -> Void
 
+    @State private var confirmDelete = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "bell.fill")
                 .font(.system(size: 15))
                 .foregroundStyle(Color.loomFaint)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(reminder.title)
@@ -1058,6 +1323,7 @@ private struct CompletedReminderRow: View {
                     .font(AppFont.caption(11))
                     .foregroundStyle(Color.loomFaint)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -1067,6 +1333,8 @@ private struct CompletedReminderRow: View {
                     .foregroundStyle(Color.loomSubtle)
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle().inset(by: -12))
+            .accessibilityLabel("Restore reminder")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -1076,9 +1344,17 @@ private struct CompletedReminderRow: View {
             Button(action: onRestore) {
                 Label("Restore", systemImage: "arrow.uturn.backward")
             }
-            Button(role: .destructive, action: onDelete) {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
                 Label("Delete Permanently", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete permanently?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("\"\(reminder.title)\" goes away for good. This can't be undone.")
         }
     }
 
@@ -1094,6 +1370,25 @@ private struct CompletedReminderRow: View {
         formatter.dateFormat = "MMM d"
         return "\(formatter.string(from: reminder.dueDate)), \(time)"
     }
+}
+
+// MARK: - Delete
+
+/// Delete a task and everything hanging off it, explicitly. The cascade rule
+/// on `LoomTask.scheduledBlocks`/`workSessions` should handle this, but
+/// SwiftData cascades have a history of leaving children behind with a nil
+/// task — those are the "Unknown Task" ghost blocks on the Schedule. Deleting
+/// the children first and saving immediately closes that hole.
+@MainActor
+func deleteTask(_ task: LoomTask, context: ModelContext) {
+    for block in task.scheduledBlocks {
+        context.delete(block)
+    }
+    for session in task.workSessions {
+        context.delete(session)
+    }
+    context.delete(task)
+    try? context.save()
 }
 
 // MARK: - Restore
@@ -1125,5 +1420,6 @@ func restoreTask(_ task: LoomTask, context: ModelContext) {
         context: context
     )
     CalendarExportService.syncIfEnabled(context: context)
+    GoogleCalendarService.exportIfEnabled(context: context)
     scheduleDidChange(context: context)
 }

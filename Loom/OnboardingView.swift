@@ -49,13 +49,14 @@ struct OnboardingView: View {
                 }
                 .font(AppFont.caption(14))
                 .foregroundStyle(Color.loomSubtle)
+                .contentShape(Rectangle().inset(by: -14))
                 .padding(.bottom, 12)
             } else {
                 Color.clear.frame(height: 30)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.loomBackground)
+        .hearthScreen()
         .interactiveDismissDisabled()
     }
 
@@ -74,7 +75,7 @@ struct OnboardingView: View {
             stepBadge(icon: "square.and.pencil")
             Text("Capture in seconds")
                 .font(AppFont.title(24))
-                .foregroundStyle(Color.loomText)
+                .foregroundStyle(LinearGradient.hearthTitle)
                 .padding(.bottom, 10)
             Text("Add a task with a deadline and a rough effort estimate. Loom plans the work for you.")
                 .font(AppFont.body(15))
@@ -91,7 +92,7 @@ struct OnboardingView: View {
             stepBadge(icon: "sunrise.fill")
             Text("Your day")
                 .font(AppFont.title(24))
-                .foregroundStyle(Color.loomText)
+                .foregroundStyle(LinearGradient.hearthTitle)
                 .padding(.bottom, 10)
             Text("Loom only schedules work while you're awake. A sleep time past midnight is fine.")
                 .font(AppFont.body(15))
@@ -107,6 +108,7 @@ struct OnboardingView: View {
                         minute: { settings.wakeMinute }, setMinute: { settings.wakeMinute = $0 }
                     ), displayedComponents: .hourAndMinute)
                     .labelsHidden()
+                    .accessibilityLabel("Wake time")
                 }
                 Divider().overlay(Color.loomBorder).padding(.leading, 16)
                 settingRow(label: "Sleep time", icon: "moon.fill", iconColor: .schoolColor) {
@@ -115,6 +117,7 @@ struct OnboardingView: View {
                         minute: { settings.sleepMinute }, setMinute: { settings.sleepMinute = $0 }
                     ), displayedComponents: .hourAndMinute)
                     .labelsHidden()
+                    .accessibilityLabel("Sleep time")
                 }
             }
             .background(Color.loomSurface)
@@ -130,7 +133,7 @@ struct OnboardingView: View {
             stepBadge(icon: "calendar.badge.clock")
             Text("Manageable blocks")
                 .font(AppFont.title(24))
-                .foregroundStyle(Color.loomText)
+                .foregroundStyle(LinearGradient.hearthTitle)
                 .padding(.bottom, 10)
             Text("Big tasks get split into blocks this size, finishing a safe buffer before the deadline.")
                 .font(AppFont.body(15))
@@ -174,7 +177,7 @@ struct OnboardingView: View {
             stepBadge(icon: "checkmark")
             Text("Stay on pace")
                 .font(AppFont.title(24))
-                .foregroundStyle(Color.loomText)
+                .foregroundStyle(LinearGradient.hearthTitle)
                 .padding(.bottom, 10)
             Text("Miss a block? Loom replans it automatically. Everything you just set can be changed later in Settings.")
                 .font(AppFont.body(15))
@@ -196,6 +199,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.brand600)
         }
         .padding(.bottom, 24)
+        .accessibilityHidden(true)
     }
 
     private var pageDots: some View {
@@ -207,6 +211,8 @@ struct OnboardingView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: step)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(step + 1) of \(stepCount)")
     }
 
     private func settingRow<Content: View>(
