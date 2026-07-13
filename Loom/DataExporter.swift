@@ -76,7 +76,7 @@ enum DataExporter {
     static func exportJSON(context: ModelContext) throws -> Data {
         var export = Export()
 
-        export.tasks = ((try? context.fetch(FetchDescriptor<LoomTask>())) ?? []).map { task in
+        export.tasks = try context.fetch(FetchDescriptor<LoomTask>()).map { task in
             TaskRecord(
                 id: task.id,
                 title: task.title,
@@ -91,7 +91,7 @@ enum DataExporter {
                 templateId: task.templateId
             )
         }
-        export.templates = ((try? context.fetch(FetchDescriptor<TaskTemplate>())) ?? []).map { template in
+        export.templates = try context.fetch(FetchDescriptor<TaskTemplate>()).map { template in
             TemplateRecord(
                 id: template.id,
                 title: template.title,
@@ -102,7 +102,7 @@ enum DataExporter {
                 repeatUntil: template.repeatUntil
             )
         }
-        export.blocks = ((try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []).map { block in
+        export.blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).map { block in
             BlockRecord(
                 id: block.id,
                 taskId: block.task?.id,
@@ -112,7 +112,7 @@ enum DataExporter {
                 isLocked: block.isLocked
             )
         }
-        export.workSessions = ((try? context.fetch(FetchDescriptor<WorkSession>())) ?? []).map { session in
+        export.workSessions = try context.fetch(FetchDescriptor<WorkSession>()).map { session in
             SessionRecord(
                 id: session.id,
                 taskId: session.task?.id,
@@ -120,7 +120,7 @@ enum DataExporter {
                 durationSeconds: session.durationSeconds
             )
         }
-        export.reminders = ((try? context.fetch(FetchDescriptor<Reminder>())) ?? []).map { reminder in
+        export.reminders = try context.fetch(FetchDescriptor<Reminder>()).map { reminder in
             ReminderRecord(
                 id: reminder.id,
                 title: reminder.title,
@@ -128,7 +128,7 @@ enum DataExporter {
                 isComplete: reminder.isComplete
             )
         }
-        export.blockedTimes = ((try? context.fetch(FetchDescriptor<BlockedTime>())) ?? []).map { blocked in
+        export.blockedTimes = try context.fetch(FetchDescriptor<BlockedTime>()).map { blocked in
             BlockedTimeRecord(
                 id: blocked.id,
                 label: blocked.label,

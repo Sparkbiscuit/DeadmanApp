@@ -54,7 +54,7 @@ struct CaptureTaskIntent: AppIntent {
             from: Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
         )
         SchedulerService.insert(result: result, into: context)
-        try? context.save()
+        try context.save()
         scheduleDidChange(context: context, interactive: false)
 
         switch result {
