@@ -138,75 +138,15 @@ struct SchedulerService {
             allowOvernight: allowOvernight
         )
 
-        // Daily focus cap: minutes already booked per day count against the limit,
-        // and no single chunk may exceed the cap or it could never be placed.
-        let calendar = Calendar.current
-        let focusCap = settings.dailyFocusMinutes
-        let effectiveMax = focusCap > 0
-            ? min(settings.maxBlockMinutes, focusCap)
-            : settings.maxBlockMinutes
-
-        // Split remaining effort into chunks
-        let chunks = splitEffort(
-            minutes: remaining,
-            minBlock: min(settings.minBlockMinutes, effectiveMax),
-            maxBlock: effectiveMax
+        var minutesPerDay = settings.dailyFocusMinutes > 0
+            ? focusMinutesPerDay(in: allBlocks)
+            : [:]
+        return place(
+            task: task,
+            in: freeSlots,
+            settings: settings,
+            minutesPerDay: &minutesPerDay
         )
-
-        var minutesPerDay: [Date: Int] = [:]
-        if focusCap > 0 {
-            for block in allBlocks where !block.isComplete {
-                let day = calendar.startOfDay(for: block.startTime)
-                minutesPerDay[day, default: 0] += block.durationMinutes
-            }
-        }
-
-        // Assign chunks to earliest available slots
-        var newBlocks: [ScheduledBlock] = []
-        var slotIndex = 0
-        var slotOffset: TimeInterval = 0
-
-        for chunk in chunks {
-            var placed = false
-            while slotIndex < freeSlots.count {
-                let slot = freeSlots[slotIndex]
-                let slotStart = slot.start.addingTimeInterval(slotOffset)
-                let available = slot.end.timeIntervalSince(slotStart) / 60.0
-                let day = calendar.startOfDay(for: slotStart)
-                let overFocusCap = focusCap > 0
-                    && minutesPerDay[day, default: 0] + chunk > focusCap
-
-                if available >= Double(chunk) && !overFocusCap {
-                    let block = ScheduledBlock(
-                        task: task,
-                        startTime: slotStart,
-                        durationMinutes: chunk
-                    )
-                    newBlocks.append(block)
-                    minutesPerDay[day, default: 0] += chunk
-                    slotOffset += TimeInterval(chunk * 60)
-                    placed = true
-                    break
-                } else {
-                    slotIndex += 1
-                    slotOffset = 0
-                }
-            }
-            if !placed { break }
-        }
-
-        let scheduledMinutes = newBlocks.reduce(0) { $0 + $1.durationMinutes }
-
-        if scheduledMinutes == 0 {
-            return .noSlots
-        } else if scheduledMinutes < remaining {
-            return .partialFit(
-                scheduled: newBlocks,
-                unscheduledMinutes: remaining - scheduledMinutes
-            )
-        } else {
-            return .success(blocks: newBlocks)
-        }
     }
 
     /// Reschedule remaining effort for a task — the single invalidation path,
@@ -288,23 +228,74 @@ struct SchedulerService {
             }
         }
 
-        let start = now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
-        for task in active {
-            let result = schedule(
-                task: task,
-                allBlocks: kept,
-                blockedTimes: blockedTimes,
-                busyEvents: busyEvents,
+        let start = roundUpToFiveMinutes(
+            now.addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+        )
+        let latestWindowEnd = active
+            .map { $0.deadline.addingTimeInterval(-Double(settings.deadlineBufferMinutes) * 60) }
+            .max() ?? start
+
+        // Build the shared free-time timeline once. Each task sees the same
+        // deadline-clipped slots it did before; placed blocks are subtracted
+        // incrementally so later-deadline work cannot overlap earlier work.
+        var occupied = kept
+            .filter { !$0.isComplete }
+            .map { Interval(start: $0.startTime, end: $0.endTime) }
+        if start < latestWindowEnd {
+            for blocked in blockedTimes {
+                occupied.append(contentsOf: blocked
+                    .occurrences(from: start, to: latestWindowEnd)
+                    .map { Interval(start: $0.start, end: $0.end) })
+            }
+            for event in busyEvents
+                where event.endTime > start && event.startTime < latestWindowEnd {
+                occupied.append(Interval(start: event.startTime, end: event.endTime))
+            }
+        }
+        occupied = mergeIntervals(occupied)
+        var freeSlots = start < latestWindowEnd
+            ? findFreeSlots(
+                from: start,
+                to: latestWindowEnd,
+                occupied: occupied,
                 settings: settings,
-                from: start
+                allowOvernight: false
             )
+            : []
+        var minutesPerDay = settings.dailyFocusMinutes > 0
+            ? focusMinutesPerDay(in: kept)
+            : [:]
+
+        for task in active {
+            let windowEnd = task.deadline.addingTimeInterval(
+                -Double(settings.deadlineBufferMinutes) * 60
+            )
+            let taskSlots = freeSlots.compactMap { slot -> Interval? in
+                let clipped = Interval(
+                    start: max(slot.start, start),
+                    end: min(slot.end, windowEnd)
+                )
+                return clipped.durationMinutes >= Double(settings.minBlockMinutes)
+                    ? clipped
+                    : nil
+            }
+            let result = start < windowEnd
+                ? place(
+                    task: task,
+                    in: taskSlots,
+                    settings: settings,
+                    minutesPerDay: &minutesPerDay
+                )
+                : .noSlots
             switch result {
             case .success(let blocks):
                 for block in blocks { context.insert(block) }
                 kept.append(contentsOf: blocks)
+                subtract(blocks: blocks, from: &freeSlots)
             case .partialFit(let blocks, _):
                 for block in blocks { context.insert(block) }
                 kept.append(contentsOf: blocks)
+                subtract(blocks: blocks, from: &freeSlots)
                 summary.unschedulableTasks += 1
             case .noSlots:
                 if task.remainingMinutes > 0 {
@@ -469,13 +460,33 @@ struct SchedulerService {
         settings: UserSettings,
         now: Date = Date()
     ) -> Double? {
+        pressureAndAvailableMinutes(
+            for: task,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            now: now
+        )?.pressure
+    }
+
+    /// Pressure plus the free-minute denominator used to calculate it. Pace
+    /// consumers that display both values can share one free-slot pass.
+    static func pressureAndAvailableMinutes(
+        for task: LoomTask,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime] = [],
+        busyEvents: [BusyEvent] = [],
+        settings: UserSettings,
+        now: Date = Date()
+    ) -> (pressure: Double, availableMinutes: Int)? {
         let remaining = task.remainingMinutes
         guard !task.isComplete, remaining > 0 else { return nil }
 
         let windowEnd = task.deadline.addingTimeInterval(
             -Double(settings.deadlineBufferMinutes) * 60
         )
-        guard windowEnd > now else { return .infinity }
+        guard windowEnd > now else { return (.infinity, 0) }
 
         let available = availableMinutes(
             from: now,
@@ -486,8 +497,8 @@ struct SchedulerService {
             busyEvents: busyEvents,
             settings: settings
         )
-        guard available > 0 else { return .infinity }
-        return Double(remaining) / Double(available)
+        guard available > 0 else { return (.infinity, 0) }
+        return (Double(remaining) / Double(available), available)
     }
 
     // MARK: - Recurring tasks
@@ -572,6 +583,154 @@ struct SchedulerService {
 
         var durationMinutes: Double {
             end.timeIntervalSince(start) / 60.0
+        }
+    }
+
+    /// Assign chunks to the earliest available slots. Daily focus accounting
+    /// follows calendar-day boundaries even when an awake window crosses them.
+    private static func place(
+        task: LoomTask,
+        in freeSlots: [Interval],
+        settings: UserSettings,
+        minutesPerDay: inout [Date: Double]
+    ) -> ScheduleResult {
+        let remaining = task.remainingMinutes
+        guard remaining > 0 else { return .success(blocks: []) }
+
+        let focusCap = settings.dailyFocusMinutes
+        let effectiveMax = focusCap > 0
+            ? min(settings.maxBlockMinutes, focusCap)
+            : settings.maxBlockMinutes
+        let chunks = splitEffort(
+            minutes: remaining,
+            minBlock: min(settings.minBlockMinutes, effectiveMax),
+            maxBlock: effectiveMax
+        )
+
+        var newBlocks: [ScheduledBlock] = []
+        var slotIndex = 0
+        var slotOffset: TimeInterval = 0
+
+        for chunk in chunks {
+            var placed = false
+            while slotIndex < freeSlots.count {
+                let slot = freeSlots[slotIndex]
+                let slotStart = slot.start.addingTimeInterval(slotOffset)
+                let available = slot.end.timeIntervalSince(slotStart) / 60.0
+                let portions = minutesByDay(
+                    from: slotStart,
+                    to: slotStart.addingTimeInterval(TimeInterval(chunk * 60))
+                )
+                let overFocusCap = focusCap > 0 && portions.contains { day, minutes in
+                    minutesPerDay[day, default: 0] + minutes > Double(focusCap)
+                }
+
+                if available >= Double(chunk) && !overFocusCap {
+                    let block = ScheduledBlock(
+                        task: task,
+                        startTime: slotStart,
+                        durationMinutes: chunk
+                    )
+                    newBlocks.append(block)
+                    for (day, minutes) in portions {
+                        minutesPerDay[day, default: 0] += minutes
+                    }
+                    slotOffset += TimeInterval(chunk * 60)
+                    placed = true
+                    break
+                } else {
+                    slotIndex += 1
+                    slotOffset = 0
+                }
+            }
+            if !placed { break }
+        }
+
+        let scheduledMinutes = newBlocks.reduce(0) { $0 + $1.durationMinutes }
+        if scheduledMinutes == 0 {
+            return .noSlots
+        } else if scheduledMinutes < remaining {
+            return .partialFit(
+                scheduled: newBlocks,
+                unscheduledMinutes: remaining - scheduledMinutes
+            )
+        } else {
+            return .success(blocks: newBlocks)
+        }
+    }
+
+    /// Focus usage from existing blocks, split at every local midnight rather
+    /// than charging an overnight block entirely to its start date.
+    private static func focusMinutesPerDay(
+        in blocks: [ScheduledBlock]
+    ) -> [Date: Double] {
+        var result: [Date: Double] = [:]
+        for block in blocks where !block.isComplete {
+            for (day, minutes) in minutesByDay(from: block.startTime, to: block.endTime) {
+                result[day, default: 0] += minutes
+            }
+        }
+        return result
+    }
+
+    private static func minutesByDay(from start: Date, to end: Date) -> [(Date, Double)] {
+        guard start < end else { return [] }
+        let calendar = Calendar.current
+        var portions: [(Date, Double)] = []
+        var cursor = start
+
+        while cursor < end {
+            let day = calendar.startOfDay(for: cursor)
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            let portionEnd = min(end, nextDay)
+            portions.append((day, portionEnd.timeIntervalSince(cursor) / 60.0))
+            cursor = portionEnd
+        }
+        return portions
+    }
+
+    /// Coalesce the initially occupied timeline once before free-slot
+    /// subtraction. Touching intervals are equivalent to one continuous hold.
+    private static func mergeIntervals(_ intervals: [Interval]) -> [Interval] {
+        let sorted = intervals
+            .filter { $0.start < $0.end }
+            .sorted { $0.start < $1.start }
+        guard var current = sorted.first else { return [] }
+
+        var merged: [Interval] = []
+        for interval in sorted.dropFirst() {
+            if interval.start <= current.end {
+                current = Interval(start: current.start, end: max(current.end, interval.end))
+            } else {
+                merged.append(current)
+                current = interval
+            }
+        }
+        merged.append(current)
+        return merged
+    }
+
+    /// Remove newly placed blocks from the shared rebalance timeline without
+    /// rebuilding all occupied intervals and free slots for the next task.
+    private static func subtract(
+        blocks: [ScheduledBlock],
+        from freeSlots: inout [Interval]
+    ) {
+        for block in blocks {
+            let occupied = Interval(start: block.startTime, end: block.endTime)
+            freeSlots = freeSlots.flatMap { slot in
+                guard occupied.start < slot.end, occupied.end > slot.start else {
+                    return [slot]
+                }
+                var remainder: [Interval] = []
+                if occupied.start > slot.start {
+                    remainder.append(Interval(start: slot.start, end: occupied.start))
+                }
+                if occupied.end < slot.end {
+                    remainder.append(Interval(start: occupied.end, end: slot.end))
+                }
+                return remainder
+            }
         }
     }
 

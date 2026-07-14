@@ -28,6 +28,7 @@ enum GoogleAuthError: Error {
     case notConnected
     /// The refresh token was revoked or expired — the user must reconnect.
     case needsReconnect
+    case keychain(OSStatus)
 }
 
 // MARK: - Keychain store
@@ -50,15 +51,20 @@ enum GoogleTokenStore {
         return try? JSONDecoder().decode(GoogleTokens.self, from: data)
     }
 
-    static func save(_ tokens: GoogleTokens) {
-        guard let data = try? JSONEncoder().encode(tokens) else { return }
+    static func save(_ tokens: GoogleTokens) throws {
+        let data = try JSONEncoder().encode(tokens)
         let attributes: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
             var query = baseQuery
             query[kSecValueData as String] = data
             query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-            SecItemAdd(query as CFDictionary, nil)
+            let addStatus = SecItemAdd(query as CFDictionary, nil)
+            guard addStatus == errSecSuccess else {
+                throw GoogleAuthError.keychain(addStatus)
+            }
+        } else if status != errSecSuccess {
+            throw GoogleAuthError.keychain(status)
         }
     }
 
@@ -98,6 +104,10 @@ final class GoogleOAuth: NSObject {
 
     /// Kept alive for the duration of the browser round trip.
     private var webSession: ASWebAuthenticationSession?
+    /// Actor reentrancy means every waiter must share the refresh already in
+    /// flight instead of observing the same stale Keychain value and starting
+    /// another token request.
+    private static var refreshTask: (id: UUID, task: Task<GoogleTokens, Error>)?
 
     // MARK: Connect
 
@@ -120,11 +130,13 @@ final class GoogleOAuth: NSObject {
 
         let code = try await authorizationCode(authURL: components.url!)
         let tokens = try await Self.exchangeCode(code, verifier: verifier)
-        GoogleTokenStore.save(tokens)
+        try GoogleTokenStore.save(tokens)
         return tokens
     }
 
     static func disconnect() {
+        refreshTask?.task.cancel()
+        refreshTask = nil
         GoogleTokenStore.clear()
     }
 
@@ -215,15 +227,55 @@ final class GoogleOAuth: NSObject {
     /// A usable access token, refreshing through the Keychain when stale.
     /// Throws `.needsReconnect` when the refresh token itself is dead.
     static func validAccessToken(urlSession: URLSession = .shared) async throws -> String {
-        guard var tokens = GoogleTokenStore.load() else {
+        guard let tokens = GoogleTokenStore.load() else {
             throw GoogleAuthError.notConnected
         }
         if tokens.isFresh() {
             return tokens.accessToken
         }
-        tokens = try await refresh(tokens, urlSession: urlSession)
-        GoogleTokenStore.save(tokens)
-        return tokens.accessToken
+        return try await refreshAccessToken(tokens, urlSession: urlSession)
+    }
+
+    /// Refresh after an API rejects a token. If another request already
+    /// replaced that exact token, use its result instead of refreshing again.
+    static func refreshAccessToken(
+        rejectedAccessToken: String,
+        urlSession: URLSession = .shared
+    ) async throws -> String {
+        guard let tokens = GoogleTokenStore.load() else {
+            throw GoogleAuthError.notConnected
+        }
+        if tokens.accessToken != rejectedAccessToken, tokens.isFresh() {
+            return tokens.accessToken
+        }
+        return try await refreshAccessToken(tokens, urlSession: urlSession)
+    }
+
+    private static func refreshAccessToken(
+        _ tokens: GoogleTokens,
+        urlSession: URLSession
+    ) async throws -> String {
+        if let refreshTask {
+            return try await refreshTask.task.value.accessToken
+        }
+
+        let id = UUID()
+        let task = Task {
+            let refreshed = try await refresh(tokens, urlSession: urlSession)
+            try Task.checkCancellation()
+            try GoogleTokenStore.save(refreshed)
+            return refreshed
+        }
+        refreshTask = (id, task)
+
+        do {
+            let refreshed = try await task.value
+            if refreshTask?.id == id { refreshTask = nil }
+            return refreshed.accessToken
+        } catch {
+            if refreshTask?.id == id { refreshTask = nil }
+            throw error
+        }
     }
 
     private static func tokenRequest(

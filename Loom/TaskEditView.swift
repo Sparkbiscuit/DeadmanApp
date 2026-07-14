@@ -73,7 +73,7 @@ struct TaskEditView: View {
         // A past deadline can't even be picked (the picker starts at now);
         // triage entry starts from a fresh, doable suggestion instead.
         if emphasizeDeadline && deadline <= Date() {
-            deadline = Date().addingTimeInterval(24 * 3600)
+            deadline = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
         }
     }
 

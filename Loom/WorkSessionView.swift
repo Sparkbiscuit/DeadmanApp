@@ -98,10 +98,12 @@ struct WorkSessionView: View {
             }
         }
         .onDisappear {
-            // Sheet dragged away mid-session: keep the worked time, skip the prompt.
-            if isRunning {
-                recordSession()
-            }
+            // Sheet dragged away mid-session OR from the post-stop progress
+            // prompt: keep the worked time, skip the prompt. recordSession()
+            // self-guards on elapsedSeconds > 0, so this is safe to call from
+            // any state — checking isRunning alone silently dropped sessions
+            // dismissed while the progress prompt was showing.
+            recordSession()
             UIApplication.shared.isIdleTimerDisabled = false
         }
     }
@@ -533,6 +535,10 @@ struct WorkSessionView: View {
             pauseBegan = now
             isPaused = true
         }
+        WorkSessionActivityController.setPaused(
+            isPaused,
+            elapsedWorkedSeconds: elapsedSeconds
+        )
     }
 
     private func checkMicroGoal() {

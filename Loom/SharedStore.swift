@@ -32,7 +32,7 @@ enum SharedStore {
     }
 
     static func makeContainer() throws -> ModelContainer {
-        migrateLegacyStoreIfNeeded()
+        try migrateLegacyStoreIfNeeded()
         let configuration = ModelConfiguration(url: storeURL)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
@@ -41,7 +41,7 @@ enum SharedStore {
     /// the app sandbox. Copy it into the group container once, so updating
     /// doesn't lose data. (Runs as a no-op inside the widget, whose sandbox
     /// never had a legacy store.)
-    static func migrateLegacyStoreIfNeeded() {
+    static func migrateLegacyStoreIfNeeded() throws {
         let fileManager = FileManager.default
         let destination = storeURL
         guard !fileManager.fileExists(atPath: destination.path) else { return }
@@ -49,17 +49,50 @@ enum SharedStore {
         let legacyBase = URL.applicationSupportDirectory.appendingPathComponent("default.store")
         guard fileManager.fileExists(atPath: legacyBase.path) else { return }
 
-        try? fileManager.createDirectory(
-            at: destination.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        // SQLite sidecars must travel with the main file.
-        for suffix in ["", "-shm", "-wal"] {
+        // A migration attempt that died mid-install can leave orphan sidecars
+        // at the destination (the main file installs last). With the main
+        // file absent they're garbage — clear them so this retry's moves
+        // can't collide with them.
+        for suffix in ["-shm", "-wal"] {
+            let orphan = URL(fileURLWithPath: destination.path + suffix)
+            if fileManager.fileExists(atPath: orphan.path) {
+                try? fileManager.removeItem(at: orphan)
+            }
+        }
+
+        // SQLite sidecars must travel with the main file. Install the main file
+        // last so its presence marks a complete migration.
+        let files = ["-shm", "-wal", ""].compactMap { suffix -> (URL, URL)? in
             let from = URL(fileURLWithPath: legacyBase.path + suffix)
             let to = URL(fileURLWithPath: destination.path + suffix)
-            if fileManager.fileExists(atPath: from.path) {
-                try? fileManager.copyItem(at: from, to: to)
+            return fileManager.fileExists(atPath: from.path) ? (from, to) : nil
+        }
+        let migrationId = UUID().uuidString
+        let stagedFiles = files.map { from, to in
+            (from, to, URL(fileURLWithPath: to.path + ".migration-\(migrationId)"))
+        }
+        var installedFiles: [URL] = []
+
+        do {
+            try fileManager.createDirectory(
+                at: destination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            for (from, _, staged) in stagedFiles {
+                try fileManager.copyItem(at: from, to: staged)
             }
+            for (_, to, staged) in stagedFiles {
+                try fileManager.moveItem(at: staged, to: to)
+                installedFiles.append(to)
+            }
+        } catch {
+            for (_, _, staged) in stagedFiles {
+                try? fileManager.removeItem(at: staged)
+            }
+            for installed in installedFiles {
+                try? fileManager.removeItem(at: installed)
+            }
+            throw error
         }
     }
 

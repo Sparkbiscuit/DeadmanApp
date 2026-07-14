@@ -1,26 +1,60 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
 @main
 struct LoomApp: App {
     @UIApplicationDelegateAdaptor(LoomAppDelegate.self) private var appDelegate
 
+    private static let persistenceLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Loom",
+        category: "Persistence"
+    )
+
     /// Store lives in the App Group so the widget can read it (SharedStore
     /// migrates any pre-1.2 sandbox store on first launch).
-    private let container: ModelContainer = {
+    private let container: ModelContainer
+    @State private var showingPersistenceWarning: Bool
+
+    init() {
+        let setup = Self.makeContainer()
+        container = setup.container
+        _showingPersistenceWarning = State(initialValue: setup.usedFallback)
+    }
+
+    private static func makeContainer() -> (container: ModelContainer, usedFallback: Bool) {
         do {
-            return try SharedStore.makeContainer()
+            return (try SharedStore.makeContainer(), false)
         } catch {
             // Last resort: an in-memory store beats a crash loop, and the
             // on-disk data stays untouched for the next launch to retry.
+            let persistentError = error
+            persistenceLogger.error(
+                "Persistent store could not be opened: \(String(describing: persistentError), privacy: .public)"
+            )
             let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
-            return try! ModelContainer(for: SharedStore.schema, configurations: [fallback])
+            do {
+                return (
+                    try ModelContainer(for: SharedStore.schema, configurations: [fallback]),
+                    true
+                )
+            } catch {
+                fatalError(
+                    "Loom could not create a persistent or in-memory model container. "
+                    + "Persistent error: \(persistentError). In-memory error: \(error)"
+                )
+            }
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
             MainTabView()
+                .alert("Your data needs a breather", isPresented: $showingPersistenceWarning) {
+                    Button("Got it", role: .cancel) {}
+                } message: {
+                    Text("Your data could not be opened — changes made now won’t be saved. Please close and reopen Loom to try again.")
+                }
         }
         .modelContainer(container)
     }

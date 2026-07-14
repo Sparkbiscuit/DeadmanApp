@@ -216,6 +216,73 @@ final class LoomTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(perDay.count, 2, "cap should force a second day")
     }
 
+    func testDailyFocusCapSplitsOvernightBlocksAcrossCalendarDays() {
+        let settings = makeSettings()
+        settings.wakeHour = 22
+        settings.sleepHour = 2
+        settings.dailyFocusMinutes = 100
+        settings.minBlockMinutes = 90
+        settings.maxBlockMinutes = 90
+
+        let day = calendar.startOfDay(for: anchor)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: day)!
+        let start = calendar.date(bySettingHour: 21, minute: 0, second: 0, of: day)!
+        let existingStart = calendar.date(
+            bySettingHour: 22, minute: 0, second: 0, of: nextDay
+        )!
+        let existingTask = makeTask(effort: 90, deadlineHoursFromAnchor: 120)
+        let existing = ScheduledBlock(
+            task: existingTask,
+            startTime: existingStart,
+            durationMinutes: 90
+        )
+        context.insert(existing)
+
+        // Leave 23:00–02:00 open on the first overnight window. Charging a
+        // 23:00–00:30 candidate only to its start day would put 120 minutes on
+        // the following calendar day once the existing block is included.
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "overnight-cap",
+            title: "Evening commitment",
+            startTime: calendar.date(
+                bySettingHour: 22, minute: 0, second: 0, of: day
+            )!,
+            endTime: calendar.date(
+                bySettingHour: 23, minute: 0, second: 0, of: day
+            )!
+        )
+        context.insert(busy)
+
+        let task = makeTask(effort: 90, deadlineHoursFromAnchor: 120)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [existing],
+            busyEvents: [busy],
+            settings: settings,
+            from: start
+        )
+        let blocks = scheduledBlocks(from: result)
+        XCTAssertEqual(blocks.reduce(0) { $0 + $1.durationMinutes }, 90)
+
+        var perDay: [Date: Double] = [:]
+        for block in [existing] + blocks {
+            var cursor = block.startTime
+            while cursor < block.endTime {
+                let calendarDay = calendar.startOfDay(for: cursor)
+                let followingDay = calendar.date(
+                    byAdding: .day, value: 1, to: calendarDay
+                )!
+                let portionEnd = min(block.endTime, followingDay)
+                perDay[calendarDay, default: 0] += portionEnd.timeIntervalSince(cursor) / 60
+                cursor = portionEnd
+            }
+        }
+        for (_, minutes) in perDay {
+            XCTAssertLessThanOrEqual(minutes, 100, "daily focus cap exceeded")
+        }
+    }
+
     // MARK: - Catch-up
 
     func testCatchUpReplansMissedBlocks() throws {

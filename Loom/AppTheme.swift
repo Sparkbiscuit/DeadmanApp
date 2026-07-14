@@ -1,5 +1,7 @@
 import SwiftUI
 import Observation
+import QuartzCore
+import UIKit
 
 // MARK: - Hex helpers
 
@@ -391,9 +393,9 @@ struct HearthTitle: View {
 
 // MARK: - Ambient hearth background
 
-/// Rising ember particles — the hearth is always faintly alive. Pure Canvas
-/// drawing, seeded once per appearance; honors Reduce Motion by holding the
-/// embers still instead of animating them.
+/// Rising ember particles — the hearth is always faintly alive. A UIKit-hosted
+/// `CAEmitterLayer` keeps the animated field smooth, while Reduce Motion swaps
+/// in a deterministic, completely static Canvas rendering.
 struct EmberField: View {
     var emberCount: Int = 16
     var intensity: Double = 1.0
@@ -401,76 +403,369 @@ struct EmberField: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
-    private struct Ember {
-        let x: Double        // 0…1 horizontal anchor
-        let drift: Double    // horizontal wobble in points
-        let speed: Double    // full rises per minute
-        let size: Double
-        let phase: Double    // 0…1 head start
-        let brightness: Double
-    }
-
-    @State private var embers: [Ember]
-    @State private var birth = Date()
-
-    /// Seeds at init, not in `onAppear`: this view lives inside screens'
-    /// `.background`, where SwiftUI never delivers `onAppear` — the field
-    /// stayed empty and not a single ember ever drew.
     init(emberCount: Int = 16, intensity: Double = 1.0) {
         self.emberCount = emberCount
         self.intensity = intensity
-        _embers = State(initialValue: (0..<emberCount).map { _ in
-            Ember(
-                x: .random(in: 0.03...0.97),
-                drift: .random(in: 6...22),
-                speed: .random(in: 0.55...1.4),
-                size: .random(in: 2.2...5.0),
-                phase: .random(in: 0...1),
-                brightness: .random(in: 0.4...0.95)
-            )
-        })
     }
 
     var body: some View {
+        let accent = HearthTheme.shared.accent
+
         Group {
             if reduceMotion {
-                canvas(at: 0)
+                StaticEmberCanvas(
+                    emberCount: emberCount,
+                    intensity: intensity,
+                    accent: accent
+                )
             } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 12, paused: scenePhase != .active)) { timeline in
-                    canvas(at: timeline.date.timeIntervalSince(birth))
-                }
+                EmberEmitterView(
+                    emberCount: emberCount,
+                    intensity: intensity,
+                    accent: accent,
+                    sceneIsActive: scenePhase == .active
+                )
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+}
 
-    private func canvas(at elapsed: TimeInterval) -> some View {
+private struct StaticEmberCanvas: View {
+    let emberCount: Int
+    let intensity: Double
+    let accent: HearthAccent
+
+    var body: some View {
         Canvas { context, size in
-            let accent = HearthTheme.shared.accent
-            for ember in embers {
-                // 0 at the bottom, 1 at the top, looping.
-                let t = (elapsed / 60 * ember.speed + ember.phase)
-                    .truncatingRemainder(dividingBy: 1)
-                let y = size.height * (1 - t)
-                let x = ember.x * size.width + sin(t * .pi * 4 + ember.phase * 10) * ember.drift
-                // Fade in near the hearth, gutter out near the top.
-                let fade = min(1, min(t / 0.15, (1 - t) / 0.35))
-                let alpha = ember.brightness * fade * 0.85 * intensity
+            for index in 0..<max(0, emberCount) {
+                let family = (index * 7) % 20
+                let x = unitValue(index, salt: 17) * 0.94 + 0.03
+                let y = unitValue(index, salt: 53) * 0.9 + 0.05
+                let scale = 0.8 + unitValue(index, salt: 89) * 0.4
+
+                let baseSize: Double
+                let baseAlpha: Double
+                let coreColor: Color
+                if family < 14 {
+                    baseSize = 6.5
+                    baseAlpha = 0.4
+                    coreColor = accent.color
+                } else if family < 19 {
+                    baseSize = 4.2
+                    baseAlpha = 0.6
+                    coreColor = accent.soft
+                } else {
+                    baseSize = 3.2
+                    baseAlpha = 0.9
+                    coreColor = accent.hi
+                }
+
+                let alpha = min(1, max(0, baseAlpha * intensity))
                 guard alpha > 0.01 else { continue }
 
+                let particleSize = baseSize * scale
+                let center = CGPoint(x: x * size.width, y: y * size.height)
                 let rect = CGRect(
-                    x: x - ember.size / 2, y: y - ember.size / 2,
-                    width: ember.size, height: ember.size
+                    x: center.x - particleSize / 2,
+                    y: center.y - particleSize / 2,
+                    width: particleSize,
+                    height: particleSize
                 )
-                context.opacity = alpha
-                context.fill(Path(ellipseIn: rect), with: .color(accent.soft))
-                context.opacity = alpha * 0.5
+
+                context.opacity = alpha * 0.32
                 context.fill(
-                    Path(ellipseIn: rect.insetBy(dx: -ember.size, dy: -ember.size)),
+                    Path(ellipseIn: rect.insetBy(dx: -particleSize, dy: -particleSize)),
                     with: .color(accent.color)
                 )
+                context.opacity = alpha
+                context.fill(Path(ellipseIn: rect), with: .color(coreColor))
             }
+        }
+    }
+
+    /// Stable integer mixing keeps Reduce Motion layouts identical every time.
+    private func unitValue(_ index: Int, salt: UInt64) -> Double {
+        var value = UInt64(truncatingIfNeeded: index) &+ salt &* 0x9E3779B97F4A7C15
+        value = (value ^ (value >> 30)) &* 0xBF58476D1CE4E5B9
+        value = (value ^ (value >> 27)) &* 0x94D049BB133111EB
+        value ^= value >> 31
+        return Double(value & 0x00FF_FFFF) / Double(0x0100_0000)
+    }
+}
+
+private struct EmberEmitterView: UIViewRepresentable {
+    let emberCount: Int
+    let intensity: Double
+    let accent: HearthAccent
+    let sceneIsActive: Bool
+
+    func makeUIView(context: Context) -> EmberEmitterUIView {
+        // Configuration starts here rather than in `onAppear`: EmberField lives
+        // inside `.background(...)`, where SwiftUI does not reliably deliver
+        // appearance callbacks.
+        EmberEmitterUIView(
+            emberCount: emberCount,
+            intensity: intensity,
+            accent: accent,
+            sceneIsActive: sceneIsActive
+        )
+    }
+
+    func updateUIView(_ uiView: EmberEmitterUIView, context: Context) {
+        uiView.update(
+            emberCount: emberCount,
+            intensity: intensity,
+            accent: accent,
+            sceneIsActive: sceneIsActive
+        )
+    }
+}
+
+private final class EmberEmitterUIView: UIView {
+    /// Deliberately a sublayer, NOT the view's backing layer: SwiftUI writes
+    /// to hosted views' backing layers on every commit of the surrounding
+    /// hierarchy, and every external property write on a CAEmitterLayer
+    /// restarts its particle simulation — the field stayed permanently
+    /// "just born". A private sublayer is only ever touched by this view.
+    private let emitter = CAEmitterLayer()
+    private var emberCount: Int
+    private var intensity: Double
+    private var accent: HearthAccent
+    private var sceneIsActive: Bool
+    private var configuredSize = CGSize.zero
+    private var hasInstalledCells = false
+
+    private static let particleImage: CGImage = {
+        let size = CGSize(width: 28, height: 28)
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 1
+
+        return UIGraphicsImageRenderer(size: size, format: format).image { renderer in
+            let context = renderer.cgContext
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let glow = CGGradient(
+                colorsSpace: colorSpace,
+                colors: [
+                    UIColor.white.withAlphaComponent(0.98).cgColor,
+                    UIColor.white.withAlphaComponent(0.58).cgColor,
+                    UIColor.white.withAlphaComponent(0.16).cgColor,
+                    UIColor.clear.cgColor
+                ] as CFArray,
+                locations: [0, 0.16, 0.48, 1]
+            )!
+            context.drawRadialGradient(
+                glow,
+                startCenter: center,
+                startRadius: 0,
+                endCenter: center,
+                endRadius: size.width / 2,
+                options: .drawsAfterEndLocation
+            )
+
+            let hotSpotCenter = CGPoint(x: center.x - 3, y: center.y - 2)
+            let hotSpot = CGGradient(
+                colorsSpace: colorSpace,
+                colors: [
+                    UIColor.white.withAlphaComponent(0.9).cgColor,
+                    UIColor.white.withAlphaComponent(0.24).cgColor,
+                    UIColor.clear.cgColor
+                ] as CFArray,
+                locations: [0, 0.38, 1]
+            )!
+            context.drawRadialGradient(
+                hotSpot,
+                startCenter: hotSpotCenter,
+                startRadius: 0,
+                endCenter: hotSpotCenter,
+                endRadius: 5.5,
+                options: .drawsAfterEndLocation
+            )
+        }.cgImage!
+    }()
+
+    init(
+        emberCount: Int,
+        intensity: Double,
+        accent: HearthAccent,
+        sceneIsActive: Bool
+    ) {
+        self.emberCount = emberCount
+        self.intensity = intensity
+        self.accent = accent
+        self.sceneIsActive = sceneIsActive
+        super.init(frame: .zero)
+
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
+        layer.addSublayer(emitter)
+        emitter.renderMode = .additive
+        // A thin rectangle spanning the bottom edge, NOT `.line`: line-shaped
+        // emitters pinned particles to the line and ignored cell velocity in
+        // every mode we tried (verified empirically on iOS 18 sim, 2026-07).
+        // Rectangle + `.volume` honors emissionLongitude (-π/2 = up).
+        emitter.emitterShape = .rectangle
+        emitter.emitterMode = .volume
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // Only touch the layer when geometry actually changed: ANY property
+        // write on a CAEmitterLayer restarts its whole particle simulation at
+        // the next commit, and SwiftUI re-lays-out this view on every screen
+        // body re-evaluation (e.g. the 1s hero countdown tick) — writing
+        // unconditionally kept resetting the field to freshly-born particles.
+        guard bounds.size != configuredSize, bounds.width > 0, bounds.height > 0 else { return }
+        configuredSize = bounds.size
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        emitter.frame = bounds
+        emitter.emitterPosition = CGPoint(x: bounds.midX, y: bounds.maxY + 8)
+        emitter.emitterSize = CGSize(width: bounds.width, height: 14)
+        rebuildCells()
+        CATransaction.commit()
+        updatePlaybackState()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updatePlaybackState()
+    }
+
+    func update(
+        emberCount: Int,
+        intensity: Double,
+        accent: HearthAccent,
+        sceneIsActive: Bool
+    ) {
+        let needsRebuild = self.emberCount != emberCount
+            || self.intensity != intensity
+            || self.accent != accent
+
+        self.emberCount = emberCount
+        self.intensity = intensity
+        self.accent = accent
+        self.sceneIsActive = sceneIsActive
+
+        if needsRebuild, bounds.width > 0, bounds.height > 0 {
+            rebuildCells()
+        }
+        updatePlaybackState()
+    }
+
+    private func rebuildCells() {
+        let height = bounds.height
+        let count = Double(max(0, emberCount))
+        let strength = max(0, intensity)
+
+        emitter.emitterCells = [
+            makeCell(
+                name: "drifting",
+                share: 0.70,
+                totalCount: count,
+                lifetime: 50,
+                scale: 0.26,
+                alpha: min(1, 0.4 * strength),
+                color: UIColor(accent.color),
+                height: height,
+                emissionRange: 0.14,
+                spinRange: 0.22
+            ),
+            makeCell(
+                name: "hot",
+                share: 0.25,
+                totalCount: count,
+                lifetime: 45,
+                scale: 0.16,
+                alpha: min(1, 0.6 * strength),
+                color: UIColor(accent.soft),
+                height: height,
+                emissionRange: 0.11,
+                spinRange: 0.3
+            ),
+            makeCell(
+                name: "spark",
+                share: 0.05,
+                totalCount: count,
+                lifetime: 28,
+                scale: 0.12,
+                alpha: min(1, 0.9 * strength),
+                color: UIColor(accent.hi),
+                height: height,
+                emissionRange: 0.09,
+                spinRange: 0.38
+            )
+        ]
+
+        if !hasInstalledCells {
+            hasInstalledCells = true
+            emitter.beginTime = CACurrentMediaTime() - 50
+        }
+    }
+
+    private func makeCell(
+        name: String,
+        share: Double,
+        totalCount: Double,
+        lifetime: Double,
+        scale: CGFloat,
+        alpha: Double,
+        color: UIColor,
+        height: CGFloat,
+        emissionRange: CGFloat,
+        spinRange: CGFloat
+    ) -> CAEmitterCell {
+        let cell = CAEmitterCell()
+        let accelerationFraction = 0.18
+        let velocity = height / lifetime * (1 - accelerationFraction / 2)
+
+        cell.name = name
+        cell.contents = Self.particleImage
+        cell.contentsScale = 1
+        cell.birthRate = Float(totalCount * share / lifetime)
+        cell.lifetime = Float(lifetime)
+        cell.lifetimeRange = Float(lifetime * 0.12)
+        cell.emissionLongitude = -.pi / 2
+        cell.emissionRange = emissionRange
+        cell.velocity = velocity
+        cell.velocityRange = velocity * 0.28
+        cell.yAcceleration = -height * accelerationFraction / (lifetime * lifetime)
+        cell.scale = scale
+        cell.scaleRange = scale * 0.34
+        cell.scaleSpeed = -scale / CGFloat(lifetime) * 0.18
+        cell.alphaRange = Float(alpha * 0.18)
+        cell.alphaSpeed = Float(-alpha / lifetime * 0.65)
+        cell.spinRange = spinRange
+        cell.color = color.withAlphaComponent(alpha).cgColor
+        return cell
+    }
+
+    private func updatePlaybackState() {
+        // With no cells there is nothing to animate. Waiting until the first
+        // layout also lets the initial -50s beginTime become the paused offset.
+        guard hasInstalledCells else { return }
+
+        let shouldPause = !sceneIsActive || window == nil
+        if shouldPause, emitter.speed != 0 {
+            let pausedTime = emitter.convertTime(CACurrentMediaTime(), from: nil)
+            emitter.speed = 0
+            emitter.timeOffset = pausedTime
+        } else if !shouldPause, emitter.speed == 0 {
+            let pausedTime = emitter.timeOffset
+            emitter.speed = 1
+            emitter.timeOffset = 0
+            emitter.beginTime = 0
+            let now = emitter.convertTime(CACurrentMediaTime(), from: nil)
+            emitter.beginTime = now - pausedTime
         }
     }
 }

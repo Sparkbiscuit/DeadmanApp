@@ -4,8 +4,8 @@ import SwiftUI
 
 /// Lock Screen banner and Dynamic Island presentation for a running work
 /// session, in the Hearthlight "held flame" language: a glowing ring around a
-/// live mono timer, "Weaving now", and the block-end anchor. The timer renders
-/// via the system timer text styles, so it ticks without app updates.
+/// live mono timer, "Weaving now", and the block-end anchor. While active, the
+/// timer renders via system timer text styles so it ticks without app updates.
 struct WorkSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkSessionAttributes.self) { context in
@@ -70,8 +70,13 @@ private func timerText(
     size: CGFloat
 ) -> some View {
     Group {
+        // The block countdown is schedule, not session: like the ring, it
+        // deliberately keeps ticking through a pause. Only the floating
+        // count-up freezes at the paused worked time.
         if let end = context.attributes.blockEndsAt, end > context.state.startedAt {
             Text(timerInterval: context.state.startedAt...end, countsDown: true)
+        } else if context.state.isPaused {
+            Text(formattedElapsedTime(context.state.pausedElapsedSeconds))
         } else {
             Text(context.state.startedAt, style: .timer)
         }
@@ -83,6 +88,17 @@ private func timerText(
     // scaled down to fit, stays centered at any duration.
     .lineLimit(1)
     .minimumScaleFactor(0.5)
+}
+
+private func formattedElapsedTime(_ seconds: Int) -> String {
+    let elapsed = max(0, seconds)
+    let hours = elapsed / 3_600
+    let minutes = (elapsed % 3_600) / 60
+    let remainingSeconds = elapsed % 60
+    if hours > 0 {
+        return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+    }
+    return String(format: "%02d:%02d", minutes, remainingSeconds)
 }
 
 /// The ring's fill window: the running block's own span (so joining a block
@@ -101,16 +117,17 @@ private func ringInterval(
 }
 
 private func subtitle(_ context: ActivityViewContext<WorkSessionAttributes>) -> String {
+    let status = context.state.isPaused ? "Resting" : "Weaving now"
     if let end = context.attributes.blockEndsAt {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return "Weaving now · block ends \(formatter.string(from: end))"
+        return "\(status) · block ends \(formatter.string(from: end))"
     }
     let minutes = context.attributes.effortMinutes
     let budget = minutes < 60
         ? "\(minutes)m"
         : minutes % 60 > 0 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes / 60)h"
-    return "Weaving now · \(budget) budget"
+    return "\(status) · \(budget) budget"
 }
 
 // MARK: - Lock Screen view
@@ -127,8 +144,8 @@ private struct LockScreenSessionView: View {
             // scheduled block's worth of work is done — Live Activities can't
             // run code while locked, so only the system styles tick on their
             // own. Two accepted limits follow: past the block it holds full
-            // (the in-app ring loops), and like the timer text beside it, it
-            // keeps advancing through a pause.
+            // (the in-app ring loops), and it keeps advancing through a pause
+            // while the worked-time label freezes.
             ZStack {
                 // Static halo — Live Activities can't run continuous
                 // animations, so the flame is held at a warm moment.
@@ -157,7 +174,7 @@ private struct LockScreenSessionView: View {
             .frame(width: 62, height: 62)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("WEAVING NOW")
+                Text(context.state.isPaused ? "RESTING" : "WEAVING NOW")
                     .font(.custom("Nunito-Bold", size: 10))
                     .kerning(1.2)
                     .foregroundStyle(accent.soft)

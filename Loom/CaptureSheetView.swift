@@ -19,7 +19,11 @@ struct CaptureSheetView: View {
     @State private var useCustomStart = false
     @State private var customStart = Date().addingTimeInterval(15 * 60)
     @State private var repeatWeekly = false
-    @State private var repeatUntil = Date().addingTimeInterval(35 * 86_400)
+    @State private var repeatUntil = Calendar.current.date(
+        byAdding: .day,
+        value: 35,
+        to: Date()
+    ) ?? Date()
 
     // Capture mode: a scheduled task, or a one-off reminder
     private enum CaptureMode: String, CaseIterable {
@@ -401,7 +405,12 @@ struct CaptureSheetView: View {
                 EffortChip(label: "Weekly", isSelected: repeatWeekly) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         repeatWeekly = true
-                        repeatUntil = max(repeatUntil, deadline.addingTimeInterval(7 * 86_400))
+                        let nextWeek = Calendar.current.date(
+                            byAdding: .day,
+                            value: 7,
+                            to: deadline
+                        ) ?? deadline
+                        repeatUntil = max(repeatUntil, nextWeek)
                     }
                 }
             }

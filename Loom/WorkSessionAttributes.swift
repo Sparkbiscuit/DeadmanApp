@@ -6,8 +6,11 @@ import SwiftUI
 
 struct WorkSessionAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
-        /// The moment the timer started; the system renders the count-up itself.
+        /// Baseline for the system count-up; rebased when work resumes.
         var startedAt: Date
+        var isPaused: Bool = false
+        /// Static worked time shown while the session is paused.
+        var pausedElapsedSeconds: Int = 0
     }
 
     var taskTitle: String
@@ -86,6 +89,21 @@ enum WorkSessionActivityController {
 
     static func end() {
         endAll()
+    }
+
+    static func setPaused(_ paused: Bool, elapsedWorkedSeconds: Int) {
+        guard let activity = Activity<WorkSessionAttributes>.activities.first else { return }
+
+        var state = activity.content.state
+        state.isPaused = paused
+        state.pausedElapsedSeconds = elapsedWorkedSeconds
+        if !paused {
+            state.startedAt = Date().addingTimeInterval(-Double(elapsedWorkedSeconds))
+        }
+
+        Task {
+            await activity.update(ActivityContent(state: state, staleDate: nil))
+        }
     }
 
     /// Ends every Loom activity — also used at launch to clear leftovers from

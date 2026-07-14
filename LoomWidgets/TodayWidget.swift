@@ -2,6 +2,10 @@ import WidgetKit
 import SwiftUI
 import SwiftData
 
+enum WidgetStore {
+    static let container = try? SharedStore.makeContainer()
+}
+
 // MARK: - Timeline
 
 struct TodayEntry: TimelineEntry {
@@ -47,7 +51,7 @@ struct TodayProvider: TimelineProvider {
         let now = Date()
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
-        guard let container = try? SharedStore.makeContainer(),
+        guard let container = WidgetStore.container,
               let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else {
             return TodayEntry(
                 date: now, doneBlocks: 0, totalBlocks: 0,
@@ -59,10 +63,15 @@ struct TodayProvider: TimelineProvider {
         // Today's work: checked blocks stay countable even after their task
         // completes (the work happened); unchecked blocks of completed tasks
         // don't linger — they're removed on completion.
-        let todayBlocks = ((try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? [])
+        let blockDescriptor = FetchDescriptor<ScheduledBlock>(
+            predicate: #Predicate { block in
+                block.startTime >= today && block.startTime < tomorrow
+            },
+            sortBy: [SortDescriptor(\ScheduledBlock.startTime)]
+        )
+        let todayBlocks = ((try? context.fetch(blockDescriptor)) ?? [])
             .filter { block in
-                guard let task = block.task,
-                      block.startTime >= today, block.startTime < tomorrow else { return false }
+                guard let task = block.task else { return false }
                 return block.isComplete || !task.isComplete
             }
         let done = todayBlocks.filter(\.isComplete).count
@@ -74,7 +83,11 @@ struct TodayProvider: TimelineProvider {
             }
             .min { $0.startTime < $1.startTime }
 
-        let sessions = (try? context.fetch(FetchDescriptor<WorkSession>())) ?? []
+        let sessionDescriptor = FetchDescriptor<WorkSession>(
+            predicate: #Predicate { $0.startedAt <= now },
+            sortBy: [SortDescriptor(\WorkSession.startedAt, order: .reverse)]
+        )
+        let sessions = (try? context.fetch(sessionDescriptor)) ?? []
         let streak = StreakCalculator.startStreak(startDates: sessions.map(\.startedAt), now: now)
 
         return TodayEntry(

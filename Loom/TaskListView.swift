@@ -118,9 +118,12 @@ struct TaskListView: View {
     /// running block if there is one, else the next upcoming block, with a
     /// single big Start button. Opening the app should never require a decision.
     private var heroSection: some View {
+        let candidates = currentAndUpcomingBlocks(at: Date())
+
         // One-second cadence: the hero ring carries a live mm:ss countdown.
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            if let block = currentOrNextBlock(at: timeline.date), let task = block.task {
+        return TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            if let block = candidates.first(where: { $0.endTime > timeline.date }),
+               let task = block.task {
                 RightNowCard(
                     task: task,
                     block: block,
@@ -283,6 +286,14 @@ struct TaskListView: View {
             .flatMap(\.scheduledBlocks)
             .filter { !$0.isComplete && $0.endTime > now }
             .min { $0.startTime < $1.startTime }
+    }
+
+    private func currentAndUpcomingBlocks(at now: Date) -> [ScheduledBlock] {
+        tasks
+            .filter { !$0.isComplete }
+            .flatMap(\.scheduledBlocks)
+            .filter { !$0.isComplete && $0.endTime > now }
+            .sorted { $0.startTime < $1.startTime }
     }
 
     // MARK: - Overdue triage
