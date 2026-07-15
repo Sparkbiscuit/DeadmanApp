@@ -194,6 +194,130 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(unscheduled, 30)
     }
 
+    func testScheduleAdaptsChunksToSeparateHourGaps() {
+        let settings = makeSettings()
+        settings.wakeHour = 9
+        settings.sleepHour = 13
+
+        let occupyingTask = makeTask(effort: 120, deadlineHoursFromAnchor: 24)
+        let firstHold = ScheduledBlock(
+            task: occupyingTask,
+            startTime: anchor.addingTimeInterval(60 * 60),
+            durationMinutes: 60
+        )
+        let secondHold = ScheduledBlock(
+            task: occupyingTask,
+            startTime: anchor.addingTimeInterval(3 * 60 * 60),
+            durationMinutes: 60
+        )
+        context.insert(firstHold)
+        context.insert(secondHold)
+
+        // Buffered window ends at 13:00, leaving only 9–10 and 11–12.
+        // A fixed [90, 30] split cannot use either first gap; slot-aware
+        // placement should adapt it to [60, 60].
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 6)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [firstHold, secondHold],
+            settings: settings,
+            from: anchor
+        )
+
+        guard case .success(let blocks) = result else {
+            return XCTFail("expected both hour gaps to fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [60, 60])
+        XCTAssertEqual(
+            blocks.map(\.startTime),
+            [anchor, anchor.addingTimeInterval(2 * 60 * 60)]
+        )
+    }
+
+    func testScheduleLooksAheadAcrossThreeSeparateFortyFiveMinuteGaps() {
+        let settings = makeSettings()
+        settings.wakeHour = 9
+        settings.sleepHour = 13
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 90
+        settings.dailyFocusMinutes = 0
+
+        let occupyingTask = makeTask(effort: 105, deadlineHoursFromAnchor: 24)
+        let holds = [
+            ScheduledBlock(
+                task: occupyingTask,
+                startTime: anchor.addingTimeInterval(45 * 60),
+                durationMinutes: 15
+            ),
+            ScheduledBlock(
+                task: occupyingTask,
+                startTime: anchor.addingTimeInterval(105 * 60),
+                durationMinutes: 15
+            ),
+            ScheduledBlock(
+                task: occupyingTask,
+                startTime: anchor.addingTimeInterval(165 * 60),
+                durationMinutes: 75
+            )
+        ]
+        for hold in holds { context.insert(hold) }
+
+        // The usable window is exactly three independent 45-minute gaps.
+        // Treating a 55-minute tail as one theoretical block would strand it;
+        // looking at the actual future gaps yields 40 + 30 + 30 instead.
+        let task = makeTask(effort: 100, deadlineHoursFromAnchor: 6)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: holds,
+            settings: settings,
+            from: anchor
+        )
+
+        guard case .success(let blocks) = result else {
+            return XCTFail("expected all three gaps to fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [40, 30, 30])
+        XCTAssertEqual(
+            blocks.map(\.startTime),
+            [
+                anchor,
+                anchor.addingTimeInterval(60 * 60),
+                anchor.addingTimeInterval(120 * 60)
+            ]
+        )
+    }
+
+    func testScheduleAllowsShortRemainderInShortSlot() {
+        let settings = makeSettings() // configured minimum is 30 minutes
+        settings.wakeHour = 9
+        settings.sleepHour = 10
+
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "short-remainder",
+            title: "Appointment",
+            startTime: anchor.addingTimeInterval(20 * 60),
+            endTime: anchor.addingTimeInterval(60 * 60)
+        )
+        context.insert(busy)
+
+        let task = makeTask(effort: 20, deadlineHoursFromAnchor: 3)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [],
+            busyEvents: [busy],
+            settings: settings,
+            from: anchor
+        )
+
+        guard case .success(let blocks) = result else {
+            return XCTFail("expected the 20-minute remainder to fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.count, 1)
+        XCTAssertEqual(blocks.first?.startTime, anchor)
+        XCTAssertEqual(blocks.first?.durationMinutes, 20)
+    }
+
     func testDailyFocusCapSpreadsWorkAcrossDays() {
         let settings = makeSettings()
         settings.dailyFocusMinutes = 60
@@ -214,6 +338,32 @@ final class LoomTests: XCTestCase {
             XCTAssertLessThanOrEqual(minutes, 60, "daily focus cap exceeded")
         }
         XCTAssertGreaterThanOrEqual(perDay.count, 2, "cap should force a second day")
+    }
+
+    func testDailyFocusCapPreservesRepresentableTailAcrossThreeDays() {
+        let settings = makeSettings()
+        settings.wakeHour = 9
+        settings.sleepHour = 9
+        settings.sleepMinute = 45
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 90
+        settings.dailyFocusMinutes = 45
+
+        // Three 45-minute days can hold 100 minutes, but taking 45 first would
+        // strand 55 minutes, which cannot be expressed in 30...45 blocks.
+        let task = makeTask(effort: 100, deadlineHoursFromAnchor: 74)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [],
+            settings: settings,
+            from: anchor
+        )
+
+        guard case .success(let blocks) = result else {
+            return XCTFail("expected all three days to fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [40, 30, 30])
+        XCTAssertEqual(Set(blocks.map { calendar.startOfDay(for: $0.startTime) }).count, 3)
     }
 
     func testDailyFocusCapSplitsOvernightBlocksAcrossCalendarDays() {
@@ -412,6 +562,97 @@ final class LoomTests: XCTestCase {
         task.manualProgressPercent = 70
         XCTAssertEqual(task.progressPercent, 70)
         XCTAssertEqual(task.remainingMinutes, 30)
+    }
+
+    func testLinkedTimedSessionReplacesCompletedBlockInTimeSpent() throws {
+        let task = makeTask(effort: 100, deadlineHoursFromAnchor: 48)
+        let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 40)
+        block.isComplete = true
+        let session = WorkSession(
+            task: task,
+            startedAt: anchor,
+            durationSeconds: 20 * 60,
+            scheduledBlockId: block.id
+        )
+        context.insert(block)
+        context.insert(session)
+        try context.save()
+
+        XCTAssertEqual(task.workedBlockMinutes, 0)
+        XCTAssertEqual(task.timeSpentMinutes, 20, "the linked reservation must not count twice")
+    }
+
+    func testUnlinkedCompletedBlockStillCountsInTimeSpent() throws {
+        let task = makeTask(effort: 100, deadlineHoursFromAnchor: 48)
+        let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 40)
+        block.isComplete = true
+        let floatingSession = WorkSession(
+            task: task,
+            startedAt: anchor.addingTimeInterval(3600),
+            durationSeconds: 20 * 60
+        )
+        context.insert(block)
+        context.insert(floatingSession)
+        try context.save()
+
+        XCTAssertEqual(task.workedBlockMinutes, 40)
+        XCTAssertEqual(task.timeSpentMinutes, 60)
+    }
+
+    // MARK: - Work session block selection
+
+    func testWorkSessionBlockSelectorIgnoresCompletedOverlap() throws {
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let completed = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-30 * 60),
+            durationMinutes: 60
+        )
+        completed.isComplete = true
+        let incomplete = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-15 * 60),
+            durationMinutes: 60
+        )
+
+        let selected = try XCTUnwrap(
+            WorkSessionBlockSelector.currentIncompleteBlock(
+                in: [completed, incomplete],
+                at: anchor
+            )
+        )
+
+        XCTAssertEqual(selected.id, incomplete.id)
+    }
+
+    func testWorkSessionBlockSelectorDeterministicallyPrefersEarliestStart() throws {
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let earlier = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-20 * 60),
+            durationMinutes: 60
+        )
+        let later = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-10 * 60),
+            durationMinutes: 60
+        )
+
+        let forward = try XCTUnwrap(
+            WorkSessionBlockSelector.currentIncompleteBlock(
+                in: [earlier, later],
+                at: anchor
+            )
+        )
+        let reversed = try XCTUnwrap(
+            WorkSessionBlockSelector.currentIncompleteBlock(
+                in: [later, earlier],
+                at: anchor
+            )
+        )
+
+        XCTAssertEqual(forward.id, earlier.id)
+        XCTAssertEqual(reversed.id, earlier.id)
     }
 
     // MARK: - Start rounding & buffer
@@ -870,6 +1111,325 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(available, 300, "a task's own booked time still belongs to it")
     }
 
+    func testAvailableMinutesRespectsDailyFocusRemainingAfterExistingWork() {
+        let settings = makeSettings()
+        settings.dailyFocusMinutes = 120
+
+        let other = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        // This block ends exactly when the queried window begins. It does not
+        // occupy the window, but it has already spent half today's focus cap.
+        let earlierBlock = ScheduledBlock(
+            task: other,
+            startTime: anchor.addingTimeInterval(-60 * 60),
+            durationMinutes: 60
+        )
+        context.insert(earlierBlock)
+
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: anchor.addingTimeInterval(5 * 3600),
+            allBlocks: [earlierBlock],
+            settings: settings
+        )
+        XCTAssertEqual(available, 60)
+    }
+
+    func testAvailableMinutesRoundsEachDayDownToValidBlockCapacity() {
+        let settings = makeSettings()
+        settings.wakeHour = 9
+        settings.sleepHour = 9
+        settings.sleepMinute = 55
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 45
+        settings.dailyFocusMinutes = 55
+
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: anchor.addingTimeInterval(55 * 60),
+            allBlocks: [],
+            settings: settings
+        )
+        XCTAssertEqual(available, 45, "the unusable 10-minute tail is not capacity")
+    }
+
+    func testFragmentedFiftyFiveMinuteGapsHaveNinetyMinutesOfCapacity() {
+        let settings = makeSettings()
+        settings.wakeHour = 9
+        settings.sleepHour = 11
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 45
+        settings.dailyFocusMinutes = 0
+
+        let occupyingTask = makeTask(effort: 10, deadlineHoursFromAnchor: 24)
+        let hold = ScheduledBlock(
+            task: occupyingTask,
+            startTime: anchor.addingTimeInterval(55 * 60),
+            durationMinutes: 10
+        )
+        context.insert(hold)
+
+        let windowEnd = anchor.addingTimeInterval(2 * 60 * 60)
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: windowEnd,
+            allBlocks: [hold],
+            settings: settings
+        )
+        XCTAssertEqual(
+            available,
+            90,
+            "each 55-minute gap can hold one 45-minute block; their 10-minute tails cannot pool"
+        )
+
+        let task = makeTask(effort: 110, deadlineHoursFromAnchor: 4)
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [hold],
+            settings: settings,
+            from: anchor
+        )
+        guard case .partialFit(let blocks, let unscheduledMinutes) = result else {
+            return XCTFail("expected maximal partial fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [45, 45])
+        XCTAssertEqual(blocks.reduce(0) { $0 + $1.durationMinutes }, 90)
+        XCTAssertEqual(unscheduledMinutes, 20)
+    }
+
+    func testOvernightCapacityChargesFocusToTheAfterMidnightDay() throws {
+        let settings = makeSettings()
+        settings.wakeHour = 22
+        settings.sleepHour = 2
+        settings.dailyFocusMinutes = 120
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 90
+
+        let day = calendar.startOfDay(for: anchor)
+        let overnightStart = calendar.date(
+            bySettingHour: 23,
+            minute: 0,
+            second: 0,
+            of: day
+        )!
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: day)!
+        let windowEnd = calendar.date(
+            bySettingHour: 1,
+            minute: 0,
+            second: 0,
+            of: nextDay
+        )!
+
+        // This reservation begins exactly when the query ends, so it does not
+        // occupy the 23:00-01:00 gap. It does consume all of the next date's
+        // focus budget, leaving only the hour before midnight available.
+        let other = makeTask(effort: 120, deadlineHoursFromAnchor: 72)
+        let afterMidnightWork = ScheduledBlock(
+            task: other,
+            startTime: windowEnd,
+            durationMinutes: 120
+        )
+        context.insert(afterMidnightWork)
+
+        let available = SchedulerService.availableMinutes(
+            from: overnightStart,
+            to: windowEnd,
+            allBlocks: [afterMidnightWork],
+            settings: settings
+        )
+        XCTAssertEqual(available, 60)
+
+        let task = LoomTask(
+            title: "Overnight task",
+            context: .school,
+            deadline: windowEnd.addingTimeInterval(
+                TimeInterval(settings.deadlineBufferMinutes * 60)
+            ),
+            effortMinutes: 120
+        )
+        context.insert(task)
+        let pace = try XCTUnwrap(SchedulerService.pressureAndAvailableMinutes(
+            for: task,
+            allBlocks: [afterMidnightWork],
+            settings: settings,
+            now: overnightStart
+        ))
+        XCTAssertEqual(pace.availableMinutes, 60)
+        XCTAssertEqual(pace.pressure, 2.0, accuracy: 0.01)
+    }
+
+    func testOvernightCapacityPreservesAContinuousMinimumBlockAcrossMidnight() throws {
+        let settings = makeSettings()
+        settings.wakeHour = 23
+        settings.wakeMinute = 45
+        settings.sleepHour = 0
+        settings.sleepMinute = 15
+        settings.dailyFocusMinutes = 30
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 30
+
+        let day = calendar.startOfDay(for: anchor)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: day)!
+        let windowStart = calendar.date(
+            bySettingHour: 23,
+            minute: 45,
+            second: 0,
+            of: day
+        )!
+        let windowEnd = calendar.date(
+            bySettingHour: 0,
+            minute: 15,
+            second: 0,
+            of: nextDay
+        )!
+
+        // Fifteen focus minutes remain on each date. Neither side of midnight
+        // is a valid block alone, but the real continuous gap holds one 30m
+        // block whose focus cost is split 15 + 15.
+        let other = makeTask(effort: 30, deadlineHoursFromAnchor: 72)
+        let before = ScheduledBlock(
+            task: other,
+            startTime: windowStart.addingTimeInterval(-45 * 60),
+            durationMinutes: 15
+        )
+        let after = ScheduledBlock(
+            task: other,
+            startTime: windowEnd.addingTimeInterval(15 * 60),
+            durationMinutes: 15
+        )
+        context.insert(before)
+        context.insert(after)
+
+        let existing = [before, after]
+        let available = SchedulerService.availableMinutes(
+            from: windowStart,
+            to: windowEnd,
+            allBlocks: existing,
+            settings: settings
+        )
+        XCTAssertEqual(available, 30)
+
+        let task = LoomTask(
+            title: "Midnight seam",
+            context: .school,
+            deadline: windowEnd.addingTimeInterval(
+                TimeInterval(settings.deadlineBufferMinutes * 60)
+            ),
+            effortMinutes: 30
+        )
+        context.insert(task)
+
+        let pace = try XCTUnwrap(SchedulerService.pressureAndAvailableMinutes(
+            for: task,
+            allBlocks: existing,
+            settings: settings,
+            now: windowStart
+        ))
+        XCTAssertEqual(pace.availableMinutes, 30)
+        XCTAssertEqual(pace.pressure, 1.0, accuracy: 0.01)
+
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: existing,
+            settings: settings,
+            from: windowStart
+        )
+        guard case .success(let blocks) = result else {
+            return XCTFail("expected seam block to fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [30])
+        XCTAssertEqual(blocks.first?.startTime, windowStart)
+    }
+
+    func testMixedSameDayAndMidnightGapsMaximizePartialFitAndMatchCapacity() throws {
+        let settings = makeSettings()
+        settings.wakeHour = 22
+        settings.sleepHour = 1
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 45
+        settings.dailyFocusMinutes = 0
+
+        let day = calendar.startOfDay(for: anchor)
+        let windowStart = calendar.date(
+            bySettingHour: 22,
+            minute: 0,
+            second: 0,
+            of: day
+        )!
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: day)!
+        let windowEnd = calendar.date(
+            bySettingHour: 0,
+            minute: 30,
+            second: 0,
+            of: nextDay
+        )!
+
+        // Free time is 22:00-22:45 (45m) plus 23:35-00:30 (55m).
+        // The second gap crosses midnight, but both can still hold a 45m block.
+        let occupyingTask = makeTask(effort: 50, deadlineHoursFromAnchor: 72)
+        let hold = ScheduledBlock(
+            task: occupyingTask,
+            startTime: windowStart.addingTimeInterval(45 * 60),
+            durationMinutes: 50
+        )
+        context.insert(hold)
+
+        let available = SchedulerService.availableMinutes(
+            from: windowStart,
+            to: windowEnd,
+            allBlocks: [hold],
+            settings: settings
+        )
+        XCTAssertEqual(available, 90)
+
+        let task = LoomTask(
+            title: "Mixed midnight gaps",
+            context: .school,
+            deadline: windowEnd.addingTimeInterval(
+                TimeInterval(settings.deadlineBufferMinutes * 60)
+            ),
+            effortMinutes: 100
+        )
+        context.insert(task)
+
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [hold],
+            settings: settings,
+            from: windowStart
+        )
+        guard case .partialFit(let blocks, let unscheduledMinutes) = result else {
+            return XCTFail("expected a maximal partial fit, got \(result)")
+        }
+        XCTAssertEqual(blocks.map(\.durationMinutes), [45, 45])
+        XCTAssertEqual(blocks.reduce(0) { $0 + $1.durationMinutes }, available)
+        XCTAssertEqual(unscheduledMinutes, 10)
+    }
+
+    func testAvailableMinutesCreditsOnlyOwnBlockPortionInsideWindow() {
+        let settings = makeSettings()
+        settings.dailyFocusMinutes = 120
+
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        // Only 13:00-14:00 overlaps the query. The locked 14:00-15:00
+        // portion remains real focus usage and leaves 60 minutes of capacity.
+        let ownBlock = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(4 * 60 * 60),
+            durationMinutes: 120
+        )
+        ownBlock.isLocked = true
+        context.insert(ownBlock)
+
+        let available = SchedulerService.availableMinutes(
+            from: anchor,
+            to: anchor.addingTimeInterval(5 * 60 * 60),
+            excludingTaskId: task.id,
+            allBlocks: [ownBlock],
+            settings: settings
+        )
+        XCTAssertEqual(available, 60)
+    }
+
     func testPressureReflectsRemainingVersusFreeTime() throws {
         let settings = makeSettings() // buffer 120
         // 60m of work; window 9:00 → deadline(anchor+7h)−2h buffer = 14:00 → 300 free.
@@ -878,6 +1438,58 @@ final class LoomTests: XCTestCase {
             for: task, allBlocks: [], settings: settings, now: anchor
         ))
         XCTAssertEqual(pressure, 0.2, accuracy: 0.01)
+    }
+
+    func testPressureRespectsDailyFocusRemainingAfterExistingWork() throws {
+        let settings = makeSettings()
+        settings.dailyFocusMinutes = 120
+
+        let other = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let earlierBlock = ScheduledBlock(
+            task: other,
+            startTime: anchor.addingTimeInterval(-60 * 60),
+            durationMinutes: 60
+        )
+        context.insert(earlierBlock)
+
+        // The wall-clock window is 300 minutes, but only 60 minutes of today's
+        // focus budget remain, so 60 minutes of work creates full pressure.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 7)
+        let pace = try XCTUnwrap(SchedulerService.pressureAndAvailableMinutes(
+            for: task,
+            allBlocks: [earlierBlock],
+            settings: settings,
+            now: anchor
+        ))
+        XCTAssertEqual(pace.availableMinutes, 60)
+        XCTAssertEqual(pace.pressure, 1.0, accuracy: 0.01)
+    }
+
+    func testPressureRejectsSubMinimumDailyFocusRemainder() throws {
+        let settings = makeSettings()
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 90
+        settings.dailyFocusMinutes = 45
+
+        let other = makeTask(effort: 20, deadlineHoursFromAnchor: 48)
+        let earlierBlock = ScheduledBlock(
+            task: other,
+            startTime: anchor.addingTimeInterval(-20 * 60),
+            durationMinutes: 20
+        )
+        context.insert(earlierBlock)
+
+        // Twenty-five focus minutes remain today, but this task's 60-minute
+        // remainder requires blocks of at least 30 minutes.
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 7)
+        let pace = try XCTUnwrap(SchedulerService.pressureAndAvailableMinutes(
+            for: task,
+            allBlocks: [earlierBlock],
+            settings: settings,
+            now: anchor
+        ))
+        XCTAssertEqual(pace.availableMinutes, 0)
+        XCTAssertTrue(pace.pressure.isInfinite)
     }
 
     func testPressureInfiniteWhenNoWindowRemains() throws {
@@ -1102,6 +1714,33 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(days[0].totalMinutes, 0, "untouched days stay empty")
     }
 
+    func testWeaveExcludesCompletedBlockLinkedToTimedSession() throws {
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 45)
+        block.isComplete = true
+        let session = WorkSession(
+            task: task,
+            startedAt: anchor,
+            durationSeconds: 20 * 60,
+            scheduledBlockId: block.id
+        )
+        context.insert(block)
+        context.insert(session)
+        try context.save()
+
+        let days = WeaveBuilder.days(
+            sessions: [session],
+            blocks: [block],
+            daysBack: 1,
+            now: anchor
+        )
+
+        let day = try XCTUnwrap(days.first)
+        XCTAssertEqual(day.totalMinutes, 20)
+        XCTAssertEqual(day.minutesByContext[.school], 20)
+        XCTAssertEqual(day.sessionCount, 1)
+    }
+
     func testWeaveEstimateHeatIsMedianAcrossContexts() {
         makeCompletedTask(taskContext: .school, effort: 60, spent: 90)    // 1.5×
         makeCompletedTask(taskContext: .work, effort: 60, spent: 60)      // 1.0×
@@ -1154,6 +1793,423 @@ final class LoomTests: XCTestCase {
         }
     }
 
+    // MARK: - Plan coordinator
+
+    @MainActor
+    func testProgressReconciliationTrimsExcessFutureCoverage() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 180, deadlineHoursFromAnchor: 72)
+        let first = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 90)
+        let second = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 90
+        )
+        context.insert(first)
+        context.insert(second)
+        try context.save()
+
+        task.manualProgressPercent = 50
+        PlanCoordinator.reconcileTaskAfterProgress(
+            task,
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        let future = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete && $0.endTime > Date()
+        }
+        XCTAssertEqual(task.remainingMinutes, 90)
+        XCTAssertEqual(
+            future.reduce(0) { $0 + $1.durationMinutes },
+            task.remainingMinutes,
+            "future reservations should shrink to the newly reported remainder"
+        )
+        XCTAssertFalse(future.contains { $0.id == first.id || $0.id == second.id })
+    }
+
+    @MainActor
+    func testProgressReconciliationCountsLockedCoverageTowardRemainder() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 180, deadlineHoursFromAnchor: 72)
+        let locked = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 120
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        task.manualProgressPercent = 50
+        PlanCoordinator.reconcileTaskAfterProgress(
+            task,
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        let future = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete && $0.endTime > Date()
+        }
+        XCTAssertEqual(task.remainingMinutes, 90)
+        XCTAssertTrue(future.contains { $0.id == locked.id })
+        XCTAssertFalse(future.contains { $0.id == movable.id })
+        XCTAssertEqual(future.reduce(0) { $0 + $1.durationMinutes }, 90)
+        XCTAssertEqual(
+            future.filter { !$0.isLocked }.reduce(0) { $0 + $1.durationMinutes },
+            30,
+            "only effort not already covered by the locked block should be placed"
+        )
+    }
+
+    func testRescheduleCountsOnlyFutureOverlapOfInProgressLockedBlock() throws {
+        let settings = makeSettings()
+        settings.startBufferMinutes = 0
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 8)
+        let locked = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-30 * 60),
+            durationMinutes: 60
+        )
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 120
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        let result = SchedulerService.reschedule(
+            task: task,
+            allBlocks: [locked, movable],
+            settings: settings,
+            from: anchor,
+            context: context
+        )
+        try context.save()
+
+        guard case .success = result else {
+            return XCTFail("expected clipped locked coverage to leave a full fit, got \(result)")
+        }
+        let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        let replacements = blocks.filter { !$0.isLocked }
+        XCTAssertTrue(blocks.contains { $0.id == locked.id })
+        XCTAssertFalse(blocks.contains { $0.id == movable.id })
+        XCTAssertEqual(
+            replacements.reduce(0) { $0 + $1.durationMinutes },
+            90,
+            "only the locked block's 30 future minutes may cover the 120-minute remainder"
+        )
+    }
+
+    func testRescheduleDoesNotCountLockedBlockAfterBufferedDeadline() throws {
+        let settings = makeSettings()
+        settings.startBufferMinutes = 0
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 4)
+        let windowEnd = task.deadline.addingTimeInterval(
+            -Double(settings.deadlineBufferMinutes) * 60
+        )
+        let locked = ScheduledBlock(
+            task: task,
+            startTime: windowEnd.addingTimeInterval(60 * 60),
+            durationMinutes: 60
+        )
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(30 * 60),
+            durationMinutes: 60
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        let result = SchedulerService.reschedule(
+            task: task,
+            allBlocks: [locked, movable],
+            settings: settings,
+            from: anchor,
+            context: context
+        )
+        try context.save()
+
+        guard case .success = result else {
+            return XCTFail("expected replacement work before the deadline, got \(result)")
+        }
+        let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        let replacements = blocks.filter { !$0.isLocked }
+        XCTAssertTrue(blocks.contains { $0.id == locked.id }, "locks remain in place")
+        XCTAssertFalse(blocks.contains { $0.id == movable.id })
+        XCTAssertEqual(replacements.reduce(0) { $0 + $1.durationMinutes }, 60)
+        XCTAssertTrue(replacements.allSatisfy { $0.endTime <= windowEnd })
+    }
+
+    func testRebalanceCountsOnlyFutureOverlapOfInProgressLockedBlock() throws {
+        let settings = makeSettings()
+        settings.startBufferMinutes = 0
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 8)
+        let locked = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-30 * 60),
+            durationMinutes: 60
+        )
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 120
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        let summary = SchedulerService.rebalance(
+            tasks: [task],
+            allBlocks: [locked, movable],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        let replacements = blocks.filter { !$0.isLocked }
+        XCTAssertEqual(summary.unschedulableTasks, 0)
+        XCTAssertTrue(blocks.contains { $0.id == locked.id })
+        XCTAssertFalse(blocks.contains { $0.id == movable.id })
+        XCTAssertEqual(replacements.reduce(0) { $0 + $1.durationMinutes }, 90)
+    }
+
+    func testRebalanceDoesNotCountLockedBlockAfterBufferedDeadline() throws {
+        let settings = makeSettings()
+        settings.startBufferMinutes = 0
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 4)
+        let windowEnd = task.deadline.addingTimeInterval(
+            -Double(settings.deadlineBufferMinutes) * 60
+        )
+        let locked = ScheduledBlock(
+            task: task,
+            startTime: windowEnd.addingTimeInterval(60 * 60),
+            durationMinutes: 60
+        )
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(30 * 60),
+            durationMinutes: 60
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        let summary = SchedulerService.rebalance(
+            tasks: [task],
+            allBlocks: [locked, movable],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        let replacements = blocks.filter { !$0.isLocked }
+        XCTAssertEqual(summary.unschedulableTasks, 0)
+        XCTAssertTrue(blocks.contains { $0.id == locked.id }, "locks remain in place")
+        XCTAssertFalse(blocks.contains { $0.id == movable.id })
+        XCTAssertEqual(replacements.reduce(0) { $0 + $1.durationMinutes }, 60)
+        XCTAssertTrue(replacements.allSatisfy { $0.endTime <= windowEnd })
+    }
+
+    @MainActor
+    func testLinkedBlockAttendanceReconciliationRestoresUnchangedCoverage() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 72)
+        let attended = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        let existingFuture = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 60
+        )
+        let session = WorkSession(
+            task: task,
+            startedAt: anchor,
+            durationSeconds: 25 * 60,
+            scheduledBlockId: attended.id
+        )
+        context.insert(attended)
+        context.insert(existingFuture)
+        context.insert(session)
+        try context.save()
+
+        attended.isComplete = true
+        let result = PlanCoordinator.reconcileTaskAfterProgress(
+            task,
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        guard case .success = result else {
+            return XCTFail("expected full replacement coverage, got \(result)")
+        }
+
+        let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id
+        }
+        let futureCoverage = blocks
+            .filter { !$0.isComplete && $0.endTime > Date() }
+            .reduce(0) { $0 + $1.durationMinutes }
+        XCTAssertEqual(task.remainingMinutes, 120, "attendance alone must not imply progress")
+        XCTAssertEqual(futureCoverage, task.remainingMinutes)
+        XCTAssertTrue(blocks.contains { $0.id == attended.id && $0.isComplete })
+        XCTAssertFalse(blocks.contains { $0.id == existingFuture.id })
+    }
+
+    @MainActor
+    func testUncheckingAttendedBlockReconciliationAvoidsDuplicateCoverage() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 72)
+        let attended = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        let existingFuture = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 60
+        )
+        context.insert(attended)
+        context.insert(existingFuture)
+        try context.save()
+
+        attended.isComplete = true
+        PlanCoordinator.reconcileTaskAfterProgress(
+            task,
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        attended.isComplete = false
+        PlanCoordinator.reconcileTaskAfterProgress(
+            task,
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        let future = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete && $0.endTime > Date()
+        }
+        let futureCoverage = future.reduce(0) { $0 + $1.durationMinutes }
+
+        XCTAssertEqual(task.remainingMinutes, 120, "attendance changes must not imply progress")
+        XCTAssertEqual(
+            futureCoverage,
+            task.remainingMinutes,
+            "undoing attendance must replace, not stack on, the reconciled coverage"
+        )
+        XCTAssertNotEqual(futureCoverage, task.remainingMinutes + attended.durationMinutes)
+        XCTAssertFalse(future.contains { $0.id == attended.id })
+    }
+
+    @MainActor
+    func testPlanningPreferenceRebuildCountsLockedCoverageTowardRemainder() throws {
+        let settings = makeSettings()
+        settings.minBlockMinutes = 15
+        let task = makeTask(effort: 180, deadlineHoursFromAnchor: 72)
+        task.manualProgressPercent = 50
+        let locked = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        locked.isLocked = true
+        let movable = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 120
+        )
+        context.insert(locked)
+        context.insert(movable)
+        try context.save()
+
+        PlanCoordinator.rebuildAfterPlanningPreferencesChange(
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        let future = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete && $0.endTime > Date()
+        }
+        XCTAssertEqual(task.remainingMinutes, 90)
+        XCTAssertTrue(future.contains { $0.id == locked.id })
+        XCTAssertFalse(future.contains { $0.id == movable.id })
+        XCTAssertEqual(future.reduce(0) { $0 + $1.durationMinutes }, 90)
+        XCTAssertEqual(future.filter { !$0.isLocked }.reduce(0) { $0 + $1.durationMinutes }, 30)
+    }
+
+    @MainActor
+    func testCompletionReleasesIncompleteLockedBlocks() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let locked = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        locked.isLocked = true
+        context.insert(locked)
+        try context.save()
+
+        PlanCoordinator.completeTask(task, context: context, interactive: false)
+
+        let surviving = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        XCTAssertTrue(task.isComplete)
+        XCTAssertTrue(surviving.isEmpty, "explicit completion must release locked reservations")
+    }
+
+    @MainActor
+    func testBusyTimeReconciliationMovesConflictingBlock() throws {
+        _ = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let original = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 60)
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "coordinator-conflict",
+            title: "New meeting",
+            startTime: original.startTime,
+            endTime: original.endTime
+        )
+        context.insert(original)
+        context.insert(busy)
+        try context.save()
+
+        let replanned = PlanCoordinator.replanBusyTimeConflicts(
+            context: context,
+            interactive: false
+        )
+        try context.save()
+
+        let replacements = try context.fetch(FetchDescriptor<ScheduledBlock>()).filter {
+            $0.task?.id == task.id && !$0.isComplete
+        }
+        XCTAssertEqual(replanned, 1)
+        XCTAssertFalse(replacements.isEmpty)
+        XCTAssertFalse(replacements.contains { $0.id == original.id })
+        XCTAssertTrue(replacements.allSatisfy {
+            $0.startTime >= busy.endTime || $0.endTime <= busy.startTime
+        })
+    }
+
     // MARK: - Data export
 
     func testDataExportRoundTrips() throws {
@@ -1161,7 +2217,12 @@ final class LoomTests: XCTestCase {
         task.firstStep = "Open the doc"
         let block = ScheduledBlock(task: task, startTime: anchor, durationMinutes: 45)
         context.insert(block)
-        let session = WorkSession(task: task, startedAt: anchor, durationSeconds: 1200)
+        let session = WorkSession(
+            task: task,
+            startedAt: anchor,
+            durationSeconds: 1200,
+            scheduledBlockId: block.id
+        )
         context.insert(session)
         let reminder = Reminder(title: "Take meds", dueDate: anchor.addingTimeInterval(3600))
         context.insert(reminder)
@@ -1180,7 +2241,7 @@ final class LoomTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let export = try decoder.decode(DataExporter.Export.self, from: data)
 
-        XCTAssertEqual(export.version, 1)
+        XCTAssertEqual(export.version, 2)
         XCTAssertEqual(export.tasks.count, 1)
         XCTAssertEqual(export.blocks.count, 1)
         XCTAssertEqual(export.workSessions.count, 1)
@@ -1193,6 +2254,24 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(exportedTask.firstStep, "Open the doc")
         XCTAssertEqual(exportedTask.context, "School")
         XCTAssertEqual(export.blocks.first?.taskId, task.id, "relations survive as id references")
+        XCTAssertEqual(export.workSessions.first?.scheduledBlockId, block.id)
         XCTAssertEqual(export.blockedTimes.first?.weekdays, [2, 4])
+
+        // Export v1 had the same envelope but no session-to-block link. The
+        // new optional field must keep those existing backups decodable.
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        legacyObject["version"] = 1
+        var legacySessions = try XCTUnwrap(
+            legacyObject["workSessions"] as? [[String: Any]]
+        )
+        legacySessions[0].removeValue(forKey: "scheduledBlockId")
+        legacyObject["workSessions"] = legacySessions
+        let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+        let legacyExport = try decoder.decode(DataExporter.Export.self, from: legacyData)
+
+        XCTAssertEqual(legacyExport.version, 1)
+        XCTAssertNil(legacyExport.workSessions.first?.scheduledBlockId)
     }
 }

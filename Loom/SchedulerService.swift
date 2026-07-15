@@ -100,7 +100,31 @@ struct SchedulerService {
         from startDate: Date = Date(),
         allowOvernight: Bool = false
     ) -> ScheduleResult {
-        let remaining = task.remainingMinutes
+        schedule(
+            task: task,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            requestedMinutes: task.remainingMinutes,
+            from: startDate,
+            allowOvernight: allowOvernight
+        )
+    }
+
+    /// Internal placement entry point for invalidation flows that retain
+    /// locked coverage and therefore need less than the task's full remainder.
+    private static func schedule(
+        task: LoomTask,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent],
+        settings: UserSettings,
+        requestedMinutes: Int,
+        from startDate: Date,
+        allowOvernight: Bool = false
+    ) -> ScheduleResult {
+        let remaining = max(0, requestedMinutes)
         guard remaining > 0 else { return .success(blocks: []) }
 
         let bufferSeconds = TimeInterval(settings.deadlineBufferMinutes * 60)
@@ -135,7 +159,11 @@ struct SchedulerService {
             to: windowEnd,
             occupied: occupied,
             settings: settings,
-            allowOvernight: allowOvernight
+            allowOvernight: allowOvernight,
+            minimumSlotMinutes: minimumSlotMinutes(
+                for: remaining,
+                settings: settings
+            )
         )
 
         var minutesPerDay = settings.dailyFocusMinutes > 0
@@ -143,6 +171,7 @@ struct SchedulerService {
             : [:]
         return place(
             task: task,
+            requestedMinutes: remaining,
             in: freeSlots,
             settings: settings,
             minutesPerDay: &minutesPerDay
@@ -170,8 +199,23 @@ struct SchedulerService {
             context.delete(block)
         }
 
-        // Get all blocks except the ones we just removed
+        // Get all blocks except the ones we just removed. Locked future blocks
+        // stay in place and already cover part of the task's remaining effort.
         let remainingBlocks = allBlocks.filter { !removedIds.contains($0.id) }
+        let planningStart = roundUpToFiveMinutes(
+            startDate
+                ?? Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+        )
+        let windowEnd = task.deadline.addingTimeInterval(
+            -Double(settings.deadlineBufferMinutes) * 60
+        )
+        let retainedLockedMinutes = retainedLockedCoverageMinutes(
+            for: task,
+            in: remainingBlocks,
+            from: planningStart,
+            to: windowEnd
+        )
+        let requestedMinutes = max(0, task.remainingMinutes - retainedLockedMinutes)
 
         let result = schedule(
             task: task,
@@ -179,8 +223,8 @@ struct SchedulerService {
             blockedTimes: blockedTimes,
             busyEvents: busyEvents,
             settings: settings,
-            from: startDate
-                ?? Date().addingTimeInterval(TimeInterval(settings.startBufferMinutes * 60))
+            requestedMinutes: requestedMinutes,
+            from: planningStart
         )
         insert(result: result, into: context)
         return result
@@ -259,7 +303,11 @@ struct SchedulerService {
                 to: latestWindowEnd,
                 occupied: occupied,
                 settings: settings,
-                allowOvernight: false
+                allowOvernight: false,
+                // Keep short fragments in the shared timeline so a task whose
+                // whole remainder is below the configured minimum can claim
+                // one after earlier-deadline work has been subtracted.
+                minimumSlotMinutes: 1
             )
             : []
         var minutesPerDay = settings.dailyFocusMinutes > 0
@@ -270,23 +318,40 @@ struct SchedulerService {
             let windowEnd = task.deadline.addingTimeInterval(
                 -Double(settings.deadlineBufferMinutes) * 60
             )
+            let retainedLockedMinutes = retainedLockedCoverageMinutes(
+                for: task,
+                in: kept,
+                from: start,
+                to: windowEnd
+            )
+            let requestedMinutes = max(0, task.remainingMinutes - retainedLockedMinutes)
+            let taskMinimum = minimumSlotMinutes(
+                for: requestedMinutes,
+                settings: settings
+            )
             let taskSlots = freeSlots.compactMap { slot -> Interval? in
                 let clipped = Interval(
                     start: max(slot.start, start),
                     end: min(slot.end, windowEnd)
                 )
-                return clipped.durationMinutes >= Double(settings.minBlockMinutes)
+                return clipped.durationMinutes >= Double(taskMinimum)
                     ? clipped
                     : nil
             }
-            let result = start < windowEnd
-                ? place(
+            let result: ScheduleResult
+            if requestedMinutes == 0 {
+                result = .success(blocks: [])
+            } else if start < windowEnd {
+                result = place(
                     task: task,
+                    requestedMinutes: requestedMinutes,
                     in: taskSlots,
                     settings: settings,
                     minutesPerDay: &minutesPerDay
                 )
-                : .noSlots
+            } else {
+                result = .noSlots
+            }
             switch result {
             case .success(let blocks):
                 for block in blocks { context.insert(block) }
@@ -298,7 +363,7 @@ struct SchedulerService {
                 subtract(blocks: blocks, from: &freeSlots)
                 summary.unschedulableTasks += 1
             case .noSlots:
-                if task.remainingMinutes > 0 {
+                if requestedMinutes > 0 {
                     summary.unschedulableTasks += 1
                 }
             }
@@ -422,6 +487,31 @@ struct SchedulerService {
         busyEvents: [BusyEvent] = [],
         settings: UserSettings
     ) -> Int {
+        scheduleableMinutes(
+            from: from,
+            to: to,
+            excludingTaskId: excludingTaskId,
+            allBlocks: allBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            minimumSlotMinutes: blockBounds(for: settings).minimum
+        )
+    }
+
+    /// The free-minute pass shared by the public capacity API and task
+    /// pressure. Pressure may lower the slot floor when the task's entire
+    /// remainder is shorter than the configured minimum block.
+    private static func scheduleableMinutes(
+        from: Date,
+        to: Date,
+        excludingTaskId: UUID?,
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent],
+        settings: UserSettings,
+        minimumSlotMinutes: Int
+    ) -> Int {
         let from = roundUpToFiveMinutes(from)
         guard from < to else { return 0 }
 
@@ -443,9 +533,40 @@ struct SchedulerService {
             to: to,
             occupied: occupied,
             settings: settings,
-            allowOvernight: false
+            allowOvernight: false,
+            minimumSlotMinutes: minimumSlotMinutes
         )
-        return Int(slots.reduce(0.0) { $0 + $1.durationMinutes })
+
+        let focusCap = settings.dailyFocusMinutes
+        var focusUsage = focusCap > 0
+            ? focusMinutesPerDay(in: allBlocks)
+            : [:]
+
+        // An excluded task can reclaim only the portion of its own reservation
+        // that lies inside this query. Same-day reservations before or after
+        // the window still consume focus budget, including locked blocks that
+        // the scheduler cannot move.
+        if focusCap > 0, let excludingTaskId {
+            for block in allBlocks
+                where !block.isComplete && block.task?.id == excludingTaskId {
+                let overlapStart = max(block.startTime, from)
+                let overlapEnd = min(block.endTime, to)
+                guard overlapStart < overlapEnd else { continue }
+
+                for (day, minutes) in minutesByDay(from: overlapStart, to: overlapEnd) {
+                    focusUsage[day] = max(0, focusUsage[day, default: 0] - minutes)
+                }
+            }
+        }
+
+        let bounds = blockBounds(for: settings)
+        return slotAwareCapacity(
+            in: slots,
+            minimum: minimumSlotMinutes,
+            maximum: bounds.maximum,
+            focusCap: focusCap,
+            focusUsage: focusUsage
+        )
     }
 
     /// Schedule pressure for a task: remaining effort ÷ free minutes left
@@ -488,14 +609,18 @@ struct SchedulerService {
         )
         guard windowEnd > now else { return (.infinity, 0) }
 
-        let available = availableMinutes(
+        let available = scheduleableMinutes(
             from: now,
             to: windowEnd,
             excludingTaskId: task.id,
             allBlocks: allBlocks,
             blockedTimes: blockedTimes,
             busyEvents: busyEvents,
-            settings: settings
+            settings: settings,
+            minimumSlotMinutes: minimumSlotMinutes(
+                for: remaining,
+                settings: settings
+            )
         )
         guard available > 0 else { return (.infinity, 0) }
         return (Double(remaining) / Double(available), available)
@@ -586,64 +711,326 @@ struct SchedulerService {
         }
     }
 
+    private struct BlockPlacement {
+        let start: Date
+        let durationMinutes: Int
+    }
+
+    private struct PlacementState {
+        let scheduledMinutes: Int
+        let placements: [BlockPlacement]
+        /// Focus added by this candidate plan. Entries for days that no future
+        /// slot can touch are discarded after each DP step.
+        let addedFocusSeconds: [Date: Int]
+    }
+
+    /// Locked blocks stay where the user put them, but only the portion that
+    /// can still satisfy this scheduling pass counts as retained coverage.
+    /// Time before planning starts and time after the buffered deadline cannot
+    /// reduce the amount that must be placed inside the usable window.
+    private static func retainedLockedCoverageMinutes(
+        for task: LoomTask,
+        in blocks: [ScheduledBlock],
+        from planningStart: Date,
+        to windowEnd: Date
+    ) -> Int {
+        guard planningStart < windowEnd else { return 0 }
+
+        return blocks.reduce(0) { total, block in
+            guard block.task?.id == task.id,
+                  block.isLocked,
+                  !block.isComplete else {
+                return total
+            }
+
+            let overlapStart = max(block.startTime, planningStart)
+            let overlapEnd = min(block.endTime, windowEnd)
+            guard overlapStart < overlapEnd else { return total }
+
+            let overlapMinutes = Int(
+                floor(overlapEnd.timeIntervalSince(overlapStart) / 60 + 0.000_001)
+            )
+            return total + max(0, overlapMinutes)
+        }
+    }
+
+    private static func scheduledMinuteCount(in result: ScheduleResult) -> Int {
+        switch result {
+        case .success(let blocks), .partialFit(let blocks, _):
+            return blocks.reduce(0) { $0 + $1.durationMinutes }
+        case .noSlots:
+            return 0
+        }
+    }
+
+    /// Candidate plans create model objects before one is selected. Sever the
+    /// inverse relationship on the loser so only the chosen plan can later be
+    /// inserted into SwiftData.
+    private static func detachBlocks(in result: ScheduleResult) {
+        switch result {
+        case .success(let blocks), .partialFit(let blocks, _):
+            for block in blocks { block.task = nil }
+        case .noSlots:
+            break
+        }
+    }
+
     /// Assign chunks to the earliest available slots. Daily focus accounting
     /// follows calendar-day boundaries even when an awake window crosses them.
     private static func place(
         task: LoomTask,
+        requestedMinutes: Int,
         in freeSlots: [Interval],
         settings: UserSettings,
         minutesPerDay: inout [Date: Double]
     ) -> ScheduleResult {
-        let remaining = task.remainingMinutes
+        let remaining = max(0, requestedMinutes)
         guard remaining > 0 else { return .success(blocks: []) }
 
-        let focusCap = settings.dailyFocusMinutes
-        let effectiveMax = focusCap > 0
-            ? min(settings.maxBlockMinutes, focusCap)
-            : settings.maxBlockMinutes
-        let chunks = splitEffort(
-            minutes: remaining,
-            minBlock: min(settings.minBlockMinutes, effectiveMax),
-            maxBlock: effectiveMax
+        let orderedSlots = freeSlots.sorted { $0.start < $1.start }
+        if orderedSlots.allSatisfy(staysWithinOneCalendarDay) {
+            return placeUsingSlotDP(
+                task: task,
+                requestedMinutes: remaining,
+                in: orderedSlots,
+                settings: settings,
+                minutesPerDay: &minutesPerDay
+            )
+        }
+
+        // The exact slot DP maximizes fragmented placement, including a block
+        // that crosses midnight. The greedy path additionally knows how to
+        // skip to midnight when the first date's focus budget is exhausted.
+        // Evaluate both against isolated focus snapshots and keep the plan that
+        // actually places more work; discarded blocks are detached so they do
+        // not linger in the task relationship.
+        var dpMinutesPerDay = minutesPerDay
+        let dpResult = placeUsingSlotDP(
+            task: task,
+            requestedMinutes: remaining,
+            in: orderedSlots,
+            settings: settings,
+            minutesPerDay: &dpMinutesPerDay
+        )
+        var greedyMinutesPerDay = minutesPerDay
+        let greedyResult = placeAcrossMidnightGreedily(
+            task: task,
+            requestedMinutes: remaining,
+            in: orderedSlots,
+            settings: settings,
+            minutesPerDay: &greedyMinutesPerDay
         )
 
-        var newBlocks: [ScheduledBlock] = []
-        var slotIndex = 0
-        var slotOffset: TimeInterval = 0
+        if scheduledMinuteCount(in: dpResult) >= scheduledMinuteCount(in: greedyResult) {
+            detachBlocks(in: greedyResult)
+            minutesPerDay = dpMinutesPerDay
+            return dpResult
+        }
 
-        for chunk in chunks {
-            var placed = false
-            while slotIndex < freeSlots.count {
-                let slot = freeSlots[slotIndex]
-                let slotStart = slot.start.addingTimeInterval(slotOffset)
-                let available = slot.end.timeIntervalSince(slotStart) / 60.0
-                let portions = minutesByDay(
-                    from: slotStart,
-                    to: slotStart.addingTimeInterval(TimeInterval(chunk * 60))
-                )
-                let overFocusCap = focusCap > 0 && portions.contains { day, minutes in
-                    minutesPerDay[day, default: 0] + minutes > Double(focusCap)
-                }
+        detachBlocks(in: dpResult)
+        minutesPerDay = greedyMinutesPerDay
+        return greedyResult
+    }
 
-                if available >= Double(chunk) && !overFocusCap {
-                    let block = ScheduledBlock(
-                        task: task,
-                        startTime: slotStart,
-                        durationMinutes: chunk
+    /// Exact, minute-granularity placement for ordinary same-day gaps. The DP
+    /// keeps at most one best state per scheduled-minute total: lower remaining
+    /// same-day focus usage dominates, then the chronologically earlier plan
+    /// wins. This finds the maximum partial fit without an exponential search.
+    private static func placeUsingSlotDP(
+        task: LoomTask,
+        requestedMinutes: Int,
+        in freeSlots: [Interval],
+        settings: UserSettings,
+        minutesPerDay: inout [Date: Double]
+    ) -> ScheduleResult {
+        let bounds = blockBounds(for: settings)
+        let minimum = min(requestedMinutes, bounds.minimum)
+        let focusCapSeconds = settings.dailyFocusMinutes > 0
+            ? settings.dailyFocusMinutes * 60
+            : 0
+        let initialFocusSeconds = minutesPerDay.mapValues {
+            Int(($0 * 60).rounded())
+        }
+
+        var states: [Int: PlacementState] = [
+            0: PlacementState(
+                scheduledMinutes: 0,
+                placements: [],
+                addedFocusSeconds: [:]
+            )
+        ]
+
+        for (index, slot) in freeSlots.enumerated() {
+            let slotCapacity = min(
+                requestedMinutes,
+                max(0, Int(floor(slot.durationMinutes + 0.000_001)))
+            )
+            var options = [0]
+            if slotCapacity >= minimum {
+                options.append(contentsOf: (minimum...slotCapacity).filter {
+                    isRepresentableByBlocks(
+                        $0,
+                        minimum: minimum,
+                        maximum: bounds.maximum
                     )
-                    newBlocks.append(block)
-                    for (day, minutes) in portions {
-                        minutesPerDay[day, default: 0] += minutes
+                })
+            }
+
+            let futureDays = Set(freeSlots.dropFirst(index + 1).map {
+                Calendar.current.startOfDay(for: $0.start)
+            })
+            var nextStates: [Int: PlacementState] = [:]
+
+            for state in states.values {
+                for amount in options where state.scheduledMinutes + amount <= requestedMinutes {
+                    let optionEnd = slot.start.addingTimeInterval(TimeInterval(amount * 60))
+                    var addedFocus = state.addedFocusSeconds
+                    var fitsFocus = true
+
+                    if focusCapSeconds > 0, amount > 0 {
+                        for (day, minutes) in minutesByDay(from: slot.start, to: optionEnd) {
+                            let seconds = Int((minutes * 60).rounded())
+                            let used = initialFocusSeconds[day, default: 0]
+                                + addedFocus[day, default: 0]
+                                + seconds
+                            if used > focusCapSeconds {
+                                fitsFocus = false
+                                break
+                            }
+                            addedFocus[day, default: 0] += seconds
+                        }
                     }
-                    slotOffset += TimeInterval(chunk * 60)
-                    placed = true
-                    break
-                } else {
-                    slotIndex += 1
-                    slotOffset = 0
+                    guard fitsFocus else { continue }
+
+                    var placements = state.placements
+                    if amount > 0 {
+                        var cursor = slot.start
+                        for chunk in splitEffort(
+                            minutes: amount,
+                            minBlock: minimum,
+                            maxBlock: bounds.maximum
+                        ) {
+                            placements.append(
+                                BlockPlacement(start: cursor, durationMinutes: chunk)
+                            )
+                            cursor = cursor.addingTimeInterval(TimeInterval(chunk * 60))
+                        }
+                    }
+
+                    addedFocus = addedFocus.filter { futureDays.contains($0.key) }
+                    let candidate = PlacementState(
+                        scheduledMinutes: state.scheduledMinutes + amount,
+                        placements: placements,
+                        addedFocusSeconds: addedFocus
+                    )
+                    let total = candidate.scheduledMinutes
+
+                    if let existing = nextStates[total] {
+                        if prefers(candidate, over: existing) {
+                            nextStates[total] = candidate
+                        }
+                    } else {
+                        nextStates[total] = candidate
+                    }
                 }
             }
-            if !placed { break }
+            states = nextStates
+
+            // Slots are chronological and this state is already the earliest
+            // complete plan reachable through the current slot. Later slots
+            // cannot improve its first-use time, so stop before a distant
+            // deadline turns an exact answer into needless DP work.
+            if states[requestedMinutes] != nil {
+                break
+            }
+        }
+
+        guard let scheduledMinutes = states.keys.max(), scheduledMinutes > 0,
+              let best = states[scheduledMinutes] else {
+            return .noSlots
+        }
+
+        let blocks = best.placements.map { placement in
+            ScheduledBlock(
+                task: task,
+                startTime: placement.start,
+                durationMinutes: placement.durationMinutes
+            )
+        }
+        for block in blocks {
+            for (day, minutes) in minutesByDay(from: block.startTime, to: block.endTime) {
+                minutesPerDay[day, default: 0] += minutes
+            }
+        }
+
+        if scheduledMinutes < requestedMinutes {
+            return .partialFit(
+                scheduled: blocks,
+                unscheduledMinutes: requestedMinutes - scheduledMinutes
+            )
+        }
+        return .success(blocks: blocks)
+    }
+
+    /// Existing midnight-aware forward placement. A continuous overnight slot
+    /// can carry a block through midnight and, after one day's focus is spent,
+    /// resume at the next date boundary.
+    private static func placeAcrossMidnightGreedily(
+        task: LoomTask,
+        requestedMinutes: Int,
+        in freeSlots: [Interval],
+        settings: UserSettings,
+        minutesPerDay: inout [Date: Double]
+    ) -> ScheduleResult {
+        let remaining = requestedMinutes
+
+        let focusCap = settings.dailyFocusMinutes
+        let bounds = blockBounds(for: settings)
+
+        var newBlocks: [ScheduledBlock] = []
+        var minutesLeft = remaining
+
+        for slot in freeSlots where minutesLeft > 0 {
+            var slotStart = slot.start
+            while slotStart < slot.end, minutesLeft > 0 {
+                guard let chunk = fittingChunk(
+                    remaining: minutesLeft,
+                    from: slotStart,
+                    to: slot.end,
+                    minimum: bounds.minimum,
+                    maximum: bounds.maximum,
+                    focusCap: focusCap,
+                    minutesPerDay: minutesPerDay
+                ) else {
+                    // An awake window can cross midnight. If today's focus
+                    // budget is exhausted, retry the still-free portion after
+                    // the calendar-day boundary instead of discarding it.
+                    let day = Calendar.current.startOfDay(for: slotStart)
+                    guard let nextDay = Calendar.current.date(
+                        byAdding: .day,
+                        value: 1,
+                        to: day
+                    ), nextDay > slotStart, nextDay < slot.end else {
+                        break
+                    }
+                    slotStart = nextDay
+                    continue
+                }
+
+                let blockEnd = slotStart.addingTimeInterval(TimeInterval(chunk * 60))
+                let portions = minutesByDay(from: slotStart, to: blockEnd)
+                let block = ScheduledBlock(
+                    task: task,
+                    startTime: slotStart,
+                    durationMinutes: chunk
+                )
+                newBlocks.append(block)
+                for (day, minutes) in portions {
+                    minutesPerDay[day, default: 0] += minutes
+                }
+                minutesLeft -= chunk
+                slotStart = blockEnd
+            }
         }
 
         let scheduledMinutes = newBlocks.reduce(0) { $0 + $1.durationMinutes }
@@ -657,6 +1044,30 @@ struct SchedulerService {
         } else {
             return .success(blocks: newBlocks)
         }
+    }
+
+    private static func prefers(
+        _ candidate: PlacementState,
+        over existing: PlacementState
+    ) -> Bool {
+        let candidateFocus = candidate.addedFocusSeconds.values.reduce(0, +)
+        let existingFocus = existing.addedFocusSeconds.values.reduce(0, +)
+        if candidateFocus != existingFocus {
+            return candidateFocus < existingFocus
+        }
+
+        for (candidateBlock, existingBlock) in zip(
+            candidate.placements,
+            existing.placements
+        ) {
+            if candidateBlock.start != existingBlock.start {
+                return candidateBlock.start < existingBlock.start
+            }
+            if candidateBlock.durationMinutes != existingBlock.durationMinutes {
+                return candidateBlock.durationMinutes > existingBlock.durationMinutes
+            }
+        }
+        return candidate.placements.count < existing.placements.count
     }
 
     /// Focus usage from existing blocks, split at every local midnight rather
@@ -687,6 +1098,277 @@ struct SchedulerService {
             cursor = portionEnd
         }
         return portions
+    }
+
+    /// Sanitized block bounds shared by free-slot filtering and placement.
+    /// A focus cap below the preferred minimum necessarily becomes the usable
+    /// maximum (and therefore minimum) for that configuration.
+    private static func blockBounds(
+        for settings: UserSettings
+    ) -> (minimum: Int, maximum: Int) {
+        let configuredMaximum = max(1, settings.maxBlockMinutes)
+        let maximum = settings.dailyFocusMinutes > 0
+            ? min(configuredMaximum, settings.dailyFocusMinutes)
+            : configuredMaximum
+        return (max(1, min(settings.minBlockMinutes, maximum)), maximum)
+    }
+
+    private static func minimumSlotMinutes(
+        for remaining: Int,
+        settings: UserSettings
+    ) -> Int {
+        guard remaining > 0 else { return 0 }
+        return min(remaining, blockBounds(for: settings).minimum)
+    }
+
+    private static func staysWithinOneCalendarDay(_ slot: Interval) -> Bool {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: slot.start)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: day) else {
+            return false
+        }
+        return slot.end <= nextDay
+    }
+
+    /// Maximum capacity across distinct same-day gaps. Each gap contributes
+    /// only totals its own geometry can represent, and a bounded daily DP
+    /// allocates the remaining focus budget without pooling unusable tails.
+    private static func slotAwareCapacity(
+        in slots: [Interval],
+        minimum: Int,
+        maximum: Int,
+        focusCap: Int,
+        focusUsage: [Date: Double]
+    ) -> Int {
+        guard minimum > 0, maximum >= minimum else { return 0 }
+
+        if focusCap <= 0 {
+            return slots.reduce(0) { total, slot in
+                let capacity = max(0, Int(floor(slot.durationMinutes + 0.000_001)))
+                return total + largestRepresentableMinutes(
+                    upTo: capacity,
+                    minimum: minimum,
+                    maximum: maximum
+                )
+            }
+        }
+
+        if !slots.allSatisfy(staysWithinOneCalendarDay) {
+            // An overnight awake window is one continuous opportunity, but its
+            // focus cost belongs to the calendar days on either side of local
+            // midnight. Keep two conservative, realizable estimates: the
+            // independent-fragment DP prevents disconnected tails from pooling,
+            // while the continuous pass preserves a real block that bridges the
+            // seam. Taking the better result never claims more than one of those
+            // placement strategies can actually schedule.
+            var fragments: [Interval] = []
+            for slot in slots {
+                var cursor = slot.start
+                while cursor < slot.end {
+                    let day = Calendar.current.startOfDay(for: cursor)
+                    guard let nextDay = Calendar.current.date(
+                        byAdding: .day,
+                        value: 1,
+                        to: day
+                    ) else { break }
+                    let fragmentEnd = min(slot.end, nextDay)
+                    fragments.append(Interval(start: cursor, end: fragmentEnd))
+                    cursor = fragmentEnd
+                }
+            }
+            let fragmentedCapacity = slotAwareCapacity(
+                in: fragments,
+                minimum: minimum,
+                maximum: maximum,
+                focusCap: focusCap,
+                focusUsage: focusUsage
+            )
+            let continuousCapacity = continuousGreedyCapacity(
+                in: slots,
+                minimum: minimum,
+                maximum: maximum,
+                focusCap: focusCap,
+                focusUsage: focusUsage
+            )
+            return max(fragmentedCapacity, continuousCapacity)
+        }
+
+        let calendar = Calendar.current
+        let slotsByDay = Dictionary(grouping: slots) {
+            calendar.startOfDay(for: $0.start)
+        }
+
+        return slotsByDay.reduce(0) { total, entry in
+            let (day, daySlots) = entry
+            let remainingFocus = max(
+                0,
+                Int(floor(Double(focusCap) - focusUsage[day, default: 0] + 0.000_001))
+            )
+            guard remainingFocus >= minimum else { return total }
+
+            var reachable = Set([0])
+            for slot in daySlots {
+                let slotCapacity = min(
+                    remainingFocus,
+                    max(0, Int(floor(slot.durationMinutes + 0.000_001)))
+                )
+                var options = [0]
+                if slotCapacity >= minimum {
+                    options.append(contentsOf: (minimum...slotCapacity).filter {
+                        isRepresentableByBlocks(
+                            $0,
+                            minimum: minimum,
+                            maximum: maximum
+                        )
+                    })
+                }
+
+                var next = Set<Int>()
+                next.reserveCapacity(min(remainingFocus + 1, reachable.count * options.count))
+                for used in reachable {
+                    for option in options where used + option <= remainingFocus {
+                        next.insert(used + option)
+                    }
+                }
+                reachable = next
+            }
+            return total + (reachable.max() ?? 0)
+        }
+    }
+
+    /// Capacity lower bound that mirrors the placement path for a continuous
+    /// overnight gap. Work starts at the gap's cursor; if today's focus budget
+    /// cannot hold another minimum block, the cursor advances to midnight just
+    /// as `placeAcrossMidnightGreedily` does. Every accepted run is itself
+    /// representable as one or more valid blocks, so this can recover seam-
+    /// spanning capacity without pooling disconnected fragments.
+    private static func continuousGreedyCapacity(
+        in slots: [Interval],
+        minimum: Int,
+        maximum: Int,
+        focusCap: Int,
+        focusUsage: [Date: Double]
+    ) -> Int {
+        guard focusCap > 0 else { return 0 }
+
+        var usage = focusUsage
+        var total = 0
+
+        for slot in slots.sorted(by: { $0.start < $1.start }) {
+            var cursor = slot.start
+
+            while cursor < slot.end {
+                let available = max(
+                    0,
+                    Int(floor(slot.end.timeIntervalSince(cursor) / 60 + 0.000_001))
+                )
+                var accepted = 0
+
+                if available >= minimum {
+                    for candidate in stride(from: available, through: minimum, by: -1) {
+                        guard isRepresentableByBlocks(
+                            candidate,
+                            minimum: minimum,
+                            maximum: maximum
+                        ) else { continue }
+
+                        let candidateEnd = cursor.addingTimeInterval(
+                            TimeInterval(candidate * 60)
+                        )
+                        let portions = minutesByDay(from: cursor, to: candidateEnd)
+                        let fits = portions.allSatisfy { day, minutes in
+                            usage[day, default: 0] + minutes <= Double(focusCap)
+                        }
+                        if fits {
+                            accepted = candidate
+                            for (day, minutes) in portions {
+                                usage[day, default: 0] += minutes
+                            }
+                            break
+                        }
+                    }
+                }
+
+                if accepted > 0 {
+                    total += accepted
+                    cursor = cursor.addingTimeInterval(TimeInterval(accepted * 60))
+                    continue
+                }
+
+                let day = Calendar.current.startOfDay(for: cursor)
+                guard let nextDay = Calendar.current.date(
+                    byAdding: .day,
+                    value: 1,
+                    to: day
+                ), nextDay > cursor, nextDay < slot.end else {
+                    break
+                }
+                cursor = nextDay
+            }
+        }
+
+        return total
+    }
+
+    /// Largest amount no greater than `limit` that can be expressed as one or
+    /// more blocks within the supplied bounds. For example, 55 minutes under
+    /// 30...45-minute bounds contributes 45 usable minutes, while 60 can be
+    /// represented by two 30-minute blocks. A sub-minimum daily remainder is
+    /// not capacity that can be pooled with another day.
+    private static func largestRepresentableMinutes(
+        upTo limit: Int,
+        minimum: Int,
+        maximum: Int
+    ) -> Int {
+        guard limit >= minimum, minimum > 0, maximum >= minimum else { return 0 }
+        let blockCount = limit / minimum
+        return min(limit, blockCount * maximum)
+    }
+
+    private static func isRepresentableByBlocks(
+        _ minutes: Int,
+        minimum: Int,
+        maximum: Int
+    ) -> Bool {
+        guard minutes > 0, minimum > 0, maximum >= minimum else { return false }
+        let minimumBlocks = Int(ceil(Double(minutes) / Double(maximum)))
+        let maximumBlocks = minutes / minimum
+        return minimumBlocks <= maximumBlocks
+    }
+
+    /// Pick the largest block that fits this particular slot while preserving
+    /// a minimum-sized tail. This adapts `[90, 30]` into `[60, 60]` when the
+    /// actual calendar offers two separate hour-long gaps.
+    private static func fittingChunk(
+        remaining: Int,
+        from start: Date,
+        to end: Date,
+        minimum: Int,
+        maximum: Int,
+        focusCap: Int,
+        minutesPerDay: [Date: Double]
+    ) -> Int? {
+        let available = Int(floor(end.timeIntervalSince(start) / 60.0 + 0.000_001))
+        let largest = min(remaining, maximum, available)
+        let smallest = remaining < minimum ? remaining : minimum
+        guard largest >= smallest else { return nil }
+
+        for candidate in stride(from: largest, through: smallest, by: -1) {
+            let tail = remaining - candidate
+            guard tail == 0 || isRepresentableByBlocks(
+                tail,
+                minimum: minimum,
+                maximum: maximum
+            ) else { continue }
+
+            let candidateEnd = start.addingTimeInterval(TimeInterval(candidate * 60))
+            let portions = minutesByDay(from: start, to: candidateEnd)
+            let fitsFocus = focusCap <= 0 || portions.allSatisfy { day, minutes in
+                minutesPerDay[day, default: 0] + minutes <= Double(focusCap)
+            }
+            if fitsFocus { return candidate }
+        }
+        return nil
     }
 
     /// Coalesce the initially occupied timeline once before free-slot
@@ -740,7 +1422,8 @@ struct SchedulerService {
         to: Date,
         occupied: [Interval],
         settings: UserSettings,
-        allowOvernight: Bool
+        allowOvernight: Bool,
+        minimumSlotMinutes: Int? = nil
     ) -> [Interval] {
         let calendar = Calendar.current
         var slots: [Interval] = []
@@ -813,8 +1496,11 @@ struct SchedulerService {
             freeSlots.append(contentsOf: remaining)
         }
 
-        // Filter out slots too small for minimum block
-        return freeSlots.filter { $0.durationMinutes >= Double(settings.minBlockMinutes) }
+        // A task whose whole remainder is shorter than the configured minimum
+        // can opt into a correspondingly short slot. Generic callers retain
+        // the configured floor.
+        let minimum = minimumSlotMinutes ?? blockBounds(for: settings).minimum
+        return freeSlots.filter { $0.durationMinutes >= Double(minimum) }
     }
 
     /// Split total effort into chunks respecting min/max block sizes.

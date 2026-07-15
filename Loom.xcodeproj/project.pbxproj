@@ -15,6 +15,7 @@
 		021ED3212C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */; };
 		0CA001012C6D3EF700D079F0 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001002C6D3EF700D079F0 /* Models.swift */; };
 		0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA001022C6D3EF700D079F0 /* SchedulerService.swift */; };
+		0CA009012C6D3EF700D079F0 /* PlanCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CA009002C6D3EF700D079F0 /* PlanCoordinator.swift */; };
 		0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00002D6D3EF700D079F0 /* Insights.swift */; };
 		0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00102D6D3EF700D079F0 /* WeaveView.swift */; };
 		0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */; };
@@ -120,6 +121,7 @@
 		021ED3202C6D3EF800D079F0 /* LoomUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		0CA001002C6D3EF700D079F0 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		0CA001022C6D3EF700D079F0 /* SchedulerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulerService.swift; sourceTree = "<group>"; };
+		0CA009002C6D3EF700D079F0 /* PlanCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanCoordinator.swift; sourceTree = "<group>"; };
 		0CAF00002D6D3EF700D079F0 /* Insights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Insights.swift; sourceTree = "<group>"; };
 		0CAF00102D6D3EF700D079F0 /* WeaveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeaveView.swift; sourceTree = "<group>"; };
 		0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoomIntents.swift; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 				021ED3002C6D3EF700D079F0 /* LoomApp.swift */,
 				0CA001002C6D3EF700D079F0 /* Models.swift */,
 				0CA001022C6D3EF700D079F0 /* SchedulerService.swift */,
+				0CA009002C6D3EF700D079F0 /* PlanCoordinator.swift */,
 				0CAF00002D6D3EF700D079F0 /* Insights.swift */,
 				0CAF00102D6D3EF700D079F0 /* WeaveView.swift */,
 				0CAF00202D6D3EF700D079F0 /* LoomIntents.swift */,
@@ -499,6 +502,7 @@
 				021ED3012C6D3EF700D079F0 /* LoomApp.swift in Sources */,
 				0CA001012C6D3EF700D079F0 /* Models.swift in Sources */,
 				0CA001032C6D3EF700D079F0 /* SchedulerService.swift in Sources */,
+				0CA009012C6D3EF700D079F0 /* PlanCoordinator.swift in Sources */,
 				0CAF00012D6D3EF700D079F0 /* Insights.swift in Sources */,
 				0CAF00112D6D3EF700D079F0 /* WeaveView.swift in Sources */,
 				0CAF00212D6D3EF700D079F0 /* LoomIntents.swift in Sources */,

@@ -4,6 +4,7 @@ import EventKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var settingsArray: [UserSettings]
     @State private var showCalendarDeniedAlert = false
     @State private var showNotificationsDeniedAlert = false
@@ -12,6 +13,8 @@ struct SettingsView: View {
     @State private var isConnectingGoogle = false
     @State private var showGoogleConnectFailed = false
     @State private var confirmGoogleDisconnect = false
+    @State private var planningPreferencesDirty = false
+    @State private var planningRebuildTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -25,6 +28,11 @@ struct SettingsView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .onDisappear(perform: flushPlanningRebuild)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            guard oldPhase == .active, newPhase != .active else { return }
+            flushPlanningRebuild()
         }
     }
 
@@ -102,15 +110,27 @@ struct SettingsView: View {
         ) {
             SettingsRow(icon: "sunrise.fill", tint: .workDisplay, label: "Wake time") {
                 timePicker(
-                    hour: Binding(get: { settings.wakeHour }, set: { settings.wakeHour = $0 }),
-                    minute: Binding(get: { settings.wakeMinute }, set: { settings.wakeMinute = $0 })
+                    hour: planningPreferenceBinding(
+                        get: { settings.wakeHour },
+                        set: { settings.wakeHour = $0 }
+                    ),
+                    minute: planningPreferenceBinding(
+                        get: { settings.wakeMinute },
+                        set: { settings.wakeMinute = $0 }
+                    )
                 )
                 .accessibilityLabel("Wake time")
             }
             SettingsRow(icon: "moon.fill", tint: .schoolDisplay, label: "Sleep time") {
                 timePicker(
-                    hour: Binding(get: { settings.sleepHour }, set: { settings.sleepHour = $0 }),
-                    minute: Binding(get: { settings.sleepMinute }, set: { settings.sleepMinute = $0 })
+                    hour: planningPreferenceBinding(
+                        get: { settings.sleepHour },
+                        set: { settings.sleepHour = $0 }
+                    ),
+                    minute: planningPreferenceBinding(
+                        get: { settings.sleepMinute },
+                        set: { settings.sleepMinute = $0 }
+                    )
                 )
                 .accessibilityLabel("Sleep time")
             }
@@ -145,7 +165,7 @@ struct SettingsView: View {
         ) {
             stepperRow(
                 icon: "gauge.with.needle", tint: .brand300, label: "Daily focus limit",
-                value: Binding(
+                value: planningPreferenceBinding(
                     get: { settings.dailyFocusMinutes },
                     set: { settings.dailyFocusMinutes = $0 }
                 ),
@@ -156,7 +176,7 @@ struct SettingsView: View {
             )
             stepperRow(
                 icon: "rectangle.compress.vertical", tint: .schoolDisplay, label: "Minimum block",
-                value: Binding(
+                value: planningPreferenceBinding(
                     get: { settings.minBlockMinutes },
                     set: { settings.minBlockMinutes = $0 }
                 ),
@@ -165,7 +185,7 @@ struct SettingsView: View {
             )
             stepperRow(
                 icon: "rectangle.expand.vertical", tint: .schoolDisplay, label: "Maximum block",
-                value: Binding(
+                value: planningPreferenceBinding(
                     get: { settings.maxBlockMinutes },
                     set: { settings.maxBlockMinutes = $0 }
                 ),
@@ -174,7 +194,7 @@ struct SettingsView: View {
             )
             stepperRow(
                 icon: "shield.fill", tint: .personalDisplay, label: "Deadline buffer",
-                value: Binding(
+                value: planningPreferenceBinding(
                     get: { settings.deadlineBufferMinutes },
                     set: { settings.deadlineBufferMinutes = $0 }
                 ),
@@ -183,7 +203,7 @@ struct SettingsView: View {
             )
             stepperRow(
                 icon: "hourglass.bottomhalf.filled", tint: .personalDisplay, label: "Start buffer",
-                value: Binding(
+                value: planningPreferenceBinding(
                     get: { settings.startBufferMinutes },
                     set: { settings.startBufferMinutes = $0 }
                 ),
@@ -217,6 +237,48 @@ struct SettingsView: View {
                     .accessibilityValue(display)
             }
         }
+    }
+
+    /// Planning controls can emit several values while a wheel or stepper is
+    /// moving. A single trailing rebuild keeps those edits responsive while
+    /// still committing the final preference promptly.
+    private func planningPreferenceBinding(
+        get: @escaping () -> Int,
+        set: @escaping (Int) -> Void
+    ) -> Binding<Int> {
+        Binding(
+            get: get,
+            set: { newValue in
+                guard newValue != get() else { return }
+                set(newValue)
+                queuePlanningRebuild()
+            }
+        )
+    }
+
+    private func queuePlanningRebuild() {
+        planningPreferencesDirty = true
+        planningRebuildTask?.cancel()
+        planningRebuildTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(650))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            planningRebuildTask = nil
+            guard planningPreferencesDirty else { return }
+            planningPreferencesDirty = false
+            PlanCoordinator.rebuildAfterPlanningPreferencesChange(context: modelContext)
+        }
+    }
+
+    private func flushPlanningRebuild() {
+        planningRebuildTask?.cancel()
+        planningRebuildTask = nil
+        guard planningPreferencesDirty else { return }
+        planningPreferencesDirty = false
+        PlanCoordinator.rebuildAfterPlanningPreferencesChange(context: modelContext)
     }
 
     // MARK: - Nudges

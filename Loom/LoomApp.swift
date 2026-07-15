@@ -10,6 +10,8 @@ struct LoomApp: App {
         subsystem: Bundle.main.bundleIdentifier ?? "Loom",
         category: "Persistence"
     )
+    private static let uiTestingArgument = "-ui-testing"
+    private static let uiTestingSkipOnboardingArgument = "-ui-testing-skip-onboarding"
 
     /// Store lives in the App Group so the widget can read it (SharedStore
     /// migrates any pre-1.2 sandbox store on first launch).
@@ -23,6 +25,10 @@ struct LoomApp: App {
     }
 
     private static func makeContainer() -> (container: ModelContainer, usedFallback: Bool) {
+        if CommandLine.arguments.contains(uiTestingArgument) {
+            return makeUITestingContainer()
+        }
+
         do {
             return (try SharedStore.makeContainer(), false)
         } catch {
@@ -44,6 +50,28 @@ struct LoomApp: App {
                     + "Persistent error: \(persistentError). In-memory error: \(error)"
                 )
             }
+        }
+    }
+
+    /// UI tests get a brand-new store for every process so their first-launch
+    /// state cannot depend on the developer's data or another test's run.
+    private static func makeUITestingContainer() -> (container: ModelContainer, usedFallback: Bool) {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        do {
+            let container = try ModelContainer(
+                for: SharedStore.schema,
+                configurations: [configuration]
+            )
+            if CommandLine.arguments.contains(uiTestingSkipOnboardingArgument) {
+                let context = ModelContext(container)
+                let settings = UserSettings()
+                settings.hasCompletedOnboarding = true
+                context.insert(settings)
+                try context.save()
+            }
+            return (container, false)
+        } catch {
+            fatalError("Loom could not create its UI-testing model container: \(error)")
         }
     }
 
@@ -225,9 +253,13 @@ struct MainTabView: View {
         if summary.replannedTasks > 0 {
             replanSummary = summary
         }
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        // Not user-initiated: never trigger the permission prompt from here.
-        scheduleDidChange(context: modelContext, interactive: false)
+        // Apple import is synchronous, so newly added or moved events are now
+        // included. Reconcile conflicts and publish the final foreground plan
+        // once, after recurring-task and missed-block work has also landed.
+        PlanCoordinator.replanBusyTimeConflicts(
+            context: modelContext,
+            interactive: false
+        )
     }
 }
 

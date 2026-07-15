@@ -52,9 +52,7 @@ struct TaskRowView: View {
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 deleteTask(task, context: modelContext)
-                CalendarExportService.syncIfEnabled(context: modelContext)
-                GoogleCalendarService.exportIfEnabled(context: modelContext)
-                scheduleDidChange(context: modelContext)
+                PlanCoordinator.publishChange(context: modelContext)
             }
             Button("Keep it", role: .cancel) {}
         } message: {
@@ -254,21 +252,6 @@ struct TaskRowView: View {
     }
 
     private func rescheduleTask() {
-        let settings = UserSettings.fetchOrCreate(in: modelContext)
-        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
-        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
-        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
-
-        SchedulerService.reschedule(
-            task: task,
-            allBlocks: allBlocks,
-            blockedTimes: blockedTimes,
-            busyEvents: busyEvents,
-            settings: settings,
-            context: modelContext
-        )
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+        PlanCoordinator.rescheduleTask(task, context: modelContext)
     }
 }
