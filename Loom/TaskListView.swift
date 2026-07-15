@@ -219,9 +219,6 @@ struct TaskListView: View {
     /// stays honest instead of one orphaned block landing somewhere random.
     private func push(task: LoomTask, choice: BlockPushChoice) {
         let settings = UserSettings.fetchOrCreate(in: modelContext)
-        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
-        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
-        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
         let calendar = Calendar.current
 
         let start: Date
@@ -241,18 +238,11 @@ struct TaskListView: View {
             } ?? Date().addingTimeInterval(24 * 3600)
         }
 
-        let result = SchedulerService.reschedule(
-            task: task,
-            allBlocks: allBlocks,
-            blockedTimes: blockedTimes,
-            busyEvents: busyEvents,
-            settings: settings,
-            from: start,
-            context: modelContext
+        let result = PlanCoordinator.rescheduleTask(
+            task,
+            context: modelContext,
+            from: start
         )
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
 
         withAnimation {
             switch result {
@@ -350,9 +340,7 @@ struct TaskListView: View {
         withAnimation {
             deleteTask(task, context: modelContext)
         }
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+        PlanCoordinator.publishChange(context: modelContext)
     }
 
     // MARK: - Stats Bar
@@ -644,7 +632,7 @@ struct TaskListView: View {
                                 withAnimation {
                                     deleteTask(task, context: modelContext)
                                 }
-                                scheduleDidChange(context: modelContext)
+                                PlanCoordinator.publishChange(context: modelContext)
                             }
                             .padding(.horizontal, 20)
                         }
@@ -680,20 +668,9 @@ struct TaskListView: View {
 
     private func completeTask(_ task: LoomTask) {
         withAnimation {
-            task.isComplete = true
-            task.completedAt = Date()
-            // Reserved future time is released back to the schedule.
-            for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
-                modelContext.delete(block)
-            }
+            PlanCoordinator.completeTask(task, context: modelContext)
         }
-        // Persist the released blocks immediately — unsaved deletes have
-        // historically resurfaced as orphaned "Unknown Task" rows.
-        try? modelContext.save()
         celebrationTask = task
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
     }
 
 }
@@ -1417,20 +1394,5 @@ func restoreTask(_ task: LoomTask, context: ModelContext) {
         task.manualProgressPercent = 90
     }
 
-    let settings = UserSettings.fetchOrCreate(in: context)
-    let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
-    let blockedTimes = (try? context.fetch(FetchDescriptor<BlockedTime>())) ?? []
-    let busyEvents = (try? context.fetch(FetchDescriptor<BusyEvent>())) ?? []
-
-    SchedulerService.reschedule(
-        task: task,
-        allBlocks: allBlocks,
-        blockedTimes: blockedTimes,
-        busyEvents: busyEvents,
-        settings: settings,
-        context: context
-    )
-    CalendarExportService.syncIfEnabled(context: context)
-    GoogleCalendarService.exportIfEnabled(context: context)
-    scheduleDidChange(context: context)
+    PlanCoordinator.reconcileTaskAfterProgress(task, context: context)
 }

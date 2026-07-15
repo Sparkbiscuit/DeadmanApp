@@ -170,7 +170,10 @@ enum GoogleCalendarService {
 
             if changes > 0 {
                 // Scheduled work moves out of the way of the imported events.
-                replanAfterBusyChange(context: context)
+                PlanCoordinator.replanBusyTimeConflicts(
+                    context: context,
+                    interactive: false
+                )
             }
         } catch GoogleAuthError.needsReconnect {
             if generation == importGeneration,
@@ -308,7 +311,10 @@ enum GoogleCalendarService {
 
             let allBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
             let exportable = allBlocks.filter {
-                !$0.isComplete && $0.endTime > now && $0.startTime < horizon && $0.task != nil
+                !$0.isComplete
+                    && $0.task?.isComplete == false
+                    && $0.endTime > now
+                    && $0.startTime < horizon
             }
 
             // Loom-tagged events currently on the calendar.

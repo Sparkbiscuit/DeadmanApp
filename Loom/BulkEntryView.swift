@@ -199,9 +199,7 @@ struct BulkEntryView: View {
             }
         }
 
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+        PlanCoordinator.publishChange(context: modelContext)
 
         if warningCount > 0 {
             scheduleSummary = "\(successCount) tasks fully scheduled, \(warningCount) had scheduling warnings. Check the schedule view for details."

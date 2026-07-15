@@ -9,7 +9,8 @@ daily focus limit if you set one.
 ## Features
 
 - **Capture in seconds** — type or dictate a task, pick a context (School / Work /
-  Personal), a deadline, and an effort estimate. Bulk entry handles a whole syllabus.
+  Personal), a deadline, and an effort estimate. Repeat and delayed-start controls
+  stay tucked under “More scheduling options,” and bulk entry handles a whole syllabus.
 - **Right Now card** — the top of the Tasks tab always answers "what should I be
   doing this minute?": the running block (with elapsed/remaining) or the next one
   up, with a single big Start button. Opening the app never requires a decision.
@@ -64,7 +65,8 @@ daily focus limit if you set one.
   a plain, pretty-printed JSON file you can share, archive, or parse. Your
   data is yours.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
-  placed into free slots that finish before your deadline, with a safety buffer.
+  packed into the gaps that really exist before your buffered deadline. Fragmented
+  calendars and daily focus limits are reflected in both placement and pace.
 - **Catch-up replanning** — blocks you miss are automatically replanned, and the
   whole schedule rebalances earliest-deadline-first, so an urgent task claims
   near slots from work that can wait.
@@ -74,10 +76,13 @@ daily focus limit if you set one.
 - **Work sessions** — a focused timer per task with self-reported progress; finish at
   100% and the task completes with a small celebration. A Live Activity mirrors the
   running timer on the Lock Screen and in the Dynamic Island.
-- **Honest progress** — checking off a time block logs the time you worked; how much
-  of the task is actually done is always yours to say.
+- **Honest progress** — checking off a time block logs attendance; timed sessions are
+  linked to their block so the same work is never counted twice. How much of the task
+  is actually done is always yours to say, and skipped progress keeps the remaining
+  effort fully scheduled.
 - **Schedule views** — a day timeline and a compact week grid, including recurring
-  blocked times the scheduler works around.
+  blocked times the scheduler works around. Long-press an upcoming block to lock it
+  in place through automatic replans, or allow Loom to move it again later.
 - **Apple Calendar sync** — optional one-way export of your work blocks into a
   dedicated "Loom" calendar, and optional import that treats events from the
   calendars you choose as busy time the scheduler works around.
@@ -92,7 +97,10 @@ scheme. The visual system (colors, type, spacing, per-screen specs) lives in
 
 ## Tests
 
-Unit tests live in `LoomTests` (scheduler, estimate advisor, streaks, pace,
-digests, recurrence). The shared `Loom` scheme includes both test bundles, so
+Unit tests live in `LoomTests` (scheduler geometry and focus limits, plan
+reconciliation, work-log accounting, export compatibility, estimate advice,
+streaks, digests, and recurrence). `LoomUITests` uses an isolated in-memory
+store to cover first launch, core tab navigation, and the capture flow without
+touching personal data. The shared `Loom` scheme includes both test bundles, so
 **Product → Test** (⌘U) runs everything; they also appear in Xcode's Test
 navigator (⌘6).

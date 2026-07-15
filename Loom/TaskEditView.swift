@@ -205,24 +205,10 @@ struct TaskEditView: View {
 
         var result: ScheduleResult?
         if needsReplan {
-            let settings = UserSettings.fetchOrCreate(in: modelContext)
-            let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
-            let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
-            let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
-
-            result = SchedulerService.reschedule(
-                task: task,
-                allBlocks: allBlocks,
-                blockedTimes: blockedTimes,
-                busyEvents: busyEvents,
-                settings: settings,
-                context: modelContext
-            )
+            result = PlanCoordinator.rescheduleTask(task, context: modelContext)
+        } else {
+            PlanCoordinator.publishChange(context: modelContext)
         }
-
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
 
         switch result {
         case .partialFit(_, let unscheduledMinutes):

@@ -16,6 +16,7 @@ struct CaptureSheetView: View {
     @State private var customEffort = 180
     @State private var showCustomEffort = false
     @State private var showBulk = false
+    @State private var showSchedulingOptions = false
     @State private var useCustomStart = false
     @State private var customStart = Date().addingTimeInterval(15 * 60)
     @State private var repeatWeekly = false
@@ -69,10 +70,9 @@ struct CaptureSheetView: View {
                             firstStepField
                             contextPicker
                             deadlinePicker
-                            repeatPicker
                             effortPicker
                             estimateAdviceRow
-                            startPicker
+                            schedulingOptionsDisclosure
                             scheduleButton
                         } else {
                             reminderDatePicker
@@ -247,6 +247,7 @@ struct CaptureSheetView: View {
                     .foregroundStyle(Color.loomText)
                     .focused($titleFocused)
                     .submitLabel(.done)
+                    .accessibilityIdentifier("capture.taskTitleField")
 
                 Button {
                     toggleVoiceInput()
@@ -517,6 +518,96 @@ struct CaptureSheetView: View {
         }
     }
 
+    // MARK: - More scheduling options
+
+    /// Repeat and delayed-start controls are valuable, but not part of the
+    /// minimum path from thought to scheduled task. Keep them together in one
+    /// calm disclosure and surface any non-default choices after it closes.
+    private var schedulingOptionsDisclosure: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    showSchedulingOptions.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.brand300)
+                        .frame(width: 32, height: 32)
+                        .background(Color.brand500.opacity(0.14), in: Circle())
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("More scheduling options")
+                            .font(AppFont.bodySemibold(14))
+                            .foregroundStyle(Color.loomText)
+
+                        if !showSchedulingOptions,
+                           let summary = schedulingOptionsSummary {
+                            Text(summary)
+                                .font(AppFont.caption(11))
+                                .foregroundStyle(Color.brand300)
+                                .transition(.opacity)
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.loomSubtle)
+                        .rotationEffect(.degrees(showSchedulingOptions ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("capture.moreSchedulingOptions")
+            .accessibilityLabel(schedulingOptionsAccessibilityLabel)
+            .accessibilityValue(showSchedulingOptions ? "Expanded" : "Collapsed")
+            .accessibilityHint(
+                showSchedulingOptions
+                    ? "Hides repeat and earliest start controls"
+                    : "Shows repeat and earliest start controls"
+            )
+
+            if showSchedulingOptions {
+                VStack(alignment: .leading, spacing: 20) {
+                    Divider()
+                        .overlay(Color.loomBorder)
+                    repeatPicker
+                    startPicker
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(Color.loomSurface)
+        .clipShape(RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: LoomRadius.card, style: .continuous)
+                .stroke(Color.loomBorder, lineWidth: 1)
+        )
+    }
+
+    private var schedulingOptionsSummary: String? {
+        var choices: [String] = []
+        if repeatWeekly { choices.append("Weekly") }
+        if useCustomStart { choices.append("Starts later") }
+        return choices.isEmpty ? nil : choices.joined(separator: " · ")
+    }
+
+    private var schedulingOptionsAccessibilityLabel: String {
+        guard let summary = schedulingOptionsSummary else {
+            return "More scheduling options"
+        }
+        return "More scheduling options, \(summary)"
+    }
+
     // MARK: - Earliest start
 
     private var startPicker: some View {
@@ -639,9 +730,7 @@ struct CaptureSheetView: View {
         insertTemplateIfRepeating(for: task)
         pendingTask = nil
         pendingBlocks = []
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+        PlanCoordinator.publishChange(context: modelContext)
         dismiss()
     }
 
@@ -672,23 +761,7 @@ struct CaptureSheetView: View {
         pendingTask = nil
         pendingBlocks = []
 
-        let settings = UserSettings.fetchOrCreate(in: modelContext)
-        let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
-        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
-        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
-        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
-
-        SchedulerService.rebalance(
-            tasks: tasks,
-            allBlocks: allBlocks,
-            blockedTimes: blockedTimes,
-            busyEvents: busyEvents,
-            settings: settings,
-            context: modelContext
-        )
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+        PlanCoordinator.rebuildPlan(context: modelContext)
         dismiss()
     }
 

@@ -49,13 +49,15 @@ struct ScheduleView: View {
             }
             .sheet(item: $progressPromptBlock) { block in
                 if let task = block.task {
-                    BlockProgressPrompt(task: task, workedMinutes: block.durationMinutes) { finished in
+                    BlockProgressPrompt(task: task, workedMinutes: block.durationMinutes) { reported in
                         progressPromptBlock = nil
-                        if finished {
+                        if let reported, reported >= 100 {
                             // Let the sheet dismiss before presenting the cover.
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 completeTask(task)
                             }
+                        } else if reported != nil {
+                            PlanCoordinator.reconcileTaskAfterProgress(task, context: modelContext)
                         }
                     }
                 }
@@ -185,9 +187,12 @@ struct ScheduleView: View {
     private func timelineRow(for item: DayItem, at now: Date) -> some View {
         switch item {
         case .block(let block):
-            BlockCard(block: block, now: now) {
-                toggleBlock(block)
-            }
+            BlockCard(
+                block: block,
+                now: now,
+                onToggle: { toggleBlock(block) },
+                onToggleLock: { toggleBlockLock(block) }
+            )
         case .blocked(let interval, let label):
             BlockedTimeCard(interval: interval, label: label, now: now)
         case .busy(let event):
@@ -499,15 +504,26 @@ struct ScheduleView: View {
             block.isComplete.toggle()
         }
 
-        // Checking a block records worked time only — progress is whatever the
-        // user says it is, so ask (they can skip).
-        if block.isComplete, let task = block.task, !task.isComplete {
-            progressPromptBlock = block
+        // Attendance is separate from reported progress, but either direction
+        // changes which blocks are reservations. Reconcile active tasks so a
+        // check stays covered and an uncheck cannot duplicate that coverage.
+        if let task = block.task, !task.isComplete {
+            PlanCoordinator.reconcileTaskAfterProgress(task, context: modelContext)
+            if block.isComplete {
+                progressPromptBlock = block
+            }
+        } else {
+            PlanCoordinator.publishChange(context: modelContext)
         }
+    }
 
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
+    private func toggleBlockLock(_ block: ScheduledBlock) {
+        guard !block.isComplete else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            block.isLocked.toggle()
+        }
+        try? modelContext.save()
+        PlanCoordinator.publishChange(context: modelContext)
     }
 
     private func toggleReminder(_ reminder: Reminder) {
@@ -522,18 +538,8 @@ struct ScheduleView: View {
     }
 
     private func completeTask(_ task: LoomTask) {
-        task.isComplete = true
-        task.completedAt = Date()
-        for block in task.scheduledBlocks where !block.isComplete && !block.isLocked {
-            modelContext.delete(block)
-        }
-        // Persist the released blocks immediately — unsaved deletes have
-        // historically resurfaced as orphaned "Unknown Task" rows.
-        try? modelContext.save()
+        PlanCoordinator.completeTask(task, context: modelContext)
         celebrationTask = task
-        CalendarExportService.syncIfEnabled(context: modelContext)
-        GoogleCalendarService.exportIfEnabled(context: modelContext)
-        scheduleDidChange(context: modelContext)
     }
 }
 
@@ -645,6 +651,7 @@ private struct BlockCard: View {
     let block: ScheduledBlock
     let now: Date
     var onToggle: () -> Void
+    var onToggleLock: () -> Void
 
     private var isInSession: Bool {
         !block.isComplete && block.startTime <= now && now < block.endTime
@@ -716,6 +723,13 @@ private struct BlockCard: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(accessibilityDescription)
+                .accessibilityActions {
+                    if !block.isComplete {
+                        Button(block.isLocked ? "Allow Replanning" : "Lock in Place") {
+                            onToggleLock()
+                        }
+                    }
+                }
 
                 // The check control only surfaces once the block has started —
                 // future rows stay clean, per the design. Early birds can
@@ -750,6 +764,15 @@ private struct BlockCard: View {
                         block.isComplete ? "Mark Incomplete" : "Mark Complete",
                         systemImage: block.isComplete ? "arrow.uturn.backward" : "checkmark.circle"
                     )
+                }
+                if !block.isComplete {
+                    Divider()
+                    Button(action: onToggleLock) {
+                        Label(
+                            block.isLocked ? "Allow Replanning" : "Lock in Place",
+                            systemImage: block.isLocked ? "lock.open" : "lock"
+                        )
+                    }
                 }
             }
         }
@@ -948,8 +971,8 @@ private struct ReminderScheduleCard: View {
 private struct BlockProgressPrompt: View {
     let task: LoomTask
     let workedMinutes: Int
-    /// Called with `true` when the user reported the task finished.
-    var onDismiss: (Bool) -> Void
+    /// The saved overall percentage, or nil when progress was skipped.
+    var onDismiss: (Int?) -> Void
 
     @State private var progressValue: Double = 0
 
@@ -978,15 +1001,16 @@ private struct BlockProgressPrompt: View {
             .padding(.top, 6)
 
             Button {
-                task.manualProgressPercent = max(task.manualProgressPercent, Int(progressValue))
-                onDismiss(Int(progressValue) >= 100)
+                let reported = Int(progressValue)
+                task.manualProgressPercent = max(task.manualProgressPercent, reported)
+                onDismiss(reported)
             } label: {
                 Text("Save Progress")
                     .primaryButtonStyle(fill: task.context.color)
             }
 
             Button("Skip") {
-                onDismiss(false)
+                onDismiss(nil)
             }
             .font(AppFont.caption(14))
             .foregroundStyle(Color.loomSubtle)

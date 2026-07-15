@@ -19,7 +19,8 @@ struct WeaveBuilder {
 
     /// The last `daysBack` days, oldest first. Worked time follows the same
     /// convention as `timeSpentMinutes`: timed sessions plus checked-off
-    /// blocks, attributed to the day they started.
+    /// blocks that do not have a linked timed session, attributed to the day
+    /// they started.
     static func days(
         sessions: [WorkSession],
         blocks: [ScheduledBlock],
@@ -28,6 +29,7 @@ struct WeaveBuilder {
         calendar: Calendar = .current
     ) -> [WeaveDay] {
         let today = calendar.startOfDay(for: now)
+        let timedBlockIds = Set(sessions.compactMap(\.scheduledBlockId))
         var result: [WeaveDay] = []
         for offset in stride(from: daysBack - 1, through: 0, by: -1) {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
@@ -38,7 +40,9 @@ struct WeaveBuilder {
                 minutes[context, default: 0] += (session.durationSeconds + 30) / 60
                 sessionCount += 1
             }
-            for block in blocks where block.isComplete && calendar.isDate(block.startTime, inSameDayAs: day) {
+            for block in blocks where block.isComplete
+                && !timedBlockIds.contains(block.id)
+                && calendar.isDate(block.startTime, inSameDayAs: day) {
                 guard let context = block.task?.context else { continue }
                 minutes[context, default: 0] += block.durationMinutes
             }

@@ -7,7 +7,7 @@ import SwiftData
 enum DataExporter {
 
     struct Export: Codable {
-        var version = 1
+        var version = 2
         var exportedAt = Date()
         var tasks: [TaskRecord] = []
         var templates: [TemplateRecord] = []
@@ -53,6 +53,7 @@ enum DataExporter {
     struct SessionRecord: Codable {
         let id: UUID
         let taskId: UUID?
+        let scheduledBlockId: UUID?
         let startedAt: Date
         let durationSeconds: Int
     }
@@ -116,6 +117,7 @@ enum DataExporter {
             SessionRecord(
                 id: session.id,
                 taskId: session.task?.id,
+                scheduledBlockId: session.scheduledBlockId,
                 startedAt: session.startedAt,
                 durationSeconds: session.durationSeconds
             )

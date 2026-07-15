@@ -80,16 +80,18 @@ final class LoomTask {
         self.workSessions = []
     }
 
-    /// Minutes of blocks the user checked off. Checking a block means "I worked
-    /// this time" — it feeds time-spent, never task progress. Productivity varies;
-    /// progress is only what the user self-reports.
+    /// Minutes recorded by checked-off blocks that do not already have a timed
+    /// session. A linked session is the canonical record for that block, so the
+    /// reservation is not counted a second time.
     var workedBlockMinutes: Int {
-        scheduledBlocks
-            .filter { $0.isComplete }
+        let timedBlockIds = Set(workSessions.compactMap(\.scheduledBlockId))
+        return scheduledBlocks
+            .filter { $0.isComplete && !timedBlockIds.contains($0.id) }
             .reduce(0) { $0 + $1.durationMinutes }
     }
 
-    /// Actual minutes worked: timed sessions plus checked-off blocks.
+    /// Actual minutes worked: timed sessions plus checked-off blocks that do
+    /// not have a linked timed session.
     var timeSpentMinutes: Int {
         workSessions.reduce(0) { $0 + ($1.durationSeconds + 30) / 60 } + workedBlockMinutes
     }
@@ -179,12 +181,21 @@ final class WorkSession {
     var task: LoomTask?
     var startedAt: Date
     var durationSeconds: Int
+    /// The reservation this timer was started inside, when there was one.
+    /// Optional with an inline default so existing stores migrate safely.
+    var scheduledBlockId: UUID? = nil
 
-    init(task: LoomTask, startedAt: Date, durationSeconds: Int) {
+    init(
+        task: LoomTask,
+        startedAt: Date,
+        durationSeconds: Int,
+        scheduledBlockId: UUID? = nil
+    ) {
         self.id = UUID()
         self.task = task
         self.startedAt = startedAt
         self.durationSeconds = durationSeconds
+        self.scheduledBlockId = scheduledBlockId
     }
 }
 

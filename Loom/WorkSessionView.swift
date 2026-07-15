@@ -2,6 +2,33 @@ import SwiftUI
 import SwiftData
 import UIKit
 
+/// Chooses the reservation a newly started timer should fulfill. Corrupt stores
+/// can contain overlapping blocks, so selection must not depend on SwiftData's
+/// relationship ordering: prefer the earliest start, then earliest end, then a
+/// stable identifier tie-breaker.
+enum WorkSessionBlockSelector {
+    static func currentIncompleteBlock(
+        in blocks: [ScheduledBlock],
+        at date: Date
+    ) -> ScheduledBlock? {
+        blocks
+            .filter {
+                !$0.isComplete
+                    && $0.startTime <= date
+                    && date < $0.endTime
+            }
+            .min { lhs, rhs in
+                if lhs.startTime != rhs.startTime {
+                    return lhs.startTime < rhs.startTime
+                }
+                if lhs.endTime != rhs.endTime {
+                    return lhs.endTime < rhs.endTime
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+    }
+}
+
 /// The held flame: a full-height focus timer for a single task. Start/pause/
 /// stop a session around the glowing ring, then self-report overall progress.
 /// Saving at 100% completes the task.
@@ -19,6 +46,9 @@ struct WorkSessionView: View {
     @State private var showProgressPrompt = false
     @State private var progressValue: Double = 0
     @State private var sessionStart: Date?
+    /// Captured when the timer starts so stopping after the block boundary still
+    /// links the work log to the reservation it fulfilled.
+    @State private var scheduledBlockId: UUID?
 
     // Pause bookkeeping: worked time is derived from the wall clock
     // (sessionStart → now, minus time spent paused), never from counting
@@ -98,11 +128,9 @@ struct WorkSessionView: View {
             }
         }
         .onDisappear {
-            // Sheet dragged away mid-session OR from the post-stop progress
-            // prompt: keep the worked time, skip the prompt. recordSession()
-            // self-guards on elapsedSeconds > 0, so this is safe to call from
-            // any state — checking isRunning alone silently dropped sessions
-            // dismissed while the progress prompt was showing.
+            // A running sheet can still disappear without Stop. Record through
+            // the same durable path; after Stop, elapsedSeconds is already zero
+            // so this remains idempotent.
             recordSession()
             UIApplication.shared.isIdleTimerDisabled = false
         }
@@ -116,9 +144,6 @@ struct WorkSessionView: View {
                 if isRunning {
                     stopTapped()
                 } else {
-                    if showProgressPrompt {
-                        recordSession()
-                    }
                     onFinish(false)
                 }
             }
@@ -475,8 +500,11 @@ struct WorkSessionView: View {
         // Immersion: the screen stays awake for the whole session, and the
         // running block's end becomes the gentle boundary chime.
         UIApplication.shared.isIdleTimerDisabled = true
-        let runningBlock = task.scheduledBlocks
-            .first { $0.startTime <= now && now < $0.endTime }
+        let runningBlock = WorkSessionBlockSelector.currentIncompleteBlock(
+            in: task.scheduledBlocks,
+            at: now
+        )
+        scheduledBlockId = runningBlock?.id
         blockEndTarget = runningBlock?.endTime
         let ringStart: Date
         let window: Int
@@ -573,11 +601,9 @@ struct WorkSessionView: View {
     }
 
     private func stopTapped() {
-        WorkSessionActivityController.end()
-        UIApplication.shared.isIdleTimerDisabled = false
-        if !isPaused {
-            syncElapsed()
-        }
+        // Commit the work log and attendance before the progress prompt. The
+        // app may be backgrounded or terminated while that prompt is visible.
+        recordSession()
         withAnimation {
             isRunning = false
             isPaused = false
@@ -599,22 +625,45 @@ struct WorkSessionView: View {
         let session = WorkSession(
             task: task,
             startedAt: sessionStart ?? Date().addingTimeInterval(-Double(elapsedSeconds)),
-            durationSeconds: elapsedSeconds
+            durationSeconds: elapsedSeconds,
+            scheduledBlockId: scheduledBlockId
         )
         modelContext.insert(session)
+        var didCompleteLinkedBlock = false
+        if let scheduledBlockId,
+           let block = task.scheduledBlocks.first(where: { $0.id == scheduledBlockId }) {
+            didCompleteLinkedBlock = !block.isComplete
+            block.isComplete = true
+        }
         // The first step's whole job is getting the first session started;
         // once that's happened it would just be stale noise.
         task.firstStep = nil
+        // Stop is a durability boundary: the session and attendance must exist
+        // on disk before the optional progress step begins.
+        try? modelContext.save()
         isRunning = false
         isPaused = false
         elapsedSeconds = 0
+        sessionStart = nil
+        scheduledBlockId = nil
         microGoalSeconds = nil
+        if didCompleteLinkedBlock {
+            // Attendance consumed one reservation without changing self-
+            // reported progress. Restore coverage for the unchanged remainder;
+            // saving progress later may legitimately reconcile once more.
+            PlanCoordinator.reconcileTaskAfterProgress(task, context: modelContext)
+            try? modelContext.save()
+        } else {
+            PlanCoordinator.publishChange(context: modelContext)
+        }
     }
 
     private func saveProgress() {
         let reported = Int(progressValue)
-        recordSession()
         task.manualProgressPercent = max(task.manualProgressPercent, reported)
+        if reported < 100 {
+            PlanCoordinator.reconcileTaskAfterProgress(task, context: modelContext)
+        }
         onFinish(reported >= 100)
     }
 }

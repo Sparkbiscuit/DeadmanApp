@@ -38,9 +38,13 @@ enum CalendarExportService {
         let now = Date()
         let horizon = Calendar.current.date(byAdding: .day, value: horizonDays, to: now) ?? now
 
-        // Blocks that should exist as events: incomplete, upcoming, inside the horizon.
+        // Blocks that should exist as events: active-task work that is
+        // incomplete, upcoming, and inside the horizon.
         let exportable = allBlocks.filter {
-            !$0.isComplete && $0.endTime > now && $0.startTime < horizon && $0.task != nil
+            !$0.isComplete
+                && $0.task?.isComplete == false
+                && $0.endTime > now
+                && $0.startTime < horizon
         }
 
         // Existing Loom-owned events within the horizon.

@@ -59,7 +59,7 @@ struct CaptureTaskIntent: AppIntent {
         )
         SchedulerService.insert(result: result, into: context)
         try context.save()
-        scheduleDidChange(context: context, interactive: false)
+        PlanCoordinator.publishChange(context: context, interactive: false)
 
         switch result {
         case .success(let blocks), .partialFit(let blocks, _):
