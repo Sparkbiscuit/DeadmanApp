@@ -46,6 +46,9 @@ struct WorkSessionView: View {
     @State private var showProgressPrompt = false
     @State private var progressValue: Double = 0
     @State private var sessionStart: Date?
+    /// Matches the App Group control snapshot and Live Activity attributes.
+    /// A delayed intent for an older activity cannot affect a newer timer.
+    @State private var activeSessionID: UUID?
     /// Captured when the timer starts so stopping after the block boundary still
     /// links the work log to the reservation it fulfilled.
     @State private var scheduledBlockId: UUID?
@@ -105,11 +108,20 @@ struct WorkSessionView: View {
             // The ring carries the schedule, not the session: it keeps
             // ticking through a pause (only the count-up freezes).
             now = tick
+            syncSharedControl(at: tick)
             if !isPaused {
-                syncElapsed()
                 checkBlockBoundary()
                 checkMicroGoal()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .workSessionControlDidChange)) {
+            notification in
+            guard isRunning,
+                  let changedID = notification.object as? UUID,
+                  changedID == activeSessionID else { return }
+            let date = Date()
+            now = date
+            syncSharedControl(at: date)
         }
         // Coming back from the background: the timer publisher slept, so the
         // ring and label catch up to the wall clock immediately instead of
@@ -122,9 +134,7 @@ struct WorkSessionView: View {
             }
             if newPhase == .active && isRunning {
                 now = Date()
-                if !isPaused {
-                    syncElapsed()
-                }
+                syncSharedControl(at: now)
             }
         }
         .onDisappear {
@@ -489,8 +499,10 @@ struct WorkSessionView: View {
 
     private func startTapped(microMinutes: Int? = nil) {
         let now = Date()
+        let sessionID = UUID()
         self.now = now // the ring's clock starts at the same instant
         sessionStart = now
+        activeSessionID = sessionID
         elapsedSeconds = 0
         pausedAccumSeconds = 0
         pauseBegan = nil
@@ -530,7 +542,12 @@ struct WorkSessionView: View {
         microGoalSeconds = microMinutes.map { $0 * 60 }
         didHitMicroGoal = false
 
+        WorkSessionControlStore.save(
+            WorkSessionControlState(sessionID: sessionID, startedAt: now)
+        )
         WorkSessionActivityController.start(
+            sessionID: sessionID,
+            taskID: task.id,
             taskTitle: task.title,
             contextName: task.context.rawValue,
             effortMinutes: task.effortMinutes,
@@ -549,8 +566,38 @@ struct WorkSessionView: View {
         elapsedSeconds = max(0, Int(now.timeIntervalSince(start)) - paused)
     }
 
+    /// Pulls pause bookkeeping written by either the in-app control or the
+    /// system-run Live Activity intent. The wall clock remains authoritative,
+    /// so resuming the app never depends on timer publisher ticks that were
+    /// skipped while it was suspended.
+    private func syncSharedControl(at date: Date) {
+        guard let activeSessionID,
+              let control = WorkSessionControlStore.load(sessionID: activeSessionID) else {
+            if !isPaused { syncElapsed(now: date) }
+            return
+        }
+
+        pausedAccumSeconds = control.accumulatedPausedSeconds
+        pauseBegan = control.pauseBeganAt
+        elapsedSeconds = control.elapsedWorkedSeconds(at: date)
+        if isPaused != control.isPaused {
+            withAnimation { isPaused = control.isPaused }
+        }
+    }
+
     private func togglePause() {
         let now = Date()
+        if let activeSessionID,
+           var control = WorkSessionControlStore.load(sessionID: activeSessionID) {
+            control.togglePause(at: now)
+            WorkSessionControlStore.save(control)
+            syncSharedControl(at: now)
+            WorkSessionActivityController.updateSoon(control, at: now)
+            return
+        }
+
+        // Defensive fallback for a damaged/missing shared snapshot. The local
+        // control remains usable even when App Group persistence is unavailable.
         if isPaused {
             if let began = pauseBegan {
                 pausedAccumSeconds += max(0, Int(now.timeIntervalSince(began)))
@@ -563,10 +610,16 @@ struct WorkSessionView: View {
             pauseBegan = now
             isPaused = true
         }
-        WorkSessionActivityController.setPaused(
-            isPaused,
-            elapsedWorkedSeconds: elapsedSeconds
-        )
+        if let activeSessionID, let sessionStart {
+            let recovered = WorkSessionControlState(
+                sessionID: activeSessionID,
+                startedAt: sessionStart,
+                accumulatedPausedSeconds: pausedAccumSeconds,
+                pauseBeganAt: pauseBegan
+            )
+            WorkSessionControlStore.save(recovered)
+            WorkSessionActivityController.updateSoon(recovered, at: now)
+        }
     }
 
     private func checkMicroGoal() {
@@ -613,15 +666,24 @@ struct WorkSessionView: View {
     }
 
     private func recordSession() {
+        if isRunning {
+            syncSharedControl(at: Date())
+        }
         WorkSessionActivityController.end()
         UIApplication.shared.isIdleTimerDisabled = false
-        if isRunning && !isPaused {
-            // Catch up before logging — the last timer tick may be stale.
-            syncElapsed()
-        }
         pausedAccumSeconds = 0
         pauseBegan = nil
-        guard elapsedSeconds > 0 else { return }
+        activeSessionID = nil
+        guard elapsedSeconds > 0 else {
+            // A sub-second start/stop has no attendance to persist, so it is
+            // already safe to finish any calendar repair that waited for the
+            // timer's ownership to clear.
+            PlanCoordinator.resumeDeferredBusyTimeConflictReplan(
+                context: modelContext
+            )
+            try? modelContext.save()
+            return
+        }
         let session = WorkSession(
             task: task,
             startedAt: sessionStart ?? Date().addingTimeInterval(-Double(elapsedSeconds)),
@@ -656,6 +718,13 @@ struct WorkSessionView: View {
         } else {
             PlanCoordinator.publishChange(context: modelContext)
         }
+        // Google import can finish while this timer still owns its scheduled
+        // block. Repair those conflicts only after the session and attendance
+        // above are durable, then persist the resulting plan before returning.
+        PlanCoordinator.resumeDeferredBusyTimeConflictReplan(
+            context: modelContext
+        )
+        try? modelContext.save()
     }
 
     private func saveProgress() {

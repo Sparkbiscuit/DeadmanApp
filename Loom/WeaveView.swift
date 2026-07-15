@@ -112,6 +112,8 @@ struct WeaveView: View {
                     winsSection
                 }
                 .padding(.bottom, 110)
+                .frame(maxWidth: LoomLayout.readableContentMaxWidth)
+                .frame(maxWidth: .infinity)
             }
             .hearthScreen(topGlow: 0.22, bottomGlow: 0.30)
         }

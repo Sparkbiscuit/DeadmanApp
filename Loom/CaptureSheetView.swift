@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import Speech
 import AVFoundation
+import UIKit
 
 struct CaptureSheetView: View {
     @Environment(\.modelContext) private var modelContext
@@ -52,6 +53,8 @@ struct CaptureSheetView: View {
     @State private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     @State private var recognitionTask: SFSpeechRecognitionTask?
     @State private var audioEngine = AVAudioEngine()
+    @State private var activeRecognitionID: UUID?
+    @State private var voiceInputIssue: VoiceInputIssue?
 
     @FocusState private var titleFocused: Bool
 
@@ -96,6 +99,21 @@ struct CaptureSheetView: View {
                 Button("Cancel", role: .cancel) { discardPending() }
             } message: {
                 Text(scheduleWarning ?? "")
+            }
+            .alert(item: $voiceInputIssue) { issue in
+                if issue.offersSettings {
+                    return Alert(
+                        title: Text(issue.title),
+                        message: Text(issue.message),
+                        primaryButton: .default(Text("Open Settings"), action: openAppSettings),
+                        secondaryButton: .cancel(Text("Not now"))
+                    )
+                }
+                return Alert(
+                    title: Text(issue.title),
+                    message: Text(issue.message),
+                    dismissButton: .default(Text("OK"))
+                )
             }
             .onAppear {
                 titleFocused = true
@@ -255,14 +273,21 @@ struct CaptureSheetView: View {
                     Image(systemName: isListening ? "mic.fill" : "mic")
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(isListening ? Color.loomRed : Color.loomSubtle)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                         .background(
                             Circle()
                                 .fill(isListening ? Color.loomRed.opacity(0.13) : Color.loomSurface2)
                         )
                 }
-                .contentShape(Rectangle().inset(by: -2))
+                .contentShape(Circle())
                 .accessibilityLabel(isListening ? "Stop voice input" : "Start voice input")
+                .accessibilityValue(isListening ? "Listening" : "Not listening")
+                .accessibilityHint(
+                    isListening
+                        ? "Stops listening and keeps the current task title."
+                        : "Uses speech to fill in the task title."
+                )
+                .accessibilityIdentifier("capture.voiceInputButton")
             }
         }
     }
@@ -785,25 +810,58 @@ struct CaptureSheetView: View {
     }
 
     private func startListening() {
+        guard speechRecognizer?.isAvailable == true else {
+            voiceInputIssue = .recognizerUnavailable
+            return
+        }
+
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
-                guard status == .authorized else { return }
                 // Don't open the microphone if the user has left for another
                 // app while the permission dialog sat waiting. (`.inactive`
                 // must stay allowed — the dialog itself holds the scene there
                 // while this callback races the grant tap.)
                 guard scenePhase != .background else { return }
+
+                switch status {
+                case .authorized:
+                    requestMicrophoneAccess()
+                case .denied, .restricted:
+                    voiceInputIssue = .speechPermission
+                case .notDetermined:
+                    voiceInputIssue = .recognizerUnavailable
+                @unknown default:
+                    voiceInputIssue = .recognizerUnavailable
+                }
+            }
+        }
+    }
+
+    private func requestMicrophoneAccess() {
+        AVAudioApplication.requestRecordPermission { granted in
+            DispatchQueue.main.async {
+                guard scenePhase != .background else { return }
+                guard granted else {
+                    voiceInputIssue = .microphonePermission
+                    return
+                }
                 beginRecognition()
             }
         }
     }
 
     private func beginRecognition() {
+        guard let speechRecognizer, speechRecognizer.isAvailable else {
+            voiceInputIssue = .recognizerUnavailable
+            return
+        }
+
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
+            voiceInputIssue = .audioUnavailable
             return
         }
 
@@ -822,18 +880,28 @@ struct CaptureSheetView: View {
             try audioEngine.start()
         } catch {
             inputNode.removeTap(onBus: 0)
+            request.endAudio()
+            recognitionRequest = nil
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            voiceInputIssue = .audioUnavailable
             return
         }
         isListening = true
 
-        recognitionTask = speechRecognizer?.recognitionTask(with: request) { result, error in
-            if let result {
-                DispatchQueue.main.async {
+        let recognitionID = UUID()
+        activeRecognitionID = recognitionID
+        recognitionTask = speechRecognizer.recognitionTask(with: request) { result, error in
+            DispatchQueue.main.async {
+                guard activeRecognitionID == recognitionID else { return }
+
+                if let result {
                     title = result.bestTranscription.formattedString
                 }
-            }
-            if error != nil || (result?.isFinal ?? false) {
-                DispatchQueue.main.async {
+
+                if error != nil {
+                    stopListening()
+                    voiceInputIssue = .recognitionFailed
+                } else if result?.isFinal ?? false {
                     stopListening()
                 }
             }
@@ -841,6 +909,7 @@ struct CaptureSheetView: View {
     }
 
     private func stopListening() {
+        activeRecognitionID = nil
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
@@ -849,6 +918,55 @@ struct CaptureSheetView: View {
         recognitionTask = nil
         isListening = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+private enum VoiceInputIssue: String, Identifiable {
+    case speechPermission
+    case microphonePermission
+    case recognizerUnavailable
+    case audioUnavailable
+    case recognitionFailed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .speechPermission:
+            "Speech recognition is off"
+        case .microphonePermission:
+            "Microphone access is off"
+        case .recognizerUnavailable:
+            "Voice input isn't available"
+        case .audioUnavailable:
+            "Couldn't start voice input"
+        case .recognitionFailed:
+            "Voice input stopped"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .speechPermission:
+            "Allow Speech Recognition in Settings to speak a task. You can still type it here."
+        case .microphonePermission:
+            "Allow Microphone access in Settings to speak a task. You can still type it here."
+        case .recognizerUnavailable:
+            "Voice input isn't ready right now. Try again in a moment, or type the task instead."
+        case .audioUnavailable:
+            "The microphone didn't start. Try again, or type the task instead."
+        case .recognitionFailed:
+            "Your spoken title couldn't be finished. You can try again or keep typing."
+        }
+    }
+
+    var offersSettings: Bool {
+        self == .speechPermission || self == .microphonePermission
     }
 }
 

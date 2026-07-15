@@ -118,7 +118,9 @@ extension Color {
     static var brand700: Color { HearthTheme.shared.accent.deep }
 
     // Semantic — urgency & task contexts (unchanged from the existing app)
-    static let loomRed = Color(hex: 0xE2434A)
+    // 4.68:1 against the lightest dark card surface (#232327), so urgency
+    // labels remain readable at normal text sizes without losing their warmth.
+    static let loomRed = Color(hex: 0xEF5961)
     static let loomRedPressed = Color(hex: 0xC93039)
     static let schoolColor = Color(hex: 0x5A78E0)
     static let workColor = Color(hex: 0xE0A020)
@@ -217,6 +219,15 @@ enum LoomRadius {
     static let group: CGFloat = 18
     static let hero: CGFloat = 22
     static let sheet: CGFloat = 24
+}
+
+/// Widths shared by the phone-first surfaces when they grow into an iPad
+/// window. Schedule intentionally does not use the readable cap: its timeline
+/// earns the extra canvas, while prose and cards are calmer at a human width.
+enum LoomLayout {
+    static let readableContentMaxWidth: CGFloat = 760
+    static let onboardingContentMaxWidth: CGFloat = 620
+    static let tabBarMaxWidth: CGFloat = 620
 }
 
 // MARK: - Typography (Nunito + JetBrains Mono)
@@ -995,6 +1006,21 @@ struct HearthToggleStyle: ToggleStyle {
             }
         }
         .buttonStyle(.plain)
+        // Keep the 46x28 artwork, but make the control itself meet Apple's
+        // minimum comfortable target and expose native switch semantics to
+        // assistive technologies instead of presenting as an unlabeled button.
+        .frame(minWidth: 44, minHeight: 44)
+        .accessibilityRepresentation {
+            Toggle(
+                isOn: Binding(
+                    get: { configuration.isOn },
+                    set: { configuration.isOn = $0 }
+                )
+            ) {
+                configuration.label
+            }
+            .toggleStyle(.switch)
+        }
     }
 }
 

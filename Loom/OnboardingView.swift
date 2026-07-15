@@ -3,69 +3,110 @@ import SwiftData
 
 /// First-launch flow: introduces the core idea, then collects the scheduling
 /// basics (wake/sleep, block sizes, deadline buffer) pre-filled with defaults.
-/// Completion flips `hasCompletedOnboarding`; there is no other way out.
+/// Completion flips `hasCompletedOnboarding`; recommended defaults provide a
+/// quick exit for people who already understand the flow.
 struct OnboardingView: View {
     let settings: UserSettings
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var step = 0
     private let stepCount = 4
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 24)
-
-            Group {
-                switch step {
-                case 0: welcomeStep
-                case 1: dayStep
-                case 2: blocksStep
-                default: paceStep
+            // Center short pages when there is room, then become a real scroll
+            // region at large Dynamic Type or in a short iPad window.
+            GeometryReader { geometry in
+                ScrollView {
+                    Group {
+                        switch step {
+                        case 0: welcomeStep
+                        case 1: dayStep
+                        case 2: blocksStep
+                        default: paceStep
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(stepTransition)
+                    .id(step)
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: LoomLayout.onboardingContentMaxWidth)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height)
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .frame(maxWidth: .infinity)
-            .transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-            .id(step)
 
-            Spacer(minLength: 24)
+            VStack(spacing: 8) {
+                pageDots
+                    .padding(.bottom, 12)
 
-            pageDots
-                .padding(.bottom, 28)
+                Button {
+                    advance()
+                } label: {
+                    Text(step == stepCount - 1 ? "Start weaving" : "Continue")
+                        .primaryButtonStyle()
+                }
 
-            Button {
-                advance()
-            } label: {
-                Text(step == stepCount - 1 ? "Start weaving" : "Continue")
-                    .primaryButtonStyle()
+                if step > 0 {
+                    Button("Back") {
+                        withAnimation(stepAnimation) { step -= 1 }
+                    }
+                    .font(AppFont.caption(14))
+                    .foregroundStyle(Color.loomSubtle)
+                    .frame(minHeight: 44)
+                } else {
+                    Button("Use recommended defaults", action: useRecommendedDefaults)
+                        .font(AppFont.caption(14))
+                        .foregroundStyle(Color.loomSubtle)
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("onboarding.useRecommendedDefaults")
+                }
             }
             .padding(.horizontal, 32)
-            .padding(.bottom, 8)
-
-            if step > 0 {
-                Button("Back") {
-                    withAnimation(.easeInOut(duration: 0.25)) { step -= 1 }
-                }
-                .font(AppFont.caption(14))
-                .foregroundStyle(Color.loomSubtle)
-                .contentShape(Rectangle().inset(by: -14))
-                .padding(.bottom, 12)
-            } else {
-                Color.clear.frame(height: 30)
-            }
+            .padding(.bottom, 12)
+            .frame(maxWidth: LoomLayout.onboardingContentMaxWidth)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .hearthScreen()
         .interactiveDismissDisabled()
     }
 
+    private var stepAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.25)
+    }
+
+    private var stepTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        )
+    }
+
     private func advance() {
         if step < stepCount - 1 {
-            withAnimation(.easeInOut(duration: 0.25)) { step += 1 }
+            withAnimation(stepAnimation) { step += 1 }
         } else {
             settings.hasCompletedOnboarding = true
         }
+    }
+
+    /// These are the same values a fresh `UserSettings` model starts with.
+    /// Resetting them makes the escape label honest even if someone backs up
+    /// after experimenting with the intermediate controls.
+    private func useRecommendedDefaults() {
+        settings.wakeHour = 8
+        settings.wakeMinute = 0
+        settings.sleepHour = 23
+        settings.sleepMinute = 0
+        settings.minBlockMinutes = 30
+        settings.maxBlockMinutes = 90
+        settings.deadlineBufferMinutes = 120
+        settings.startBufferMinutes = 15
+        settings.hasCompletedOnboarding = true
     }
 
     // MARK: - Step 1: Welcome
@@ -210,7 +251,7 @@ struct OnboardingView: View {
                     .frame(width: index == step ? 18 : 6, height: 6)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: step)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: step)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(step + 1) of \(stepCount)")
     }
@@ -221,12 +262,24 @@ struct OnboardingView: View {
         iconColor: Color,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack {
-            Label(label, systemImage: icon)
-                .font(AppFont.body(15))
-                .foregroundStyle(iconColor)
-            Spacer()
-            content()
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(label, systemImage: icon)
+                        .font(AppFont.body(15))
+                        .foregroundStyle(iconColor)
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } else {
+                HStack {
+                    Label(label, systemImage: icon)
+                        .font(AppFont.body(15))
+                        .foregroundStyle(iconColor)
+                    Spacer()
+                    content()
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -244,10 +297,12 @@ struct OnboardingView: View {
                 Text(label)
                     .font(AppFont.body(15))
                     .foregroundStyle(Color.loomText)
-                Spacer()
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 Text(CountdownFormatter.effortString(minutes: value()))
                     .font(AppFont.mono(14))
                     .foregroundStyle(Color.loomSubtle)
+                    .fixedSize()
             }
         }
         .padding(.horizontal, 16)

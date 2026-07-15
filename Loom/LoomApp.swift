@@ -1,6 +1,32 @@
 import SwiftUI
 import SwiftData
 import OSLog
+import Accessibility
+
+/// All automatic rewrites of existing schedule blocks share this gate. A work
+/// session owns its reservation until it records attendance; imports may still
+/// land while the timer runs, but catch-up and conflict repair wait their turn.
+enum AutomaticPlanRefreshPolicy {
+    static func canRewriteSchedule(
+        activeWorkSession: WorkSessionControlState?
+    ) -> Bool {
+        activeWorkSession == nil
+    }
+}
+
+/// Runs only when Loom presents its UI for the first time in this process.
+/// Keeping the guard outside view identity prevents a later scene rebuild from
+/// ending a session that started after the initial foreground bootstrap.
+@MainActor
+private enum WorkSessionForegroundCleanup {
+    private static var didRun = false
+
+    static func runOnce() {
+        guard !didRun else { return }
+        didRun = true
+        WorkSessionActivityController.endAll()
+    }
+}
 
 @main
 struct LoomApp: App {
@@ -89,16 +115,34 @@ struct LoomApp: App {
 }
 
 struct MainTabView: View {
+    private struct CatchUpRefreshTrigger: Hashable {
+        let date: Date?
+        let generation: Int
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query private var settingsArray: [UserSettings]
+    // `endTime` is computed, so SwiftData cannot use it in a fetch sort. The
+    // lightweight policy below computes the minimum from this unsorted set.
+    @Query private var scheduledBlocks: [ScheduledBlock]
     @State private var selectedTab = 0
     @State private var replanSummary = CatchUpSummary()
     @State private var sessionRequestTaskId: UUID?
     @State private var showingCapture = false
+    @State private var catchUpRefreshGeneration = 0
+    @State private var lastReplanAnnouncement: CatchUpSummary?
+    @State private var lastReplanAnnouncementDate: Date?
 
     private var needsOnboarding: Bool {
         settingsArray.first.map { !$0.hasCompletedOnboarding } ?? false
+    }
+
+    private var catchUpRefreshTrigger: CatchUpRefreshTrigger {
+        CatchUpRefreshTrigger(
+            date: SchedulerService.nextCatchUpRefreshDate(blocks: scheduledBlocks),
+            generation: catchUpRefreshGeneration
+        )
     }
 
     var body: some View {
@@ -146,8 +190,32 @@ struct MainTabView: View {
                 refreshSchedule()
             }
         }
+        // A single cancellable wake-up at the next block boundary keeps an
+        // open app honest without battery-heavy interval polling. SwiftData
+        // changes automatically cancel and re-arm this for the new plan.
+        .task(id: catchUpRefreshTrigger) {
+            guard let refreshDate = catchUpRefreshTrigger.date else { return }
+            let delay = max(0, refreshDate.timeIntervalSinceNow) + 0.5
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard scenePhase == .active,
+                  WorkSessionControlStore.load() == nil else { return }
+            refreshMissedBlocksAtBoundary()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .loomOpenWorkSession)) { _ in
             consumePendingSessionRequest()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .workSessionControlDidChange)) { _ in
+            // If a session held the reservation past its block boundary, its
+            // clear notification re-arms the one-shot that deliberately stood
+            // aside. Pause/resume writes keep a control snapshot and are quiet.
+            guard WorkSessionControlStore.load() == nil,
+                  let refreshDate = catchUpRefreshTrigger.date,
+                  refreshDate <= Date() else { return }
+            catchUpRefreshGeneration &+= 1
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -175,6 +243,14 @@ struct MainTabView: View {
     }
 
     private func bootstrap() {
+        // A LiveActivityIntent may launch Loom's process in the background
+        // without opening a UI scene. Cleanup must therefore wait until the
+        // user actually opens the app; doing it from LoomApp.init would erase
+        // the App Group control value before the Lock Screen intent could read
+        // it. The process-wide foreground guard also keeps a later rebuild of
+        // the one supported scene from touching a newly started timer.
+        WorkSessionForegroundCleanup.runOnce()
+
         let settings = UserSettings.fetchOrCreate(in: modelContext)
 
         // Anyone with existing tasks predates the onboarding flow — don't
@@ -186,9 +262,6 @@ struct MainTabView: View {
             }
         }
 
-        // Sessions don't survive the app dying; clear any orphaned
-        // Live Activity left on the Lock Screen.
-        WorkSessionActivityController.endAll()
         refreshSchedule()
     }
 
@@ -240,7 +313,49 @@ struct MainTabView: View {
         if created > 0 {
             allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
         }
+        let canRewriteSchedule = AutomaticPlanRefreshPolicy.canRewriteSchedule(
+            activeWorkSession: WorkSessionControlStore.load()
+        )
+        // A running timer owns its linked reservation until recordSession()
+        // marks attendance. Foreground activation must not let catch-up delete
+        // that block while the user is actively working it.
+        if canRewriteSchedule {
+            let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
+            let summary = SchedulerService.catchUpMissedBlocks(
+                tasks: tasks,
+                allBlocks: allBlocks,
+                blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
+                settings: settings,
+                context: modelContext
+            )
+            if summary.adjustedTasks > 0 {
+                presentReplanFeedback(summary)
+            }
+        }
+        // Apple import is synchronous, so newly added or moved events are now
+        // included. Reconcile conflicts and publish the final foreground plan
+        // once, after recurring-task and missed-block work has also landed.
+        PlanCoordinator.replanBusyTimeConflicts(
+            context: modelContext,
+            interactive: false
+        )
+    }
+
+    /// Lightweight in-app catch-up used at a block boundary. Calendar imports
+    /// remain foreground events; this path only replans when elapsed work made
+    /// the local plan stale, then immediately updates widgets and nudges.
+    private func refreshMissedBlocksAtBoundary() {
+        // The timer owns its linked reservation until it records attendance.
+        // Its stop path reconciles the task and re-arms this one-shot from the
+        // resulting SwiftData change, so catch-up must not race that write.
+        guard WorkSessionControlStore.load() == nil else { return }
+
+        let settings = UserSettings.fetchOrCreate(in: modelContext)
         let tasks = (try? modelContext.fetch(FetchDescriptor<LoomTask>())) ?? []
+        let allBlocks = (try? modelContext.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+        let blockedTimes = (try? modelContext.fetch(FetchDescriptor<BlockedTime>())) ?? []
+        let busyEvents = (try? modelContext.fetch(FetchDescriptor<BusyEvent>())) ?? []
 
         let summary = SchedulerService.catchUpMissedBlocks(
             tasks: tasks,
@@ -250,16 +365,35 @@ struct MainTabView: View {
             settings: settings,
             context: modelContext
         )
-        if summary.replannedTasks > 0 {
-            replanSummary = summary
+        guard summary.adjustedTasks > 0 else { return }
+
+        // Persist before asking extensions to reload so they never observe the
+        // previous plan during this prompt boundary refresh.
+        try? modelContext.save()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            presentReplanFeedback(summary)
         }
-        // Apple import is synchronous, so newly added or moved events are now
-        // included. Reconcile conflicts and publish the final foreground plan
-        // once, after recurring-task and missed-block work has also landed.
-        PlanCoordinator.replanBusyTimeConflicts(
-            context: modelContext,
-            interactive: false
-        )
+        PlanCoordinator.publishChange(context: modelContext, interactive: false)
+    }
+
+    /// Announces only actual automatic plan changes. The short duplicate gate
+    /// prevents a scene activation and boundary wake-up arriving together from
+    /// speaking the same result twice, while later refreshes remain audible.
+    private func presentReplanFeedback(_ summary: CatchUpSummary) {
+        replanSummary = summary
+
+        let now = Date()
+        if lastReplanAnnouncement == summary,
+           let lastReplanAnnouncementDate,
+           now.timeIntervalSince(lastReplanAnnouncementDate) < 10 {
+            return
+        }
+
+        lastReplanAnnouncement = summary
+        self.lastReplanAnnouncementDate = now
+        AccessibilityNotification.Announcement(
+            summary.accessibilityAnnouncement
+        ).post()
     }
 }
 
@@ -303,6 +437,7 @@ private struct HearthTabBar: View {
         )
         .overlay(Capsule().stroke(Color.white.opacity(0.09), lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 20, y: 8)
+        .frame(maxWidth: LoomLayout.tabBarMaxWidth)
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
     }

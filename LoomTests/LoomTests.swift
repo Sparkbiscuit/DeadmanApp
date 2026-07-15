@@ -458,6 +458,7 @@ final class LoomTests: XCTestCase {
         )
         try context.save()
 
+        XCTAssertEqual(summary.adjustedTasks, 1)
         XCTAssertEqual(summary.replannedTasks, 1)
         XCTAssertEqual(summary.unschedulableTasks, 0)
         let remaining = try context.fetch(FetchDescriptor<ScheduledBlock>())
@@ -490,6 +491,7 @@ final class LoomTests: XCTestCase {
         )
         try context.save()
 
+        XCTAssertEqual(summary.adjustedTasks, 1, "the topped-up plan should be surfaced")
         XCTAssertEqual(summary.replannedTasks, 0, "no blocks were missed")
         XCTAssertEqual(summary.unschedulableTasks, 0)
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
@@ -520,6 +522,155 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(summary, CatchUpSummary())
         let all = try context.fetch(FetchDescriptor<ScheduledBlock>())
         XCTAssertEqual(all.map(\.id), [futureId], "a healthy plan must not be rearranged")
+    }
+
+    func testCatchUpReleasesAndReplansMissedLockedBlock() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let missed = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-3 * 3600),
+            durationMinutes: 60
+        )
+        missed.isLocked = true
+        let missedId = missed.id
+        context.insert(missed)
+        try context.save()
+
+        let summary = SchedulerService.catchUpMissedBlocks(
+            tasks: [task],
+            allBlocks: [missed],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary.adjustedTasks, 1)
+        XCTAssertEqual(summary.replannedTasks, 1)
+        let remaining = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertFalse(remaining.contains { $0.id == missedId }, "elapsed time cannot stay reserved by a lock")
+        XCTAssertEqual(remaining.reduce(0) { $0 + $1.durationMinutes }, 60)
+        XCTAssertTrue(remaining.allSatisfy { $0.startTime >= anchor })
+    }
+
+    func testNextCatchUpRefreshDateChoosesEarliestRelevantBlock() {
+        let task = makeTask(effort: 120, deadlineHoursFromAnchor: 48)
+        let missed = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-2 * 3600),
+            durationMinutes: 60
+        )
+        let future = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 60
+        )
+        let completed = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-4 * 3600),
+            durationMinutes: 60
+        )
+        completed.isComplete = true
+
+        let overdueTask = LoomTask(
+            title: "Overdue",
+            context: .school,
+            deadline: anchor.addingTimeInterval(-3600),
+            effortMinutes: 60
+        )
+        context.insert(overdueTask)
+        let overdueBlock = ScheduledBlock(
+            task: overdueTask,
+            startTime: anchor.addingTimeInterval(-3 * 3600),
+            durationMinutes: 60
+        )
+
+        let blocks = [future, completed, overdueBlock, missed]
+        XCTAssertEqual(
+            SchedulerService.nextCatchUpRefreshDate(blocks: blocks, now: anchor),
+            missed.endTime,
+            "an elapsed active block should trigger immediate catch-up instead of being skipped"
+        )
+
+        missed.isComplete = true
+        XCTAssertEqual(
+            SchedulerService.nextCatchUpRefreshDate(blocks: blocks, now: anchor),
+            future.endTime,
+            "completion should re-arm the one-shot refresh for the next block"
+        )
+
+        task.isComplete = true
+        XCTAssertNil(SchedulerService.nextCatchUpRefreshDate(blocks: blocks, now: anchor))
+    }
+
+    func testCatchUpFeedbackKeepsVisualAndSpokenCopyInSync() {
+        let refreshed = CatchUpSummary(adjustedTasks: 1, replannedTasks: 1)
+        XCTAssertEqual(
+            refreshed.accessibilityAnnouncement,
+            "Plan refreshed after missed work. Your next steps are up to date."
+        )
+
+        let warning = CatchUpSummary(
+            adjustedTasks: 2,
+            replannedTasks: 1,
+            unschedulableTasks: 2
+        )
+        XCTAssertEqual(
+            warning.warningMessage,
+            "2 tasks no longer fit before their deadlines. Extend them or trim the estimates."
+        )
+        XCTAssertEqual(
+            warning.accessibilityAnnouncement,
+            warning.feedbackMessage + " " + (warning.warningMessage ?? "")
+        )
+    }
+
+    func testAutomaticPlanRefreshWaitsForActiveWorkSession() {
+        XCTAssertTrue(
+            AutomaticPlanRefreshPolicy.canRewriteSchedule(
+                activeWorkSession: nil
+            )
+        )
+
+        let activeSession = WorkSessionControlState(
+            sessionID: UUID(),
+            startedAt: anchor
+        )
+        XCTAssertFalse(
+            AutomaticPlanRefreshPolicy.canRewriteSchedule(
+                activeWorkSession: activeSession
+            ),
+            "catch-up and busy-time conflict repair must both defer while a timer owns its block"
+        )
+    }
+
+    func testDeferredBusyTimeConflictReplanStateResumesExactlyOnce() {
+        var state = DeferredBusyTimeConflictReplanState()
+
+        XCTAssertFalse(state.request(canRewriteSchedule: false))
+        XCTAssertTrue(state.hasPendingRequest)
+        XCTAssertFalse(
+            state.resume(canRewriteSchedule: false),
+            "a second active session must preserve the deferred repair"
+        )
+        XCTAssertTrue(state.hasPendingRequest)
+        XCTAssertTrue(state.resume(canRewriteSchedule: true))
+        XCTAssertFalse(state.hasPendingRequest)
+        XCTAssertFalse(
+            state.resume(canRewriteSchedule: true),
+            "the same deferred repair must not run twice"
+        )
+    }
+
+    func testImmediateBusyTimeConflictRequestClearsOlderDeferral() {
+        var state = DeferredBusyTimeConflictReplanState()
+
+        XCTAssertFalse(state.request(canRewriteSchedule: false))
+        XCTAssertTrue(state.request(canRewriteSchedule: true))
+        XCTAssertFalse(state.hasPendingRequest)
+        XCTAssertFalse(state.resume(canRewriteSchedule: true))
     }
 
     // MARK: - Reschedule
@@ -653,6 +804,45 @@ final class LoomTests: XCTestCase {
 
         XCTAssertEqual(forward.id, earlier.id)
         XCTAssertEqual(reversed.id, earlier.id)
+    }
+
+    // MARK: - Shared work-session clock
+
+    func testWorkSessionControlStateExcludesPausedWallTime() {
+        let start = anchor
+        var state = WorkSessionControlState(sessionID: UUID(), startedAt: start)
+
+        XCTAssertEqual(state.elapsedWorkedSeconds(at: start.addingTimeInterval(10)), 10)
+
+        state.setPaused(true, at: start.addingTimeInterval(10))
+        XCTAssertTrue(state.isPaused)
+        XCTAssertEqual(
+            state.elapsedWorkedSeconds(at: start.addingTimeInterval(40)),
+            10,
+            "worked time must freeze while the Live Activity reports paused"
+        )
+
+        state.setPaused(false, at: start.addingTimeInterval(40))
+        XCTAssertFalse(state.isPaused)
+        XCTAssertEqual(state.accumulatedPausedSeconds, 30)
+        XCTAssertEqual(state.elapsedWorkedSeconds(at: start.addingTimeInterval(55)), 25)
+    }
+
+    func testWorkSessionControlStatePauseTransitionsAreIdempotentAndCodable() throws {
+        let start = anchor
+        var state = WorkSessionControlState(sessionID: UUID(), startedAt: start)
+
+        state.setPaused(true, at: start.addingTimeInterval(5))
+        state.setPaused(true, at: start.addingTimeInterval(20))
+        state.setPaused(false, at: start.addingTimeInterval(25))
+        state.setPaused(false, at: start.addingTimeInterval(40))
+
+        XCTAssertEqual(state.accumulatedPausedSeconds, 20)
+        XCTAssertEqual(state.elapsedWorkedSeconds(at: start.addingTimeInterval(40)), 20)
+
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(WorkSessionControlState.self, from: data)
+        XCTAssertEqual(decoded, state)
     }
 
     // MARK: - Start rounding & buffer

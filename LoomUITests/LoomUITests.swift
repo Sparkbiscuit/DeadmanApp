@@ -36,6 +36,18 @@ final class LoomUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Tasks"].isSelected)
     }
 
+    func testFreshLaunchCanUseRecommendedDefaults() throws {
+        let app = launchApp()
+
+        assertVisible(app.staticTexts["Capture in seconds"])
+        let useDefaults = app.buttons["onboarding.useRecommendedDefaults"]
+        assertVisible(useDefaults)
+        useDefaults.tap()
+
+        assertVisible(app.staticTexts["Your Tasks"])
+        XCTAssertTrue(app.buttons["Tasks"].isSelected)
+    }
+
     func testSkipOnboardingNavigatesTabsAndInspectsCaptureOptions() throws {
         let app = launchApp(skipOnboarding: true)
 
@@ -67,6 +79,62 @@ final class LoomUITests: XCTestCase {
         app.buttons["Cancel"].tap()
         XCTAssertTrue(titleField.waitForNonExistence(timeout: 3))
         assertVisible(app.staticTexts["Your Tasks"])
+    }
+
+    func testSettingsToggleExposesSwitchSemantics() throws {
+        let app = launchApp(skipOnboarding: true)
+        visitTab("Settings", showing: "Settings", in: app)
+
+        let blockNudges = app.switches["Block start nudges"]
+        scrollToHittable(blockNudges, in: app)
+        assertVisible(blockNudges)
+        XCTAssertTrue(blockNudges.isHittable)
+        XCTAssertTrue(
+            ["0", "1"].contains(blockNudges.value as? String),
+            "Expected a native on/off accessibility value from the custom Toggle style."
+        )
+    }
+
+    /// Focused adaptive-layout smoke test. It skips on iPhone destinations so
+    /// the regular phone suite stays fast, and exercises the same four core
+    /// surfaces in the iPad orientation most likely to expose runaway widths.
+    func testIPadLandscapeCoreNavigation() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = launchApp(skipOnboarding: true)
+        let window = app.windows.firstMatch
+        assertVisible(window)
+
+        let landscapeExpectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { object, _ in
+                guard let element = object as? XCUIElement else { return false }
+                return element.frame.width > element.frame.height
+            },
+            object: window
+        )
+        wait(for: [landscapeExpectation], timeout: 5)
+
+        let shortEdge = min(window.frame.width, window.frame.height)
+        guard shortEdge >= 700 else {
+            throw XCTSkip("Run this focused adaptive-layout check on an iPad destination.")
+        }
+
+        assertVisible(app.staticTexts["Your Tasks"])
+        visitTab("Schedule", showing: "Schedule", in: app)
+        visitTab("Weave", showing: "Your Weave", in: app)
+        visitTab("Settings", showing: "Settings", in: app)
+        visitTab("Tasks", showing: "Your Tasks", in: app)
+
+        let tasksButton = app.buttons["Tasks"]
+        let captureButton = app.buttons["Capture a task"]
+        assertVisible(tasksButton)
+        assertVisible(captureButton)
+        XCTAssertTrue(tasksButton.isHittable)
+        XCTAssertTrue(captureButton.isHittable)
+        XCTAssertLessThanOrEqual(
+            captureButton.frame.maxX - tasksButton.frame.minX,
+            620,
+            "Expected the iPad tab bar controls to remain centered at a readable width."
+        )
     }
 
     private func launchApp(skipOnboarding: Bool = false) -> XCUIApplication {
