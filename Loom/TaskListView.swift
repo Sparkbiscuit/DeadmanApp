@@ -32,15 +32,17 @@ struct TaskListView: View {
                         headerSection
                         heroSection
                         upNextThreadSection
+                        replanBanner
                         pushBanner
                         statsBar
-                        replanBanner
                         overdueTriageSection
                         remindersSection
                         taskSections
                         completedSection
                     }
                     .padding(.bottom, 110)
+                    .frame(maxWidth: LoomLayout.readableContentMaxWidth)
+                    .frame(maxWidth: .infinity)
                 }
                 .hearthScreen()
             }
@@ -162,36 +164,39 @@ struct TaskListView: View {
                     .padding(.leading, 34)
                     .padding(.bottom, 10)
 
-                ZStack(alignment: .topLeading) {
-                    // The thread itself: accentSoft fading to nothing.
+                VStack(spacing: 10) {
+                    ForEach(Array(upcoming)) { block in
+                        if let task = block.task {
+                            UpNextThreadRow(task: task, block: block) {
+                                workSessionTask = task
+                            } onEdit: {
+                                editingTask = task
+                            }
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            }
+            // Size the light from the whole section, not a fixed estimate of
+            // the header's height. It therefore stays continuous with larger
+            // text, split-view iPad widths, and taller wrapped rows.
+            .background(alignment: .topLeading) {
+                GeometryReader { geometry in
                     LinearGradient(
                         colors: [Color.brand300.opacity(0.75), Color.brand300.opacity(0)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(width: 2)
-                    .frame(maxHeight: .infinity)
+                    .frame(width: 2, height: geometry.size.height + 18)
+                    // The hero contributes 4pt bottom spacing and this
+                    // section contributes 14pt top spacing. Reaching through
+                    // both makes the two strokes overlap instead of merely
+                    // appearing close at one text size.
+                    .offset(x: 6, y: -18)
                     .hearthGlow(.brand500, radius: 5, opacity: 0.5)
-                    .padding(.leading, 6)
-                    .padding(.bottom, 10)
-                    // Reach up past the section header to the hero card's
-                    // glowing corner, so now → next reads as one thread.
-                    .padding(.top, -44)
-                    .accessibilityHidden(true)
-
-                    VStack(spacing: 10) {
-                        ForEach(Array(upcoming)) { block in
-                            if let task = block.task {
-                                UpNextThreadRow(task: task, block: block) {
-                                    workSessionTask = task
-                                } onEdit: {
-                                    editingTask = task
-                                }
-                            }
-                        }
-                    }
-                    .padding(.leading, 20)
                 }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
             .padding(.horizontal, 20)
             .padding(.top, 14)
@@ -410,20 +415,16 @@ struct TaskListView: View {
 
     @ViewBuilder
     private var replanBanner: some View {
-        if replanSummary.replannedTasks > 0 {
+        if replanSummary.adjustedTasks > 0 {
             VStack(spacing: 10) {
                 InfoBanner(
                     icon: "arrow.triangle.2.circlepath",
-                    text: replanSummary.replannedTasks == 1
-                        ? "Replanned 1 task with missed blocks"
-                        : "Replanned \(replanSummary.replannedTasks) tasks with missed blocks"
+                    text: replanSummary.feedbackMessage
                 )
-                if replanSummary.unschedulableTasks > 0 {
+                if let warningMessage = replanSummary.warningMessage {
                     InfoBanner(
                         icon: "exclamationmark.triangle.fill",
-                        text: replanSummary.unschedulableTasks == 1
-                            ? "1 task no longer fits before its deadline. Extend it or trim the estimate"
-                            : "\(replanSummary.unschedulableTasks) tasks no longer fit before their deadlines. Extend them or trim the estimates",
+                        text: warningMessage,
                         tint: .loomRed
                     )
                 }
@@ -433,6 +434,8 @@ struct TaskListView: View {
             .onTapGesture {
                 withAnimation { replanSummary = CatchUpSummary() }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(replanSummary.accessibilityAnnouncement)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Dismisses this message")
         }
@@ -755,6 +758,12 @@ private struct ThreadConnector: Shape {
         path.addLine(to: CGPoint(x: 1, y: 54))
         path.addQuadCurve(to: CGPoint(x: 23, y: 76), control: CGPoint(x: 1, y: 76))
         path.addLine(to: CGPoint(x: 86, y: 76))
+
+        // Branch from the rounded corner down to the section thread's x=6
+        // rail. Without this short overlap the two independently laid-out
+        // strokes can show a gap at some sizes and display scales.
+        path.move(to: CGPoint(x: 6, y: 70))
+        path.addLine(to: CGPoint(x: 6, y: rect.maxY))
         return path
     }
 }

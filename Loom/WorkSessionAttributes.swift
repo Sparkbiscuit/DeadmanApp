@@ -1,5 +1,6 @@
 import Foundation
 import ActivityKit
+import AppIntents
 import SwiftUI
 
 // MARK: - Live Activity attributes (shared with the LoomWidgets extension)
@@ -14,6 +15,14 @@ struct WorkSessionAttributes: ActivityAttributes {
     }
 
     var taskTitle: String
+    /// Identifies the timer behind this activity so an inline intent can only
+    /// mutate the session that rendered its button. Loom permits one active
+    /// timer, but the identifier also makes a delayed tap harmless after a
+    /// rapid stop/restart.
+    var sessionID: UUID
+    /// Lets every non-control surface of the Live Activity deep-link back to
+    /// the task's work-session screen.
+    var taskID: UUID
     /// TaskContext.rawValue — kept as a string so the widget target doesn't
     /// need the SwiftData models.
     var contextName: String
@@ -32,6 +41,129 @@ struct WorkSessionAttributes: ActivityAttributes {
     /// block's duration (or the full effort budget when the session floats
     /// outside any block).
     var ringEndsAt: Date? = nil
+}
+
+// MARK: - Shared work-session clock
+
+/// Durable pause bookkeeping shared by the app and its Live Activity intent.
+/// The in-app timer still renders once per second, but it derives elapsed work
+/// from this wall-clock state so actions performed while the app is suspended
+/// are accounted for when it returns.
+struct WorkSessionControlState: Codable, Hashable {
+    let sessionID: UUID
+    let startedAt: Date
+    var accumulatedPausedSeconds: Int = 0
+    var pauseBeganAt: Date?
+
+    var isPaused: Bool { pauseBeganAt != nil }
+
+    func elapsedWorkedSeconds(at date: Date) -> Int {
+        let currentPause = pauseBeganAt.map {
+            max(0, Int(date.timeIntervalSince($0)))
+        } ?? 0
+        return max(
+            0,
+            Int(date.timeIntervalSince(startedAt))
+                - accumulatedPausedSeconds
+                - currentPause
+        )
+    }
+
+    mutating func setPaused(_ paused: Bool, at date: Date) {
+        guard paused != isPaused else { return }
+        if paused {
+            pauseBeganAt = date
+        } else if let pauseBeganAt {
+            accumulatedPausedSeconds += max(0, Int(date.timeIntervalSince(pauseBeganAt)))
+            self.pauseBeganAt = nil
+        }
+    }
+
+    mutating func togglePause(at date: Date) {
+        setPaused(!isPaused, at: date)
+    }
+}
+
+/// One small App Group value is enough to bridge the system-run intent back to
+/// the timer view. It deliberately contains no task content or SwiftData
+/// models, which keeps intent execution fast and avoids opening the store from
+/// the Lock Screen. It is a control bridge, not a recovery journal: Loom's
+/// existing cold-launch cleanup ends orphaned activities and clears this value.
+enum WorkSessionControlStore {
+    private static let key = "activeWorkSessionControl.v1"
+
+    private static var defaults: UserDefaults {
+        UserDefaults(suiteName: SharedStore.appGroupId) ?? .standard
+    }
+
+    static func load(sessionID: UUID? = nil) -> WorkSessionControlState? {
+        guard let data = defaults.data(forKey: key),
+              let state = try? JSONDecoder().decode(WorkSessionControlState.self, from: data),
+              sessionID == nil || state.sessionID == sessionID else {
+            return nil
+        }
+        return state
+    }
+
+    static func save(_ state: WorkSessionControlState) {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        defaults.set(data, forKey: key)
+        NotificationCenter.default.post(
+            name: .workSessionControlDidChange,
+            object: state.sessionID
+        )
+    }
+
+    static func clear(sessionID: UUID? = nil) {
+        let active = load()
+        if let sessionID, active?.sessionID != sessionID { return }
+        defaults.removeObject(forKey: key)
+        if let active {
+            NotificationCenter.default.post(
+                name: .workSessionControlDidChange,
+                object: active.sessionID
+            )
+        }
+    }
+}
+
+extension Notification.Name {
+    static let workSessionControlDidChange = Notification.Name(
+        "workSessionControlDidChange"
+    )
+}
+
+/// Interactive Live Activity action. `LiveActivityIntent` makes the system run
+/// this in Loom's process without bringing the app to the foreground.
+struct ToggleWorkSessionPauseIntent: LiveActivityIntent {
+    static var title: LocalizedStringResource = "Pause or Resume Work Session"
+    static var description = IntentDescription(
+        "Pause or resume the work timer shown in Loom's Live Activity."
+    )
+    static var isDiscoverable = false
+
+    @Parameter(title: "Session")
+    var sessionID: String
+
+    init() {}
+
+    init(sessionID: UUID) {
+        self.sessionID = sessionID.uuidString
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard let id = UUID(uuidString: sessionID),
+              var control = WorkSessionControlStore.load(sessionID: id) else {
+            return .result()
+        }
+
+        let now = Date()
+        control.togglePause(at: now)
+        WorkSessionControlStore.save(control)
+        await WorkSessionActivityController.update(control, at: now)
+        return .result()
+    }
 }
 
 extension WorkSessionAttributes {
@@ -55,6 +187,8 @@ extension WorkSessionAttributes {
 enum WorkSessionActivityController {
 
     static func start(
+        sessionID: UUID,
+        taskID: UUID,
         taskTitle: String,
         contextName: String,
         effortMinutes: Int,
@@ -67,6 +201,8 @@ enum WorkSessionActivityController {
 
         let attributes = WorkSessionAttributes(
             taskTitle: taskTitle,
+            sessionID: sessionID,
+            taskID: taskID,
             contextName: contextName,
             effortMinutes: effortMinutes,
             blockEndsAt: blockEndsAt,
@@ -83,6 +219,13 @@ enum WorkSessionActivityController {
             for activity in Activity<WorkSessionAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
+            // Stop may have run while the awaits above were ending an older
+            // activity. Only request this one if its session is still the
+            // active App Group control; otherwise a rapid start/stop could
+            // resurrect an orphan after endAll() had already taken its snapshot.
+            guard WorkSessionControlStore.load(sessionID: sessionID) != nil else {
+                return
+            }
             _ = try? Activity.request(attributes: attributes, content: content)
         }
     }
@@ -91,24 +234,31 @@ enum WorkSessionActivityController {
         endAll()
     }
 
-    static func setPaused(_ paused: Bool, elapsedWorkedSeconds: Int) {
-        guard let activity = Activity<WorkSessionAttributes>.activities.first else { return }
+    static func update(_ control: WorkSessionControlState, at date: Date = Date()) async {
+        guard let activity = Activity<WorkSessionAttributes>.activities.first(where: {
+            $0.attributes.sessionID == control.sessionID
+        }) else { return }
 
+        let elapsed = control.elapsedWorkedSeconds(at: date)
         var state = activity.content.state
-        state.isPaused = paused
-        state.pausedElapsedSeconds = elapsedWorkedSeconds
-        if !paused {
-            state.startedAt = Date().addingTimeInterval(-Double(elapsedWorkedSeconds))
+        state.isPaused = control.isPaused
+        state.pausedElapsedSeconds = elapsed
+        if !control.isPaused {
+            state.startedAt = date.addingTimeInterval(-Double(elapsed))
         }
+        await activity.update(ActivityContent(state: state, staleDate: nil))
+    }
 
+    static func updateSoon(_ control: WorkSessionControlState, at date: Date = Date()) {
         Task {
-            await activity.update(ActivityContent(state: state, staleDate: nil))
+            await update(control, at: date)
         }
     }
 
     /// Ends every Loom activity — also used at launch to clear leftovers from
     /// a session that died with the app.
     static func endAll() {
+        WorkSessionControlStore.clear()
         let activities = Activity<WorkSessionAttributes>.activities
         guard !activities.isEmpty else { return }
         Task {

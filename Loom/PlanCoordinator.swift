@@ -1,11 +1,39 @@
 import Foundation
 import SwiftData
 
+/// Tiny state machine for busy-time repair requests that arrive while a work
+/// session owns its scheduled block. Keeping this value separate makes the
+/// defer/resume contract deterministic without putting SwiftData or App Group
+/// state into policy tests.
+struct DeferredBusyTimeConflictReplanState {
+    private(set) var hasPendingRequest = false
+
+    /// Returns `true` when the caller may repair conflicts immediately.
+    mutating func request(canRewriteSchedule: Bool) -> Bool {
+        guard canRewriteSchedule else {
+            hasPendingRequest = true
+            return false
+        }
+        hasPendingRequest = false
+        return true
+    }
+
+    /// Consumes a deferred request only once schedule ownership is available.
+    mutating func resume(canRewriteSchedule: Bool) -> Bool {
+        guard hasPendingRequest, canRewriteSchedule else { return false }
+        hasPendingRequest = false
+        return true
+    }
+}
+
 /// The app-level boundary for mutating an existing plan. Views report the
 /// user's intent here; scheduling, calendar mirrors, widgets, and nudges stay
 /// in sync behind one small surface.
 @MainActor
 enum PlanCoordinator {
+    private static var deferredBusyTimeConflictReplan =
+        DeferredBusyTimeConflictReplanState()
+
     /// Publish the current plan to every downstream consumer.
     static func publishChange(context: ModelContext, interactive: Bool = true) {
         CalendarExportService.syncIfEnabled(context: context)
@@ -110,6 +138,47 @@ enum PlanCoordinator {
     static func replanBusyTimeConflicts(
         context: ModelContext,
         interactive: Bool = true
+    ) -> Int {
+        let canRewriteSchedule = AutomaticPlanRefreshPolicy.canRewriteSchedule(
+            activeWorkSession: WorkSessionControlStore.load()
+        )
+        guard deferredBusyTimeConflictReplan.request(
+            canRewriteSchedule: canRewriteSchedule
+        ) else {
+            return 0
+        }
+
+        return performBusyTimeConflictReplan(
+            context: context,
+            interactive: interactive
+        )
+    }
+
+    /// Finish only the conflict repair that was deferred by an active timer.
+    /// WorkSessionView calls this after its attendance write is durable, so the
+    /// repair can no longer delete the reservation that session fulfilled.
+    @discardableResult
+    static func resumeDeferredBusyTimeConflictReplan(
+        context: ModelContext
+    ) -> Int {
+        let canRewriteSchedule = AutomaticPlanRefreshPolicy.canRewriteSchedule(
+            activeWorkSession: WorkSessionControlStore.load()
+        )
+        guard deferredBusyTimeConflictReplan.resume(
+            canRewriteSchedule: canRewriteSchedule
+        ) else {
+            return 0
+        }
+
+        return performBusyTimeConflictReplan(
+            context: context,
+            interactive: false
+        )
+    }
+
+    private static func performBusyTimeConflictReplan(
+        context: ModelContext,
+        interactive: Bool
     ) -> Int {
         let settings = UserSettings.fetchOrCreate(in: context)
         let tasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []

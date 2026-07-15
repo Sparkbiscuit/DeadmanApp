@@ -11,11 +11,36 @@ enum ScheduleResult {
 
 /// Outcome of a catch-up pass over missed blocks.
 struct CatchUpSummary: Equatable {
+    /// Tasks whose coverage changed during this pass, whether because time
+    /// elapsed or because their future plan was found short. This drives calm
+    /// user feedback for every automatic plan change, not only one subtype.
+    var adjustedTasks = 0
     /// Tasks whose missed work was fed back through the scheduler.
     var replannedTasks = 0
     /// Of those, tasks whose remaining effort could not fully fit before the
     /// deadline — surfaced to the user instead of leaving dangling blocks.
     var unschedulableTasks = 0
+
+    /// Calm, outcome-first copy shared by the visible banner and its VoiceOver
+    /// announcement so the two never describe the same refresh differently.
+    var feedbackMessage: String {
+        replannedTasks > 0
+            ? "Plan refreshed after missed work. Your next steps are up to date."
+            : "Plan refreshed to keep your remaining work covered."
+    }
+
+    var warningMessage: String? {
+        guard unschedulableTasks > 0 else { return nil }
+        return unschedulableTasks == 1
+            ? "1 task no longer fits before its deadline. Extend it or trim the estimate."
+            : "\(unschedulableTasks) tasks no longer fit before their deadlines. Extend them or trim the estimates."
+    }
+
+    var accessibilityAnnouncement: String {
+        [feedbackMessage, warningMessage]
+            .compactMap { $0 }
+            .joined(separator: " ")
+    }
 }
 
 // MARK: - Estimate Advisor
@@ -241,10 +266,11 @@ struct SchedulerService {
     }
 
     /// Rebuild the whole plan, earliest deadline first. Every active task's
-    /// unlocked incomplete blocks are wiped and remaining effort is replanned
+    /// movable incomplete blocks are wiped and remaining effort is replanned
     /// in deadline order, so an urgent task bumps later-deadline work out of
-    /// the near slots instead of going unblocked. Completed and locked blocks
-    /// stay where they are.
+    /// the near slots instead of going unblocked. Completed and future locked
+    /// blocks stay where they are; a lock on elapsed time cannot reserve work
+    /// that did not happen, so missed locked blocks are released too.
     @discardableResult
     static func rebalance(
         tasks: [LoomTask],
@@ -265,7 +291,8 @@ struct SchedulerService {
         var kept: [ScheduledBlock] = []
         for block in allBlocks {
             let belongsToActive = block.task.map { activeIds.contains($0.id) } ?? false
-            if belongsToActive && !block.isComplete && !block.isLocked {
+            let isMissed = block.endTime <= now
+            if belongsToActive && !block.isComplete && (!block.isLocked || isMissed) {
                 context.delete(block)
             } else {
                 kept.append(block)
@@ -388,20 +415,23 @@ struct SchedulerService {
         var summary = CatchUpSummary()
         let active = tasks.filter { !$0.isComplete && $0.deadline > now }
 
-        summary.replannedTasks = active.filter { task in
+        let missedTaskIds = Set(active.filter { task in
             task.scheduledBlocks.contains {
-                !$0.isComplete && !$0.isLocked && $0.endTime <= now
+                !$0.isComplete && $0.endTime <= now
             }
-        }.count
+        }.map(\.id))
 
-        let anyUnderScheduled = active.contains { task in
+        let underScheduledTaskIds = Set(active.filter { task in
             let futureMinutes = task.scheduledBlocks
                 .filter { !$0.isComplete && $0.endTime > now }
                 .reduce(0) { $0 + $1.durationMinutes }
             return task.remainingMinutes > futureMinutes
-        }
+        }.map(\.id))
 
-        guard summary.replannedTasks > 0 || anyUnderScheduled else { return summary }
+        summary.replannedTasks = missedTaskIds.count
+        summary.adjustedTasks = missedTaskIds.union(underScheduledTaskIds).count
+
+        guard summary.adjustedTasks > 0 else { return summary }
 
         let rebalanced = rebalance(
             tasks: tasks,
@@ -414,6 +444,25 @@ struct SchedulerService {
         )
         summary.unschedulableTasks = rebalanced.unschedulableTasks
         return summary
+    }
+
+    /// The next moment a running foreground app may need catch-up. Returning
+    /// an already elapsed block is intentional: the one-shot caller runs
+    /// immediately instead of skipping past damage after an unrelated redraw.
+    /// Completed, orphaned, and overdue-task blocks cannot produce catch-up.
+    static func nextCatchUpRefreshDate(
+        blocks: [ScheduledBlock],
+        now: Date = Date()
+    ) -> Date? {
+        blocks.compactMap { block in
+            guard !block.isComplete,
+                  let task = block.task,
+                  !task.isComplete,
+                  task.deadline > now else {
+                return nil
+            }
+            return block.endTime
+        }.min()
     }
 
     /// Replan tasks whose upcoming blocks collide with a blocked time or an

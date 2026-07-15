@@ -59,6 +59,8 @@ struct SettingsView: View {
                     .padding(.top, 8)
             }
             .padding(.bottom, 110)
+            .frame(maxWidth: LoomLayout.readableContentMaxWidth)
+            .frame(maxWidth: .infinity)
         }
         .hearthScreen(topGlow: 0.18, bottomGlow: 0.24)
         .alert("Calendar access needed", isPresented: $showCalendarDeniedAlert) {
@@ -85,7 +87,7 @@ struct SettingsView: View {
     private var hearthSection: some View {
         SettingsGroup(title: "Hearth", footer: "The color your hearth burns. Everything warm follows it.") {
             SettingsRow(icon: "flame.fill", tint: .brand500, label: "Flame") {
-                HStack(spacing: 10) {
+                HStack(spacing: 2) {
                     ForEach(HearthAccent.allCases) { accent in
                         AccentSwatch(
                             accent: accent,
@@ -289,7 +291,7 @@ struct SettingsView: View {
             footer: "Block nudges fire when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. The morning preview (30 minutes after wake time) pre-loads the day's shape; the evening wrap-up closes it out and names tomorrow's first block."
         ) {
             SettingsRow(icon: "bell.badge.fill", tint: .brand300, label: "Block start nudges") {
-                Toggle("", isOn: Binding(
+                Toggle("Block start nudges", isOn: Binding(
                     get: { settings.blockRemindersEnabled },
                     set: { enabled in setBlockReminders(enabled, settings: settings) }
                 ))
@@ -315,7 +317,7 @@ struct SettingsView: View {
             }
 
             SettingsRow(icon: "sun.horizon.fill", tint: .workDisplay, label: "Morning preview") {
-                Toggle("", isOn: notificationToggleBinding(
+                Toggle("Morning preview", isOn: notificationToggleBinding(
                     get: { settings.morningPreviewEnabled },
                     set: { settings.morningPreviewEnabled = $0 }
                 ))
@@ -324,7 +326,7 @@ struct SettingsView: View {
             }
 
             SettingsRow(icon: "moon.stars.fill", tint: .schoolDisplay, label: "Evening wrap-up") {
-                Toggle("", isOn: notificationToggleBinding(
+                Toggle("Evening wrap-up", isOn: notificationToggleBinding(
                     get: { settings.eveningReviewEnabled },
                     set: { settings.eveningReviewEnabled = $0 }
                 ))
@@ -421,7 +423,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
 
             SettingsRow(icon: "calendar.badge.clock", tint: .schoolDisplay, label: "Import busy times") {
-                Toggle("", isOn: Binding(
+                Toggle("Import busy times from Apple Calendar", isOn: Binding(
                     get: { settings.importFromAppleCalendar },
                     set: { enabled in setCalendarImport(enabled, settings: settings) }
                 ))
@@ -448,7 +450,7 @@ struct SettingsView: View {
             }
 
             SettingsRow(icon: "arrow.up", tint: .schoolDisplay, label: "Export blocks to Calendar") {
-                Toggle("", isOn: Binding(
+                Toggle("Export blocks to Apple Calendar", isOn: Binding(
                     get: { settings.exportToAppleCalendar },
                     set: { enabled in setCalendarExport(enabled, settings: settings) }
                 ))
@@ -554,6 +556,8 @@ struct SettingsView: View {
                     .font(AppFont.caption(13))
                     .foregroundStyle(Color.loomRed)
                     .buttonStyle(.plain)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("Disconnect Google Calendar")
                 }
                 .confirmationDialog("Disconnect Google Calendar?", isPresented: $confirmGoogleDisconnect, titleVisibility: .visible) {
                     Button("Disconnect", role: .destructive) {
@@ -588,7 +592,7 @@ struct SettingsView: View {
                 }
 
                 SettingsRow(icon: "calendar.badge.clock", tint: .workDisplay, label: "Import busy times") {
-                    Toggle("", isOn: Binding(
+                    Toggle("Import busy times from Google Calendar", isOn: Binding(
                         get: { settings.importFromGoogleCalendar },
                         set: { enabled in setGoogleImport(enabled, settings: settings) }
                     ))
@@ -597,7 +601,7 @@ struct SettingsView: View {
                 }
 
                 SettingsRow(icon: "arrow.up", tint: .workDisplay, label: "Export blocks to Google") {
-                    Toggle("", isOn: Binding(
+                    Toggle("Export blocks to Google Calendar", isOn: Binding(
                         get: { settings.exportToGoogleCalendar },
                         set: { enabled in setGoogleExport(enabled, settings: settings) }
                     ))
@@ -795,7 +799,10 @@ private struct SettingsRow<Trailing: View>: View {
             trailing
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        // Controls may be visually smaller, but every row remains at least a
+        // comfortable 44pt target without making the existing cards taller.
+        .padding(.vertical, 5)
+        .frame(minHeight: 54)
         .contentShape(Rectangle())
     }
 }
@@ -825,7 +832,8 @@ private struct AccentSwatch: View {
                 .shadow(color: isSelected ? accent.color.opacity(0.6) : .clear, radius: 8)
         }
         .buttonStyle(.plain)
-        .contentShape(Circle().inset(by: -10))
+        .frame(width: 44, height: 44)
+        .contentShape(Circle())
         .accessibilityLabel("\(accent.displayName) flame")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }

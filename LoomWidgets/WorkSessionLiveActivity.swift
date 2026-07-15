@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import WidgetKit
 import SwiftUI
 
@@ -12,6 +13,7 @@ struct WorkSessionLiveActivity: Widget {
             LockScreenSessionView(context: context)
                 .activityBackgroundTint(Color(red: 0.07, green: 0.07, blue: 0.08).opacity(0.94))
                 .activitySystemActionForegroundColor(.white)
+                .widgetURL(workSessionURL(context.attributes))
         } dynamicIsland: { context in
             let accent = HearthAccent.current
             return DynamicIsland {
@@ -33,14 +35,18 @@ struct WorkSessionLiveActivity: Widget {
                         .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(context.attributes.taskTitle)
-                            .font(.custom("Nunito-ExtraBold", size: 16))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Text(subtitle(context))
-                            .font(.custom("Nunito-SemiBold", size: 12))
-                            .foregroundStyle(.white.opacity(0.6))
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(context.attributes.taskTitle)
+                                .font(.custom("Nunito-ExtraBold", size: 16))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Text(subtitle(context))
+                                .font(.custom("Nunito-SemiBold", size: 12))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
+                        Spacer(minLength: 4)
+                        sessionControlButton(context, diameter: 36)
                     }
                     .padding(.horizontal, 4)
                 }
@@ -59,8 +65,47 @@ struct WorkSessionLiveActivity: Widget {
                     .foregroundStyle(accent.soft)
             }
             .keylineTint(accent.color)
+            .widgetURL(workSessionURL(context.attributes))
         }
     }
+}
+
+private func workSessionURL(_ attributes: WorkSessionAttributes) -> URL {
+    URL(string: "loom://start-session/\(attributes.taskID.uuidString)")
+        ?? URL(string: "loom://open")!
+}
+
+/// A real inline control rather than an app-opening affordance. The intent is
+/// session-scoped, so a cached button from an ended activity is a no-op.
+private func sessionControlButton(
+    _ context: ActivityViewContext<WorkSessionAttributes>,
+    diameter: CGFloat
+) -> some View {
+    let accent = HearthAccent.current
+    let isPaused = context.state.isPaused
+
+    return Button(intent: ToggleWorkSessionPauseIntent(sessionID: context.attributes.sessionID)) {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [accent.hi, accent.color],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: accent.color.opacity(0.5), radius: diameter * 0.18)
+            Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                .font(.system(size: diameter * 0.36, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: diameter, height: diameter)
+        .frame(width: max(44, diameter), height: max(44, diameter))
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(isPaused ? "Resume work session" : "Pause work session")
+    .accessibilityHint("Controls the timer without opening Loom")
 }
 
 /// Counts down to the block end when the session started inside a block,
@@ -195,24 +240,7 @@ private struct LockScreenSessionView: View {
 
             Spacer()
 
-            // Held-flame mark — tapping the activity opens the timer, so the
-            // glyph must not promise an inline action (pause) it can't do.
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [accent.hi, accent.color],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 44, height: 44)
-                    .shadow(color: accent.color.opacity(0.5), radius: 8)
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .accessibilityHidden(true)
+            sessionControlButton(context, diameter: 44)
         }
         .padding(16)
         // The hearth banked in the corner behind the flame, with a few
