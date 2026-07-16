@@ -524,6 +524,264 @@ final class LoomTests: XCTestCase {
         XCTAssertEqual(all.map(\.id), [futureId], "a healthy plan must not be rearranged")
     }
 
+    func testCatchUpSuppressesRepeatedFutileRebalanceWithoutChurningBlocks() throws {
+        let settings = makeSettings()
+        let impossible = makeTask(effort: 60, deadlineHoursFromAnchor: 1)
+        let unaffected = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let original = ScheduledBlock(
+            task: unaffected,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 60
+        )
+        context.insert(original)
+        try context.save()
+
+        let first = SchedulerService.catchUpMissedBlocks(
+            tasks: [impossible, unaffected],
+            allBlocks: [original],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(first.adjustedTasks, 1)
+        XCTAssertEqual(first.replannedTasks, 0)
+        XCTAssertEqual(first.unschedulableTasks, 1)
+        XCTAssertNotNil(settings.lastFutileAutomaticRebalanceFingerprint)
+
+        let afterFirst = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        let unaffectedIds = Set(afterFirst
+            .filter { $0.task?.id == unaffected.id }
+            .map(\.id))
+        XCTAssertFalse(unaffectedIds.isEmpty)
+
+        let second = SchedulerService.catchUpMissedBlocks(
+            tasks: [unaffected, impossible],
+            allBlocks: Array(afterFirst.reversed()),
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(second, CatchUpSummary())
+        let afterSecond = try context.fetch(FetchDescriptor<ScheduledBlock>())
+        XCTAssertEqual(
+            Set(afterSecond.filter { $0.task?.id == unaffected.id }.map(\.id)),
+            unaffectedIds,
+            "an identical futile pass must preserve unaffected block IDs"
+        )
+    }
+
+    func testFutileRebalanceRetriesAfterAnySchedulingInputChanges() throws {
+        let settings = makeSettings()
+        let impossible = makeTask(effort: 60, deadlineHoursFromAnchor: 1)
+        let unaffected = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
+        let original = ScheduledBlock(
+            task: unaffected,
+            startTime: anchor.addingTimeInterval(2 * 3600),
+            durationMinutes: 60
+        )
+        let busy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "fingerprint-busy",
+            title: "Busy",
+            startTime: anchor.addingTimeInterval(30 * 3600),
+            endTime: anchor.addingTimeInterval(31 * 3600)
+        )
+        let blocked = BlockedTime(
+            label: "Blocked",
+            weekdays: Array(1...7),
+            startHour: 18,
+            startMinute: 0,
+            durationMinutes: 30
+        )
+        context.insert(original)
+        context.insert(busy)
+        context.insert(blocked)
+        try context.save()
+
+        func runCatchUpAfterMutation(_ input: String) throws {
+            let previousFingerprint = settings.lastFutileAutomaticRebalanceFingerprint
+            let blocks = try context.fetch(FetchDescriptor<ScheduledBlock>())
+            let summary = SchedulerService.catchUpMissedBlocks(
+                tasks: [impossible, unaffected],
+                allBlocks: blocks,
+                blockedTimes: [blocked],
+                busyEvents: [busy],
+                settings: settings,
+                now: anchor,
+                context: context
+            )
+            try context.save()
+            XCTAssertGreaterThan(summary.adjustedTasks, 0, "\(input) must permit another attempt")
+            XCTAssertEqual(summary.unschedulableTasks, 1)
+            XCTAssertNotEqual(
+                settings.lastFutileAutomaticRebalanceFingerprint,
+                previousFingerprint,
+                "\(input) must produce a new persisted plan fingerprint"
+            )
+        }
+
+        try runCatchUpAfterMutation("initial plan")
+
+        let block = try XCTUnwrap(
+            context.fetch(FetchDescriptor<ScheduledBlock>())
+                .first { $0.task?.id == unaffected.id }
+        )
+        block.isLocked.toggle()
+        try runCatchUpAfterMutation("block mutation")
+
+        busy.startTime = busy.startTime.addingTimeInterval(15 * 60)
+        busy.endTime = busy.endTime.addingTimeInterval(15 * 60)
+        try runCatchUpAfterMutation("busy-event mutation")
+
+        blocked.durationMinutes += 15
+        try runCatchUpAfterMutation("blocked-time mutation")
+
+        impossible.effortMinutes += 15
+        try runCatchUpAfterMutation("task effort mutation")
+
+        settings.dailyFocusMinutes = 60
+        try runCatchUpAfterMutation("focus-limit mutation")
+    }
+
+    func testMissedBlockBypassesMatchingFutileFingerprint() throws {
+        let settings = makeSettings()
+        let task = makeTask(effort: 60, deadlineHoursFromAnchor: 1)
+        let missed = ScheduledBlock(
+            task: task,
+            startTime: anchor.addingTimeInterval(-2 * 3600),
+            durationMinutes: 60
+        )
+        context.insert(missed)
+        settings.lastFutileAutomaticRebalanceFingerprint =
+            SchedulerService.automaticSchedulingFingerprint(
+                tasks: [task],
+                allBlocks: [missed],
+                blockedTimes: [],
+                busyEvents: [],
+                settings: settings
+            )
+        try context.save()
+
+        let summary = SchedulerService.catchUpMissedBlocks(
+            tasks: [task],
+            allBlocks: [missed],
+            blockedTimes: [],
+            settings: settings,
+            now: anchor,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertEqual(summary.replannedTasks, 1)
+        XCTAssertEqual(summary.unschedulableTasks, 1)
+        XCTAssertFalse(
+            try context.fetch(FetchDescriptor<ScheduledBlock>())
+                .contains { $0.id == missed.id }
+        )
+    }
+
+    func testFutileRebalanceFingerprintPersistsAcrossModelContexts() throws {
+        let settings = makeSettings()
+        settings.lastFutileAutomaticRebalanceFingerprint = "persisted-fingerprint"
+        try context.save()
+
+        let freshContext = ModelContext(container)
+        let fetched = try XCTUnwrap(
+            freshContext.fetch(FetchDescriptor<UserSettings>()).first
+        )
+        XCTAssertEqual(
+            fetched.lastFutileAutomaticRebalanceFingerprint,
+            "persisted-fingerprint"
+        )
+    }
+
+    func testAutomaticSchedulingFingerprintIsStableAcrossInputShuffling() {
+        let settings = makeSettings()
+        let firstTask = makeTask(effort: 30, deadlineHoursFromAnchor: 24)
+        let secondTask = makeTask(effort: 45, deadlineHoursFromAnchor: 48)
+        let firstBlock = ScheduledBlock(
+            task: firstTask,
+            startTime: anchor.addingTimeInterval(3600),
+            durationMinutes: 30
+        )
+        let secondBlock = ScheduledBlock(
+            task: secondTask,
+            startTime: anchor.addingTimeInterval(3 * 3600),
+            durationMinutes: 45
+        )
+        let firstBusy = BusyEvent(
+            source: .appleCalendar,
+            sourceId: "first",
+            title: "First",
+            startTime: anchor.addingTimeInterval(5 * 3600),
+            endTime: anchor.addingTimeInterval(6 * 3600)
+        )
+        let secondBusy = BusyEvent(
+            source: .googleCalendar,
+            sourceId: "second",
+            title: "Second",
+            startTime: anchor.addingTimeInterval(7 * 3600),
+            endTime: anchor.addingTimeInterval(8 * 3600)
+        )
+        let firstBlocked = BlockedTime(
+            label: "First", weekdays: [2, 4],
+            startHour: 10, startMinute: 15, durationMinutes: 30
+        )
+        let secondBlocked = BlockedTime(
+            label: "Second", weekdays: [6, 3],
+            startHour: 14, startMinute: 45, durationMinutes: 60
+        )
+
+        let original = SchedulerService.automaticSchedulingFingerprint(
+            tasks: [firstTask, secondTask],
+            allBlocks: [firstBlock, secondBlock],
+            blockedTimes: [firstBlocked, secondBlocked],
+            busyEvents: [firstBusy, secondBusy],
+            settings: settings
+        )
+        let shuffled = SchedulerService.automaticSchedulingFingerprint(
+            tasks: [secondTask, firstTask],
+            allBlocks: [secondBlock, firstBlock],
+            blockedTimes: [secondBlocked, firstBlocked],
+            busyEvents: [secondBusy, firstBusy],
+            settings: settings
+        )
+
+        XCTAssertEqual(original, shuffled)
+    }
+
+    func testZeroDurationOccupiedIntervalDoesNotSplitUsableGap() {
+        let settings = makeSettings()
+        settings.deadlineBufferMinutes = 0
+        settings.minBlockMinutes = 30
+        let occupyingTask = makeTask(effort: 30, deadlineHoursFromAnchor: 24)
+        let zeroDuration = ScheduledBlock(
+            task: occupyingTask,
+            startTime: anchor.addingTimeInterval(20 * 60),
+            durationMinutes: 0
+        )
+        let task = makeTask(effort: 30, deadlineHoursFromAnchor: 40.0 / 60.0)
+
+        let result = SchedulerService.schedule(
+            task: task,
+            allBlocks: [zeroDuration],
+            settings: settings,
+            from: anchor
+        )
+
+        XCTAssertEqual(
+            scheduledBlocks(from: result).reduce(0) { $0 + $1.durationMinutes },
+            30,
+            "a zero-length record must leave the full 40-minute gap usable"
+        )
+    }
+
     func testCatchUpReleasesAndReplansMissedLockedBlock() throws {
         let settings = makeSettings()
         let task = makeTask(effort: 60, deadlineHoursFromAnchor: 48)
@@ -807,6 +1065,105 @@ final class LoomTests: XCTestCase {
     }
 
     // MARK: - Shared work-session clock
+
+    func testWorkSessionControlStateDecodesLegacyJournal() throws {
+        let sessionID = UUID()
+        let json = """
+        {
+          "sessionID": "\(sessionID.uuidString)",
+          "startedAt": 0,
+          "accumulatedPausedSeconds": 17
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(
+            WorkSessionControlState.self,
+            from: Data(json.utf8)
+        )
+
+        XCTAssertEqual(decoded.sessionID, sessionID)
+        XCTAssertEqual(decoded.startedAt, Date(timeIntervalSinceReferenceDate: 0))
+        XCTAssertEqual(decoded.accumulatedPausedSeconds, 17)
+        XCTAssertNil(decoded.taskID)
+        XCTAssertNil(decoded.scheduledBlockID)
+        XCTAssertNil(decoded.blockEndsAt)
+        XCTAssertNil(decoded.ringStartsAt)
+        XCTAssertNil(decoded.ringEndsAt)
+    }
+
+    func testWorkSessionRecoveryDecision() {
+        let now = anchor
+        let taskID = UUID()
+        let fresh = WorkSessionControlState(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-60),
+            taskID: taskID
+        )
+        let missingTaskID = WorkSessionControlState(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-60)
+        )
+        let stale = WorkSessionControlState(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-12 * 3600),
+            taskID: taskID
+        )
+
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(journal: nil, taskExists: true, now: now),
+            .discard
+        )
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(
+                journal: missingTaskID,
+                taskExists: true,
+                now: now
+            ),
+            .discard
+        )
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(journal: fresh, taskExists: false, now: now),
+            .discard
+        )
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(journal: fresh, taskExists: nil, now: now),
+            .keep,
+            "an unavailable lookup must leave the recovery journal untouched"
+        )
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(journal: stale, taskExists: true, now: now),
+            .discard
+        )
+        XCTAssertEqual(
+            WorkSessionRecovery.evaluate(journal: fresh, taskExists: true, now: now),
+            .restore(fresh)
+        )
+    }
+
+    func testWorkSessionControlStateJournalRoundTripPreservesElapsedMath() throws {
+        let start = anchor
+        let evaluatedAt = start.addingTimeInterval(50 * 60)
+        let state = WorkSessionControlState(
+            sessionID: UUID(),
+            startedAt: start,
+            accumulatedPausedSeconds: 8 * 60,
+            pauseBeganAt: start.addingTimeInterval(45 * 60),
+            taskID: UUID(),
+            scheduledBlockID: UUID(),
+            blockEndsAt: start.addingTimeInterval(60 * 60),
+            ringStartsAt: start.addingTimeInterval(-15 * 60),
+            ringEndsAt: start.addingTimeInterval(75 * 60)
+        )
+
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(WorkSessionControlState.self, from: data)
+
+        XCTAssertEqual(
+            decoded.elapsedWorkedSeconds(at: evaluatedAt),
+            state.elapsedWorkedSeconds(at: evaluatedAt)
+        )
+        XCTAssertEqual(decoded, state)
+    }
 
     func testWorkSessionControlStateExcludesPausedWallTime() {
         let start = anchor
@@ -1750,6 +2107,98 @@ final class LoomTests: XCTestCase {
         XCTAssertNil(BlockNotificationService.eveningDigestBody(
             todayBlocks: [], tomorrowFirst: nil
         ))
+    }
+
+    func testBlockAlertBudgetPreservesDigestsThenNearestStartsAndLeads() {
+        let starts = (0..<20).map { index in
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-\(index)",
+                fireDate: anchor.addingTimeInterval(Double(index) * 3600),
+                isLead: false
+            )
+        }
+        let leads = (0..<20).map { index in
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-\(index)-lead",
+                fireDate: anchor.addingTimeInterval(Double(index) * 3600 - 600),
+                isLead: true
+            )
+        }
+
+        let selected = BlockNotificationService.selectBlockAlerts(
+            candidates: starts + leads,
+            digestCount: 6,
+            otherPendingCount: 19
+        )
+
+        XCTAssertEqual(selected.count + 6 + 19, 55)
+        XCTAssertEqual(selected.filter { !$0.isLead }, starts)
+        XCTAssertEqual(selected.filter(\.isLead), Array(leads.prefix(10)))
+
+        let startsOnly = BlockNotificationService.selectBlockAlerts(
+            candidates: starts + leads,
+            digestCount: 6,
+            otherPendingCount: 34
+        )
+        XCTAssertEqual(startsOnly, Array(starts.prefix(15)))
+    }
+
+    func testBlockAlertBudgetFitsAllCandidatesWithNoOtherPendingRequests() {
+        let candidates = (0..<20).flatMap { index in
+            let start = anchor.addingTimeInterval(Double(index) * 3600)
+            return [
+                BlockNotificationService.BlockAlertCandidate(
+                    identifier: "block-\(index)", fireDate: start, isLead: false
+                ),
+                BlockNotificationService.BlockAlertCandidate(
+                    identifier: "block-\(index)-lead",
+                    fireDate: start.addingTimeInterval(-600),
+                    isLead: true
+                )
+            ]
+        }
+
+        let selected = BlockNotificationService.selectBlockAlerts(
+            candidates: candidates,
+            digestCount: 6,
+            otherPendingCount: 0
+        )
+
+        XCTAssertEqual(selected.count, 40)
+        XCTAssertEqual(selected.filter { !$0.isLead }.count, 20)
+        XCTAssertEqual(selected.filter(\.isLead).count, 20)
+    }
+
+    func testBlockAlertBudgetOrderingIsDeterministic() {
+        let candidates = [
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-b-lead", fireDate: anchor, isLead: true
+            ),
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-b", fireDate: anchor, isLead: false
+            ),
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-a-lead", fireDate: anchor, isLead: true
+            ),
+            BlockNotificationService.BlockAlertCandidate(
+                identifier: "block-a", fireDate: anchor, isLead: false
+            )
+        ]
+        let expected = ["block-a", "block-b", "block-a-lead", "block-b-lead"]
+
+        let forward = BlockNotificationService.selectBlockAlerts(
+            candidates: candidates,
+            digestCount: 0,
+            otherPendingCount: 0
+        )
+        let reversed = BlockNotificationService.selectBlockAlerts(
+            candidates: Array(candidates.reversed()),
+            digestCount: 0,
+            otherPendingCount: 0
+        )
+
+        XCTAssertEqual(forward.map(\.identifier), expected)
+        XCTAssertEqual(reversed.map(\.identifier), expected)
     }
 
     // MARK: - Recurring tasks

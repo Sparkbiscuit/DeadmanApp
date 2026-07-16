@@ -268,6 +268,16 @@ struct AppFont {
         .custom("Nunito-Bold", size: size, relativeTo: .caption)
     }
 
+    /// Settings section headers — Nunito ExtraBold
+    static func settingsSectionHeader(_ size: CGFloat = 11) -> Font {
+        .custom("Nunito-ExtraBold", size: size, relativeTo: .caption2)
+    }
+
+    /// Settings row labels — Nunito Bold
+    static func settingsRowLabel(_ size: CGFloat = 15) -> Font {
+        .custom("Nunito-Bold", size: size, relativeTo: .subheadline)
+    }
+
     /// Numeric/time displays — JetBrains Mono SemiBold
     static func mono(_ size: CGFloat = 14) -> Font {
         .custom("JetBrainsMono-SemiBold", size: size, relativeTo: .body)

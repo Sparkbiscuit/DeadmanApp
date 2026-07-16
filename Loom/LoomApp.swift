@@ -14,17 +14,60 @@ enum AutomaticPlanRefreshPolicy {
     }
 }
 
+/// A journal is recoverable only while it still names a live task and remains
+/// recent enough to be an interrupted session rather than abandoned state.
+enum WorkSessionRecovery: Equatable {
+    case restore(WorkSessionControlState)
+    case discard
+    case keep
+
+    static func evaluate(
+        journal: WorkSessionControlState?,
+        taskExists: Bool?,
+        now: Date
+    ) -> WorkSessionRecovery {
+        guard let journal, journal.taskID != nil else {
+            return .discard
+        }
+        guard let taskExists else { return .keep }
+        guard taskExists,
+              now.timeIntervalSince(journal.startedAt) < 12 * 3600 else {
+            return .discard
+        }
+        return .restore(journal)
+    }
+}
+
 /// Runs only when Loom presents its UI for the first time in this process.
 /// Keeping the guard outside view identity prevents a later scene rebuild from
-/// ending a session that started after the initial foreground bootstrap.
+/// reconsidering a session that started after the initial foreground bootstrap.
 @MainActor
 private enum WorkSessionForegroundCleanup {
     private static var didRun = false
 
-    static func runOnce() {
-        guard !didRun else { return }
+    static func runOnce(
+        journal: WorkSessionControlState?,
+        taskExists: Bool?,
+        now: Date = Date()
+    ) -> WorkSessionRecovery? {
+        guard !didRun else { return nil }
         didRun = true
-        WorkSessionActivityController.endAll()
+        let decision = WorkSessionRecovery.evaluate(
+            journal: journal,
+            taskExists: taskExists,
+            now: now
+        )
+        switch decision {
+        case .discard:
+            WorkSessionActivityController.endAll()
+        case .keep:
+            // The lookup was unavailable, not negative — nothing was consumed,
+            // so a later scene bootstrap may try again with a healthy store.
+            didRun = false
+        case .restore:
+            break
+        }
+        return decision
     }
 }
 
@@ -42,11 +85,13 @@ struct LoomApp: App {
     /// Store lives in the App Group so the widget can read it (SharedStore
     /// migrates any pre-1.2 sandbox store on first launch).
     private let container: ModelContainer
+    private let usedFallback: Bool
     @State private var showingPersistenceWarning: Bool
 
     init() {
         let setup = Self.makeContainer()
         container = setup.container
+        usedFallback = setup.usedFallback
         _showingPersistenceWarning = State(initialValue: setup.usedFallback)
     }
 
@@ -103,7 +148,7 @@ struct LoomApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            MainTabView(usedFallback: usedFallback)
                 .alert("Your data needs a breather", isPresented: $showingPersistenceWarning) {
                     Button("Got it", role: .cancel) {}
                 } message: {
@@ -126,6 +171,7 @@ struct MainTabView: View {
     // `endTime` is computed, so SwiftData cannot use it in a fetch sort. The
     // lightweight policy below computes the minimum from this unsorted set.
     @Query private var scheduledBlocks: [ScheduledBlock]
+    let usedFallback: Bool
     @State private var selectedTab = 0
     @State private var replanSummary = CatchUpSummary()
     @State private var sessionRequestTaskId: UUID?
@@ -226,11 +272,12 @@ struct MainTabView: View {
     /// into the work session timer; anything else just opens the app.
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "loom" else { return }
-        selectedTab = 0
         if url.host == "start-session",
            let idString = url.pathComponents.dropFirst().first,
            let taskId = UUID(uuidString: idString) {
-            sessionRequestTaskId = taskId
+            requestWorkSession(for: taskId)
+        } else {
+            selectedTab = 0
         }
     }
 
@@ -238,6 +285,10 @@ struct MainTabView: View {
     private func consumePendingSessionRequest() {
         guard let taskId = LoomAppDelegate.pendingSessionTaskId else { return }
         LoomAppDelegate.pendingSessionTaskId = nil
+        requestWorkSession(for: taskId)
+    }
+
+    private func requestWorkSession(for taskId: UUID) {
         selectedTab = 0
         sessionRequestTaskId = taskId
     }
@@ -245,11 +296,32 @@ struct MainTabView: View {
     private func bootstrap() {
         // A LiveActivityIntent may launch Loom's process in the background
         // without opening a UI scene. Cleanup must therefore wait until the
-        // user actually opens the app; doing it from LoomApp.init would erase
-        // the App Group control value before the Lock Screen intent could read
+        // user actually opens the app; doing it from LoomApp.init would inspect
+        // the App Group journal before the Lock Screen intent finished writing
         // it. The process-wide foreground guard also keeps a later rebuild of
         // the one supported scene from touching a newly started timer.
-        WorkSessionForegroundCleanup.runOnce()
+        let journal = WorkSessionControlStore.load()
+        let taskExists: Bool?
+        if usedFallback {
+            taskExists = nil
+        } else if let taskID = journal?.taskID {
+            let descriptor = FetchDescriptor<LoomTask>(
+                predicate: #Predicate { $0.id == taskID && !$0.isComplete }
+            )
+            do {
+                taskExists = try modelContext.fetchCount(descriptor) > 0
+            } catch {
+                taskExists = nil
+            }
+        } else {
+            taskExists = false
+        }
+        if case .restore(let journal) = WorkSessionForegroundCleanup.runOnce(
+            journal: journal,
+            taskExists: taskExists
+        ), let taskID = journal.taskID {
+            requestWorkSession(for: taskID)
+        }
 
         let settings = UserSettings.fetchOrCreate(in: modelContext)
 

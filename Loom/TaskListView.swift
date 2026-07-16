@@ -75,13 +75,31 @@ struct TaskListView: View {
             .sheet(item: $triageEditTask) { task in
                 TaskEditView(task: task, emphasizeDeadline: true)
             }
-            .onChange(of: sessionRequestTaskId) { _, newValue in
-                guard let taskId = newValue else { return }
-                sessionRequestTaskId = nil
-                if let task = tasks.first(where: { $0.id == taskId && !$0.isComplete }) {
-                    workSessionTask = task
-                }
+            .onAppear {
+                consumeSessionRequest()
             }
+            .onChange(of: sessionRequestTaskId) { _, _ in
+                consumeSessionRequest()
+            }
+        }
+    }
+
+    private func consumeSessionRequest() {
+        guard let requestedTaskID = sessionRequestTaskId else { return }
+        sessionRequestTaskId = nil
+
+        let taskID: UUID
+        if let journalTaskID = WorkSessionControlStore.load()?.taskID,
+           journalTaskID != requestedTaskID,
+           tasks.contains(where: { $0.id == journalTaskID && !$0.isComplete }) {
+            // Loom has one active timer. Route back to its live task so a new
+            // request cannot strand the recovery journal behind another task.
+            taskID = journalTaskID
+        } else {
+            taskID = requestedTaskID
+        }
+        if let task = tasks.first(where: { $0.id == taskID && !$0.isComplete }) {
+            workSessionTask = task
         }
     }
 
@@ -759,11 +777,14 @@ private struct ThreadConnector: Shape {
         path.addQuadCurve(to: CGPoint(x: 23, y: 76), control: CGPoint(x: 1, y: 76))
         path.addLine(to: CGPoint(x: 86, y: 76))
 
-        // Branch from the rounded corner down to the section thread's x=6
-        // rail. Without this short overlap the two independently laid-out
-        // strokes can show a gap at some sizes and display scales.
-        path.move(to: CGPoint(x: 6, y: 70))
-        path.addLine(to: CGPoint(x: 6, y: rect.maxY))
+        // Branch from the rounded corner down to the section thread's rail.
+        // The section rail's centerline sits at +7pt from the content leading
+        // edge (6pt offset + half its 2pt width); this shape is drawn shifted
+        // x: -0.5, so x = 7.5 here lands the branch exactly on that line.
+        // Without this short overlap the two independently laid-out strokes
+        // can show a gap at some sizes and display scales.
+        path.move(to: CGPoint(x: 7.5, y: 70))
+        path.addLine(to: CGPoint(x: 7.5, y: rect.maxY))
         return path
     }
 }

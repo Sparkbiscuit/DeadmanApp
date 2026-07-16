@@ -65,6 +65,22 @@ enum PlanCoordinator {
             from: startDate,
             context: context
         )
+        // Fetching while the reschedule's deletions are still pending makes
+        // SwiftData process those changes mid-flight and sever the fresh
+        // blocks' task relationships — the new plan would evaporate. Persist
+        // the reschedule first; the marker is only worth computing over the
+        // durable result, so a failed save simply skips it.
+        if (try? context.save()) != nil {
+            let resultingTasks = (try? context.fetch(FetchDescriptor<LoomTask>())) ?? []
+            let resultingBlocks = (try? context.fetch(FetchDescriptor<ScheduledBlock>())) ?? []
+            SchedulerService.updateFutileAutomaticRebalanceMarker(
+                tasks: resultingTasks,
+                allBlocks: resultingBlocks,
+                blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
+                settings: settings
+            )
+        }
         publishChange(context: context, interactive: interactive)
         return result
     }

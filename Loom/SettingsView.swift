@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var showCalendarDeniedAlert = false
     @State private var showNotificationsDeniedAlert = false
     @State private var didPushNow = false
+    @State private var showPushNowError = false
     @State private var exportFileURL: URL?
     @State private var isConnectingGoogle = false
     @State private var showGoogleConnectFailed = false
@@ -39,7 +40,7 @@ struct SettingsView: View {
     private func settingsList(_ settings: UserSettings) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HearthTitle(text: "Settings", size: 30)
+                HearthTitle(text: "Settings", size: 28)
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
                     .padding(.bottom, 18)
@@ -53,7 +54,7 @@ struct SettingsView: View {
                 aboutSection
 
                 Text("Loom \(appVersion) · woven with care")
-                    .font(AppFont.monoMedium(12))
+                    .font(AppFont.monoMedium(11))
                     .foregroundStyle(Color.loomFaint)
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
@@ -438,7 +439,7 @@ struct SettingsView: View {
                     SettingsRow(icon: "list.bullet", tint: .schoolDisplay, label: "Calendars") {
                         HStack(spacing: 8) {
                             Text(includedCalendarsLabel(settings))
-                                .font(AppFont.body(13))
+                                .font(AppFont.mono(13))
                                 .foregroundStyle(Color.loomSubtle)
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 12, weight: .semibold))
@@ -466,6 +467,10 @@ struct SettingsView: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Color.personalDisplay)
+                    } else if showPushNowError {
+                        Text("Couldn't reach Calendar")
+                            .font(AppFont.caption(12))
+                            .foregroundStyle(Color.loomRed)
                     }
                 }
             }
@@ -522,13 +527,30 @@ struct SettingsView: View {
     }
 
     private func pushBlocksNow(settings: UserSettings) {
+        withAnimation {
+            didPushNow = false
+            showPushNowError = false
+        }
         Task { @MainActor in
             let granted = await CalendarExportService.requestAccess()
             if granted {
-                CalendarExportService.syncNow(context: modelContext, settings: settings)
-                withAnimation { didPushNow = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { didPushNow = false }
+                do {
+                    try CalendarExportService.syncNow(context: modelContext, settings: settings)
+                    withAnimation {
+                        showPushNowError = false
+                        didPushNow = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { didPushNow = false }
+                    }
+                } catch {
+                    withAnimation {
+                        didPushNow = false
+                        showPushNowError = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { showPushNowError = false }
+                    }
                 }
             } else {
                 showCalendarDeniedAlert = true
@@ -732,7 +754,7 @@ private struct SettingsGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())
-                .font(AppFont.caption(11))
+                .font(AppFont.settingsSectionHeader())
                 .foregroundStyle(Color.loomSubtle)
                 .kerning(1.2)
                 .padding(.leading, 4)
@@ -791,7 +813,7 @@ private struct SettingsRow<Trailing: View>: View {
             .accessibilityHidden(true)
 
             Text(label)
-                .font(AppFont.bodySemibold(15))
+                .font(AppFont.settingsRowLabel())
                 .foregroundStyle(labelTint)
 
             Spacer(minLength: 8)
@@ -861,22 +883,31 @@ private struct CalendarPickerView: View {
                                     .fill(calendarDotColor(calendar))
                                     .frame(width: 10, height: 10)
                                 Text(calendar.title)
-                                    .font(AppFont.body(15))
+                                    .font(AppFont.settingsRowLabel())
                                     .foregroundStyle(Color.loomText)
                             }
                         }
                         .toggleStyle(HearthToggleStyle())
                     }
                 } header: {
-                    Text(group.source)
+                    Text(group.source.uppercased())
+                        .font(AppFont.settingsSectionHeader())
+                        .foregroundStyle(Color.loomSubtle)
+                        .kerning(1.2)
                 }
                 .listRowBackground(Color.loomSurface)
             }
         }
         .scrollContentBackground(.hidden)
         .background(Color.loomBackground)
-        .navigationTitle("Calendars")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Calendars")
+                    .font(AppFont.heading(16))
+                    .foregroundStyle(Color.loomText)
+            }
+        }
         .onAppear(perform: loadCalendars)
         .onDisappear {
             // One re-sync when leaving, instead of one per toggle flip.

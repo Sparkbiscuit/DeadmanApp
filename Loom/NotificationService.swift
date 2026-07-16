@@ -36,7 +36,7 @@ enum NotificationService {
             content: content,
             trigger: trigger
         )
-        UNUserNotificationCenter.current().add(request)
+        BlockNotificationService.addDirectRequestMakingRoom(request)
     }
 
     static func cancel(_ reminder: Reminder) {

@@ -49,6 +49,10 @@ struct WorkSessionView: View {
     /// Matches the App Group control snapshot and Live Activity attributes.
     /// A delayed intent for an older activity cannot affect a newer timer.
     @State private var activeSessionID: UUID?
+    /// Retained only when SwiftData rejects the attendance durability boundary.
+    /// A later Stop retries this same row instead of inserting a duplicate.
+    @State private var pendingAttendanceRecord: WorkSession?
+    @State private var pendingAttendanceCompletedLinkedBlock = false
     /// Captured when the timer starts so stopping after the block boundary still
     /// links the work log to the reservation it fulfilled.
     @State private var scheduledBlockId: UUID?
@@ -103,6 +107,9 @@ struct WorkSessionView: View {
         // The held flame at full strength: no top glow to compete with the
         // ring, a hot floor, and the densest ember field in the app.
         .hearthScreen(topGlow: 0.05, bottomGlow: 0.5, embers: 30, emberIntensity: 1.5)
+        .onAppear {
+            rehydrateIfNeeded()
+        }
         .onReceive(timer) { tick in
             guard isRunning else { return }
             // The ring carries the schedule, not the session: it keeps
@@ -498,6 +505,12 @@ struct WorkSessionView: View {
     // MARK: - Actions
 
     private func startTapped(microMinutes: Int? = nil) {
+        if let journalTaskID = WorkSessionControlStore.load()?.taskID,
+           journalTaskID != task.id {
+            // Loom has one active timer. Never overwrite another task's
+            // recovery journal just because this screen was presented.
+            return
+        }
         let now = Date()
         let sessionID = UUID()
         self.now = now // the ring's clock starts at the same instant
@@ -543,7 +556,15 @@ struct WorkSessionView: View {
         didHitMicroGoal = false
 
         WorkSessionControlStore.save(
-            WorkSessionControlState(sessionID: sessionID, startedAt: now)
+            WorkSessionControlState(
+                sessionID: sessionID,
+                startedAt: now,
+                taskID: task.id,
+                scheduledBlockID: runningBlock?.id,
+                blockEndsAt: blockEndTarget,
+                ringStartsAt: ringStart,
+                ringEndsAt: ringStart.addingTimeInterval(TimeInterval(window))
+            )
         )
         WorkSessionActivityController.start(
             sessionID: sessionID,
@@ -556,6 +577,66 @@ struct WorkSessionView: View {
             ringStartsAt: ringStart,
             ringEndsAt: ringStart.addingTimeInterval(TimeInterval(window))
         )
+    }
+
+    /// Rebuilds the foreground timer from the App Group journal after iOS has
+    /// terminated Loom in the background. The journal's wall clock remains the
+    /// source of truth; presenting this view must not restart the session.
+    private func rehydrateIfNeeded() {
+        guard !isRunning,
+              let journal = WorkSessionControlStore.load(),
+              journal.taskID == task.id else { return }
+
+        let date = Date()
+        let fallbackRingStart = journal.startedAt.addingTimeInterval(
+            TimeInterval(-task.timeSpentMinutes * 60)
+        )
+        let ringStart: Date
+        let ringWindow: Int
+        if let journalStart = journal.ringStartsAt,
+           let journalEnd = journal.ringEndsAt,
+           journalEnd > journalStart {
+            ringStart = journalStart
+            ringWindow = max(1, Int(journalEnd.timeIntervalSince(journalStart)))
+        } else {
+            ringStart = fallbackRingStart
+            ringWindow = max(task.effortMinutes, 1) * 60
+        }
+
+        now = date
+        activeSessionID = journal.sessionID
+        sessionStart = journal.startedAt
+        scheduledBlockId = journal.scheduledBlockID
+        blockEndTarget = journal.blockEndsAt
+        ringStartTime = ringStart
+        ringWindowSeconds = ringWindow
+        if let blockEnd = journal.blockEndsAt {
+            didWarnNearEnd = date >= blockEnd.addingTimeInterval(-10 * 60)
+            didMarkBlockEnd = date >= blockEnd
+        }
+        syncSharedControl(at: date)
+        isRunning = true
+        UIApplication.shared.isIdleTimerDisabled = true
+        // Recovery deserves a word: the app just came back from a process
+        // death with the timer intact, and saying so out loud is what turns
+        // an invisible save into trust.
+        immersionMessage = "Picked the thread right back up — nothing lost."
+
+        if WorkSessionActivityController.isActive(sessionID: journal.sessionID) {
+            WorkSessionActivityController.updateSoon(journal, at: date)
+        } else {
+            WorkSessionActivityController.start(
+                sessionID: journal.sessionID,
+                taskID: task.id,
+                taskTitle: task.title,
+                contextName: task.context.rawValue,
+                effortMinutes: task.effortMinutes,
+                startedAt: journal.startedAt,
+                blockEndsAt: journal.blockEndsAt,
+                ringStartsAt: ringStart,
+                ringEndsAt: ringStart.addingTimeInterval(TimeInterval(ringWindow))
+            )
+        }
     }
 
     /// Worked time from the wall clock: start → now, minus paused stretches.
@@ -615,7 +696,16 @@ struct WorkSessionView: View {
                 sessionID: activeSessionID,
                 startedAt: sessionStart,
                 accumulatedPausedSeconds: pausedAccumSeconds,
-                pauseBeganAt: pauseBegan
+                pauseBeganAt: pauseBegan,
+                taskID: task.id,
+                scheduledBlockID: scheduledBlockId,
+                blockEndsAt: blockEndTarget,
+                ringStartsAt: ringStartTime,
+                ringEndsAt: ringStartTime.flatMap { start in
+                    ringWindowSeconds.map {
+                        start.addingTimeInterval(TimeInterval($0))
+                    }
+                }
             )
             WorkSessionControlStore.save(recovered)
             WorkSessionActivityController.updateSoon(recovered, at: now)
@@ -656,7 +746,7 @@ struct WorkSessionView: View {
     private func stopTapped() {
         // Commit the work log and attendance before the progress prompt. The
         // app may be backgrounded or terminated while that prompt is visible.
-        recordSession()
+        guard recordSession() else { return }
         withAnimation {
             isRunning = false
             isPaused = false
@@ -665,16 +755,13 @@ struct WorkSessionView: View {
         }
     }
 
-    private func recordSession() {
+    @discardableResult
+    private func recordSession() -> Bool {
         if isRunning {
             syncSharedControl(at: Date())
         }
-        WorkSessionActivityController.end()
-        UIApplication.shared.isIdleTimerDisabled = false
-        pausedAccumSeconds = 0
-        pauseBegan = nil
-        activeSessionID = nil
         guard elapsedSeconds > 0 else {
+            finishRecordedSession()
             // A sub-second start/stop has no attendance to persist, so it is
             // already safe to finish any calendar repair that waited for the
             // timer's ownership to clear.
@@ -682,33 +769,73 @@ struct WorkSessionView: View {
                 context: modelContext
             )
             try? modelContext.save()
-            return
+            return true
         }
-        let session = WorkSession(
-            task: task,
-            startedAt: sessionStart ?? Date().addingTimeInterval(-Double(elapsedSeconds)),
-            durationSeconds: elapsedSeconds,
-            scheduledBlockId: scheduledBlockId
-        )
-        modelContext.insert(session)
-        var didCompleteLinkedBlock = false
-        if let scheduledBlockId,
-           let block = task.scheduledBlocks.first(where: { $0.id == scheduledBlockId }) {
-            didCompleteLinkedBlock = !block.isComplete
-            block.isComplete = true
+        let session: WorkSession
+        let didCompleteLinkedBlock: Bool
+        if let pendingAttendanceRecord {
+            session = pendingAttendanceRecord
+            session.durationSeconds = elapsedSeconds
+            didCompleteLinkedBlock = pendingAttendanceCompletedLinkedBlock
+        } else {
+            guard let attendanceID = activeSessionID else { return false }
+            let descriptor = FetchDescriptor<WorkSession>(
+                predicate: #Predicate { $0.id == attendanceID }
+            )
+            do {
+                if let existing = try modelContext.fetch(descriptor).first {
+                    session = existing
+                    session.task = task
+                    session.startedAt = sessionStart
+                        ?? Date().addingTimeInterval(-Double(elapsedSeconds))
+                    session.durationSeconds = elapsedSeconds
+                    session.scheduledBlockId = scheduledBlockId
+                    didCompleteLinkedBlock = session.scheduledBlockId != nil
+                } else {
+                    session = WorkSession(
+                        id: attendanceID,
+                        task: task,
+                        startedAt: sessionStart
+                            ?? Date().addingTimeInterval(-Double(elapsedSeconds)),
+                        durationSeconds: elapsedSeconds,
+                        scheduledBlockId: scheduledBlockId
+                    )
+                    modelContext.insert(session)
+                    if let scheduledBlockId,
+                       let block = task.scheduledBlocks.first(where: { $0.id == scheduledBlockId }) {
+                        didCompleteLinkedBlock = !block.isComplete
+                        block.isComplete = true
+                    } else {
+                        didCompleteLinkedBlock = false
+                    }
+                }
+            } catch {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                return false
+            }
+            // The first step's whole job is getting the first session started;
+            // once that's happened it would just be stale noise.
+            task.firstStep = nil
+            pendingAttendanceRecord = session
+            pendingAttendanceCompletedLinkedBlock = didCompleteLinkedBlock
         }
-        // The first step's whole job is getting the first session started;
-        // once that's happened it would just be stale noise.
-        task.firstStep = nil
         // Stop is a durability boundary: the session and attendance must exist
         // on disk before the optional progress step begins.
-        try? modelContext.save()
-        isRunning = false
-        isPaused = false
-        elapsedSeconds = 0
-        sessionStart = nil
-        scheduledBlockId = nil
-        microGoalSeconds = nil
+        do {
+            try modelContext.save()
+        } catch {
+            do {
+                try modelContext.save()
+            } catch {
+                // Keep the recovery journal, Live Activity, and foreground
+                // timer intact. A later Stop can retry the pending context.
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                return false
+            }
+        }
+        pendingAttendanceRecord = nil
+        pendingAttendanceCompletedLinkedBlock = false
+        finishRecordedSession()
         if didCompleteLinkedBlock {
             // Attendance consumed one reservation without changing self-
             // reported progress. Restore coverage for the unchanged remainder;
@@ -725,6 +852,26 @@ struct WorkSessionView: View {
             context: modelContext
         )
         try? modelContext.save()
+        return true
+    }
+
+    /// Shared teardown is deliberately separate from attendance mutation so a
+    /// failed SwiftData save cannot erase the only recoverable session state.
+    private func finishRecordedSession() {
+        WorkSessionActivityController.end()
+        UIApplication.shared.isIdleTimerDisabled = false
+        isRunning = false
+        isPaused = false
+        elapsedSeconds = 0
+        sessionStart = nil
+        pausedAccumSeconds = 0
+        pauseBegan = nil
+        activeSessionID = nil
+        scheduledBlockId = nil
+        blockEndTarget = nil
+        ringStartTime = nil
+        ringWindowSeconds = nil
+        microGoalSeconds = nil
     }
 
     private func saveProgress() {

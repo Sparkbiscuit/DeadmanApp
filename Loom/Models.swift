@@ -186,12 +186,13 @@ final class WorkSession {
     var scheduledBlockId: UUID? = nil
 
     init(
+        id: UUID = UUID(),
         task: LoomTask,
         startedAt: Date,
         durationSeconds: Int,
         scheduledBlockId: UUID? = nil
     ) {
-        self.id = UUID()
+        self.id = id
         self.task = task
         self.startedAt = startedAt
         self.durationSeconds = durationSeconds
@@ -434,6 +435,9 @@ final class UserSettings {
     var startBufferMinutes: Int = 15
     /// Max minutes of task blocks the scheduler may place on a single day. 0 = no limit.
     var dailyFocusMinutes: Int = 0
+    /// The last plan state where automatic scheduling proved no more work fit.
+    /// Optional with an inline default so existing stores migrate safely.
+    var lastFutileAutomaticRebalanceFingerprint: String? = nil
     var exportToAppleCalendar: Bool
     /// One-way import: Apple Calendar events become BusyEvents the scheduler avoids.
     var importFromAppleCalendar: Bool = false
@@ -474,6 +478,7 @@ final class UserSettings {
         self.deadlineBufferMinutes = 120
         self.startBufferMinutes = 15
         self.dailyFocusMinutes = 0
+        self.lastFutileAutomaticRebalanceFingerprint = nil
         self.exportToAppleCalendar = false
         self.importFromAppleCalendar = false
         self.excludedCalendarIds = []

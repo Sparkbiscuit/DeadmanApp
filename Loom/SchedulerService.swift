@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import SwiftData
 
 // MARK: - Scheduling Result
@@ -285,7 +286,10 @@ struct SchedulerService {
         let active = tasks
             .filter { !$0.isComplete && $0.deadline > now }
             .sorted { $0.deadline < $1.deadline }
-        guard !active.isEmpty else { return summary }
+        guard !active.isEmpty else {
+            settings.lastFutileAutomaticRebalanceFingerprint = nil
+            return summary
+        }
 
         let activeIds = Set(active.map(\.id))
         var kept: [ScheduledBlock] = []
@@ -395,6 +399,14 @@ struct SchedulerService {
                 }
             }
         }
+        updateFutileAutomaticRebalanceMarker(
+            tasks: tasks,
+            allBlocks: kept,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            now: now
+        )
         return summary
     }
 
@@ -428,6 +440,22 @@ struct SchedulerService {
             return task.remainingMinutes > futureMinutes
         }.map(\.id))
 
+        // A missed reservation is new damage and must always be repaired. The
+        // fingerprint only quiets an unchanged impossible-fit plan after one
+        // honest attempt, avoiding block-ID churn on every foreground pass.
+        if missedTaskIds.isEmpty, !underScheduledTaskIds.isEmpty {
+            let fingerprint = automaticSchedulingFingerprint(
+                tasks: tasks,
+                allBlocks: allBlocks,
+                blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
+                settings: settings
+            )
+            if fingerprint == settings.lastFutileAutomaticRebalanceFingerprint {
+                return CatchUpSummary()
+            }
+        }
+
         summary.replannedTasks = missedTaskIds.count
         summary.adjustedTasks = missedTaskIds.union(underScheduledTaskIds).count
 
@@ -444,6 +472,113 @@ struct SchedulerService {
         )
         summary.unschedulableTasks = rebalanced.unschedulableTasks
         return summary
+    }
+
+    /// Record whether the resulting plan is still short. Explicit replans call
+    /// this after their mutation too: they never consult the marker, but their
+    /// new plan state becomes the baseline for the next automatic pass.
+    static func updateFutileAutomaticRebalanceMarker(
+        tasks: [LoomTask],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent],
+        settings: UserSettings,
+        now: Date = Date()
+    ) {
+        let remainsUnderScheduled = tasks
+            .filter { !$0.isComplete && $0.deadline > now }
+            .contains { task in
+                let futureMinutes = allBlocks
+                    .filter {
+                        !$0.isComplete && $0.task?.id == task.id && $0.endTime > now
+                    }
+                    .reduce(0) { $0 + $1.durationMinutes }
+                return task.remainingMinutes > futureMinutes
+            }
+
+        settings.lastFutileAutomaticRebalanceFingerprint = remainsUnderScheduled
+            ? automaticSchedulingFingerprint(
+                tasks: tasks,
+                allBlocks: allBlocks,
+                blockedTimes: blockedTimes,
+                busyEvents: busyEvents,
+                settings: settings
+            )
+            : nil
+    }
+
+    /// Stable digest of every input that can change automatic placement. UUID
+    /// sorting and fixed date formatting keep it identical across launches;
+    /// Swift's process-seeded Hasher is deliberately unsuitable here.
+    static func automaticSchedulingFingerprint(
+        tasks: [LoomTask],
+        allBlocks: [ScheduledBlock],
+        blockedTimes: [BlockedTime],
+        busyEvents: [BusyEvent],
+        settings: UserSettings
+    ) -> String {
+        var records: [String] = []
+
+        records.append(contentsOf: tasks
+            .filter { !$0.isComplete }
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map {
+                [
+                    "task", $0.id.uuidString, fingerprintDate($0.deadline),
+                    String($0.effortMinutes), String($0.manualProgressPercent),
+                    fingerprintBool($0.isComplete)
+                ].joined(separator: "|")
+            })
+        records.append(contentsOf: allBlocks
+            .filter { !$0.isComplete }
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map {
+                [
+                    "block", $0.id.uuidString, $0.task?.id.uuidString ?? "nil",
+                    fingerprintDate($0.startTime), String($0.durationMinutes),
+                    fingerprintBool($0.isLocked), fingerprintBool($0.isComplete)
+                ].joined(separator: "|")
+            })
+        records.append(contentsOf: busyEvents
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map {
+                [
+                    "busy", $0.id.uuidString, fingerprintDate($0.startTime),
+                    fingerprintDate($0.endTime)
+                ].joined(separator: "|")
+            })
+        records.append(contentsOf: blockedTimes
+            .sorted { $0.id.uuidString < $1.id.uuidString }
+            .map {
+                [
+                    "blocked", $0.id.uuidString,
+                    $0.weekdays.sorted().map(String.init).joined(separator: ","),
+                    String($0.startHour), String($0.startMinute),
+                    String($0.durationMinutes)
+                ].joined(separator: "|")
+            })
+        records.append([
+            "settings", String(settings.wakeHour), String(settings.wakeMinute),
+            String(settings.sleepHour), String(settings.sleepMinute),
+            String(settings.minBlockMinutes), String(settings.maxBlockMinutes),
+            String(settings.startBufferMinutes), String(settings.deadlineBufferMinutes),
+            String(settings.dailyFocusMinutes)
+        ].joined(separator: "|"))
+
+        let digest = SHA256.hash(data: Data(records.joined(separator: "\n").utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func fingerprintDate(_ date: Date) -> String {
+        String(
+            format: "%.9f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            date.timeIntervalSinceReferenceDate
+        )
+    }
+
+    private static func fingerprintBool(_ value: Bool) -> String {
+        value ? "1" : "0"
     }
 
     /// The next moment a running foreground app may need catch-up. Returning
@@ -519,6 +654,14 @@ struct SchedulerService {
             }
             replanned += 1
         }
+        updateFutileAutomaticRebalanceMarker(
+            tasks: tasks,
+            allBlocks: currentBlocks,
+            blockedTimes: blockedTimes,
+            busyEvents: busyEvents,
+            settings: settings,
+            now: now
+        )
         return replanned
     }
 
@@ -1518,6 +1661,10 @@ struct SchedulerService {
 
             currentDay = nextDay
         }
+
+        // Degenerate records occupy no time. Letting one enter subtraction can
+        // split a usable slot into two fragments that both fail the minimum.
+        let occupied = occupied.filter { $0.start < $0.end }
 
         // Subtract occupied intervals from free slots
         var freeSlots: [Interval] = []

@@ -21,6 +21,41 @@ enum BlockNotificationService {
     /// Pending-notification budget (iOS caps at 64 per app; reminders need room too).
     private static let maxBlocks = 20
     private static let horizonDays = 3
+    private static let pendingRequestTarget = 55
+    private static let directRequestThreshold = 60
+
+    @MainActor private static var resyncGeneration: UInt = 0
+
+    private static func isResyncOwnedIdentifier(_ identifier: String) -> Bool {
+        if identifier.hasPrefix(digestIdPrefix) { return true }
+        return identifier.hasPrefix(idPrefix) && !identifier.hasPrefix("\(idPrefix)snooze-")
+    }
+
+    struct BlockAlertCandidate: Equatable {
+        let identifier: String
+        let fireDate: Date
+        let isLead: Bool
+    }
+
+    /// Keeps starts ahead of heads-ups, while reserving room for digests and
+    /// pending reminders/snoozes that this service does not own.
+    static func selectBlockAlerts(
+        candidates: [BlockAlertCandidate],
+        digestCount: Int,
+        otherPendingCount: Int
+    ) -> [BlockAlertCandidate] {
+        let available = max(
+            0,
+            pendingRequestTarget - max(0, digestCount) - max(0, otherPendingCount)
+        )
+        return candidates.sorted { lhs, rhs in
+            if lhs.isLead != rhs.isLead { return !lhs.isLead }
+            if lhs.fireDate != rhs.fireDate { return lhs.fireDate < rhs.fireDate }
+            return lhs.identifier < rhs.identifier
+        }
+        .prefix(available)
+        .map { $0 }
+    }
 
     private struct BlockSnapshot {
         let id: UUID
@@ -55,6 +90,8 @@ enum BlockNotificationService {
     /// current schedule.
     @MainActor
     static func resync(context: ModelContext) {
+        resyncGeneration &+= 1
+        let generation = resyncGeneration
         let settings = UserSettings.fetchOrCreate(in: context)
         let enabled = settings.blockRemindersEnabled
         let leadMinutes = settings.blockReminderLeadMinutes
@@ -86,29 +123,67 @@ enum BlockNotificationService {
             }
 
         let digests = digestRequests(settings: settings, allBlocks: allBlocks, now: now)
+        var requestsByIdentifier: [String: UNNotificationRequest] = [:]
+        var candidates: [BlockAlertCandidate] = []
+        if enabled {
+            for snapshot in snapshots {
+                let startRequest = request(for: snapshot, leadMinutes: 0)
+                requestsByIdentifier[startRequest.identifier] = startRequest
+                candidates.append(BlockAlertCandidate(
+                    identifier: startRequest.identifier,
+                    fireDate: snapshot.start,
+                    isLead: false
+                ))
+                if leadMinutes > 0 {
+                    let leadRequest = request(for: snapshot, leadMinutes: leadMinutes)
+                    requestsByIdentifier[leadRequest.identifier] = leadRequest
+                    candidates.append(BlockAlertCandidate(
+                        identifier: leadRequest.identifier,
+                        fireDate: snapshot.start.addingTimeInterval(TimeInterval(-leadMinutes * 60)),
+                        isLead: true
+                    ))
+                }
+            }
+        }
 
         let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { pending in
-            let stale = pending.map(\.identifier).filter {
-                $0.hasPrefix(idPrefix) || $0.hasPrefix(digestIdPrefix)
-            }
-            center.removePendingNotificationRequests(withIdentifiers: stale)
+        Task { @MainActor in
+            let pending = await center.pendingNotificationRequests()
+            guard generation == resyncGeneration else { return }
 
-            guard enabled || !digests.isEmpty else { return }
-            center.getNotificationSettings { notifSettings in
-                guard notifSettings.authorizationStatus == .authorized else { return }
-                if enabled {
-                    for snapshot in snapshots {
-                        center.add(request(for: snapshot, leadMinutes: 0))
-                        if leadMinutes > 0 {
-                            center.add(request(for: snapshot, leadMinutes: leadMinutes))
-                        }
-                    }
-                }
-                for digest in digests {
-                    center.add(digest)
-                }
+            let stale = pending.map(\.identifier).filter(isResyncOwnedIdentifier)
+            guard enabled || !digests.isEmpty else {
+                center.removePendingNotificationRequests(withIdentifiers: stale)
+                return
             }
+
+            let notifSettings = await center.notificationSettings()
+            guard generation == resyncGeneration else { return }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            guard notifSettings.authorizationStatus == .authorized else { return }
+
+            let otherPendingCount = pending.filter {
+                !isResyncOwnedIdentifier($0.identifier)
+            }.count
+            let selected = selectBlockAlerts(
+                candidates: candidates,
+                digestCount: digests.count,
+                otherPendingCount: otherPendingCount
+            )
+
+            enqueue(digests, on: center)
+            enqueue(selected.compactMap { requestsByIdentifier[$0.identifier] }, on: center)
+        }
+    }
+
+    /// Uses the callback API so a current generation enqueues its whole batch
+    /// without yielding back to another resync between individual requests.
+    private static func enqueue(
+        _ requests: [UNNotificationRequest],
+        on center: UNUserNotificationCenter
+    ) {
+        for request in requests {
+            center.add(request)
         }
     }
 
@@ -266,11 +341,35 @@ enum BlockNotificationService {
         content.body = "Snoozed. Ready for a small start?"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10 * 60, repeats: false)
         let request = UNNotificationRequest(
-            identifier: "\(idPrefix)snooze-\(UUID().uuidString)",
+            identifier: "snooze-\(UUID().uuidString)",
             content: content,
             trigger: trigger
         )
-        UNUserNotificationCenter.current().add(request)
+        addDirectRequestMakingRoom(request)
+    }
+
+    /// Direct notifications outrank an early heads-up when the pending queue
+    /// is already close to iOS's hard cap.
+    static func addDirectRequestMakingRoom(_ request: UNNotificationRequest) {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let farthestLead = pending
+                .filter { $0.identifier.hasPrefix(idPrefix) && $0.identifier.hasSuffix("-lead") }
+                .max(by: { lhs, rhs in
+                    let lhsDate = (lhs.trigger as? UNCalendarNotificationTrigger)?
+                        .nextTriggerDate() ?? .distantPast
+                    let rhsDate = (rhs.trigger as? UNCalendarNotificationTrigger)?
+                        .nextTriggerDate() ?? .distantPast
+                    if lhsDate != rhsDate { return lhsDate < rhsDate }
+                    return lhs.identifier < rhs.identifier
+                })
+            if pending.count >= directRequestThreshold,
+               !pending.contains(where: { $0.identifier == request.identifier }),
+               let farthestLead {
+                center.removePendingNotificationRequests(withIdentifiers: [farthestLead.identifier])
+            }
+            center.add(request)
+        }
     }
 
     private static func request(for snapshot: BlockSnapshot, leadMinutes: Int) -> UNNotificationRequest {

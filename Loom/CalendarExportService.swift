@@ -1,5 +1,6 @@
 import Foundation
 import EventKit
+import OSLog
 import SwiftData
 
 /// One-way export of scheduled work blocks into a dedicated "Loom" calendar in
@@ -9,6 +10,14 @@ import SwiftData
 enum CalendarExportService {
 
     private static let store = EKEventStore()
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Loom",
+        category: "CalendarExport"
+    )
+
+    private enum ExportError: Error {
+        case noCalendarSource
+    }
 
     /// How far ahead exported events are maintained (Google export shares it).
     nonisolated static let horizonDays = 60
@@ -24,16 +33,20 @@ enum CalendarExportService {
         let settings = UserSettings.fetchOrCreate(in: context)
         guard settings.exportToAppleCalendar else { return }
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return }
-        syncNow(context: context, settings: settings)
+        do {
+            try syncNow(context: context, settings: settings)
+        } catch {
+            logger.error("Calendar export failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Unconditional one-time push, regardless of the ongoing-export toggle —
     /// caller has verified access.
-    static func syncNow(context: ModelContext, settings: UserSettings) {
-        guard let calendar = loomCalendar(settings: settings) else { return }
+    static func syncNow(context: ModelContext, settings: UserSettings) throws {
+        let calendar = try loomCalendar(settings: settings)
 
         let blockDescriptor = FetchDescriptor<ScheduledBlock>()
-        let allBlocks = (try? context.fetch(blockDescriptor)) ?? []
+        let allBlocks = try context.fetch(blockDescriptor)
 
         let now = Date()
         let horizon = Calendar.current.date(byAdding: .day, value: horizonDays, to: now) ?? now
@@ -57,31 +70,52 @@ enum CalendarExportService {
             uniquingKeysWith: { first, _ in first }
         )
 
-        for block in exportable {
-            let title = block.task?.title ?? "Loom block"
-            if let eventId = block.appleCalendarEventId, let event = eventsById[eventId] {
-                if event.title != title || event.startDate != block.startTime || event.endDate != block.endTime {
+        var createdEvents: [(block: ScheduledBlock, event: EKEvent)] = []
+
+        do {
+            for block in exportable {
+                let title = block.task?.title ?? "Loom block"
+                let eventId = block.appleCalendarEventId
+                let storedEvent = eventId.flatMap { eventsById[$0] ?? store.event(withIdentifier: $0) }
+                let matchingEvent = storedEvent.flatMap { event in
+                    event.calendar.calendarIdentifier == calendar.calendarIdentifier ? event : nil
+                }
+
+                if let eventId, let event = matchingEvent {
+                    if event.title != title || event.startDate != block.startTime || event.endDate != block.endTime {
+                        event.title = title
+                        event.startDate = block.startTime
+                        event.endDate = block.endTime
+                        try store.save(event, span: .thisEvent, commit: false)
+                    }
+                    eventsById.removeValue(forKey: eventId)
+                } else {
+                    let event = EKEvent(eventStore: store)
+                    event.calendar = calendar
                     event.title = title
                     event.startDate = block.startTime
                     event.endDate = block.endTime
-                    try? store.save(event, span: .thisEvent)
+                    event.notes = "Scheduled by Loom"
+                    try store.save(event, span: .thisEvent, commit: false)
+                    createdEvents.append((block, event))
                 }
-                eventsById.removeValue(forKey: eventId)
-            } else {
-                let event = EKEvent(eventStore: store)
-                event.calendar = calendar
-                event.title = title
-                event.startDate = block.startTime
-                event.endDate = block.endTime
-                event.notes = "Scheduled by Loom"
-                try? store.save(event, span: .thisEvent)
-                block.appleCalendarEventId = event.eventIdentifier
             }
+
+            // Whatever is left in the calendar no longer matches a block — remove it.
+            for (_, orphan) in eventsById {
+                try store.remove(orphan, span: .thisEvent, commit: false)
+            }
+
+            try store.commit()
+        } catch {
+            // Drop any uncommitted EventKit changes before the next reconciliation.
+            store.reset()
+            throw error
         }
 
-        // Whatever is left in the calendar no longer matches a block — remove it.
-        for (_, orphan) in eventsById {
-            try? store.remove(orphan, span: .thisEvent)
+        // Event identifiers are only trustworthy after the batch commit succeeds.
+        for (block, event) in createdEvents {
+            block.appleCalendarEventId = event.eventIdentifier
         }
     }
 
@@ -91,19 +125,28 @@ enum CalendarExportService {
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return }
         if let identifier = settings.loomCalendarIdentifier,
            let calendar = store.calendar(withIdentifier: identifier) {
-            try? store.removeCalendar(calendar, commit: true)
+            do {
+                try store.removeCalendar(calendar, commit: true)
+            } catch {
+                logger.error("Calendar removal failed: \(String(describing: error), privacy: .public)")
+                return
+            }
         }
         settings.loomCalendarIdentifier = nil
 
-        let blockDescriptor = FetchDescriptor<ScheduledBlock>()
-        for block in (try? context.fetch(blockDescriptor)) ?? [] {
-            block.appleCalendarEventId = nil
+        do {
+            let blockDescriptor = FetchDescriptor<ScheduledBlock>()
+            for block in try context.fetch(blockDescriptor) {
+                block.appleCalendarEventId = nil
+            }
+        } catch {
+            logger.error("Calendar identifier cleanup failed: \(String(describing: error), privacy: .public)")
         }
     }
 
     // MARK: - Internals
 
-    private static func loomCalendar(settings: UserSettings) -> EKCalendar? {
+    private static func loomCalendar(settings: UserSettings) throws -> EKCalendar {
         if let identifier = settings.loomCalendarIdentifier,
            let existing = store.calendar(withIdentifier: identifier) {
             return existing
@@ -114,14 +157,10 @@ enum CalendarExportService {
         calendar.cgColor = CGColor(red: 0xC1 / 255.0, green: 0x57 / 255.0, blue: 0x1F / 255.0, alpha: 1)
         calendar.source = store.defaultCalendarForNewEvents?.source
             ?? store.sources.first { $0.sourceType == .local }
-        guard calendar.source != nil else { return nil }
+        guard calendar.source != nil else { throw ExportError.noCalendarSource }
 
-        do {
-            try store.saveCalendar(calendar, commit: true)
-            settings.loomCalendarIdentifier = calendar.calendarIdentifier
-            return calendar
-        } catch {
-            return nil
-        }
+        try store.saveCalendar(calendar, commit: true)
+        settings.loomCalendarIdentifier = calendar.calendarIdentifier
+        return calendar
     }
 }

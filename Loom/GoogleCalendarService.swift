@@ -25,11 +25,16 @@ enum GoogleCalendarService {
 
     /// Injection point for the URLProtocol-mocked test session.
     static var urlSession: URLSession = .shared
+    /// Deterministic save-failure seam for transaction tests. Production uses
+    /// `ModelContext.save()` directly through this closure.
+    static var saveContext: (ModelContext) throws -> Void = { try $0.save() }
 
     private static var isImporting = false
     private static var isExporting = false
     private static var importGeneration: UInt = 0
     private static var exportGeneration: UInt = 0
+    private static var queuedImportGeneration: UInt?
+    private static var queuedExportGeneration: UInt?
     private static var cleanupGeneration: UInt = 0
     private static var foregroundSyncTask: Task<Void, Never>?
     private static var foregroundSyncTaskId: UUID?
@@ -132,9 +137,22 @@ enum GoogleCalendarService {
     static func importNow(context: ModelContext, settings: UserSettings) async {
         let generation = importGeneration
         guard settings.importFromGoogleCalendar, settings.googleAccountEmail != nil else { return }
-        guard !isImporting else { return }
+        guard !isImporting else {
+            queuedImportGeneration = generation
+            return
+        }
         isImporting = true
-        defer { isImporting = false }
+        defer {
+            isImporting = false
+            if let queuedGeneration = queuedImportGeneration {
+                queuedImportGeneration = nil
+                if queuedGeneration == importGeneration {
+                    Task { @MainActor in
+                        await importNow(context: context, settings: settings)
+                    }
+                }
+            }
+        }
 
         do {
             let accessToken = try await GoogleOAuth.validAccessToken(urlSession: urlSession)
@@ -155,6 +173,9 @@ enum GoogleCalendarService {
                 try ensureImportIsCurrent(generation, settings: settings)
             }
 
+            // Establish a clean rollback boundary before touching the mirror.
+            // This also preserves unrelated pending edits on the shared context.
+            try saveContext(context)
             let changes = reconcileImport(events: page.events, fullSync: fullSync, context: context)
             pruneStaleBusyEvents(context: context)
             let previousSyncToken = settings.googleSyncToken
@@ -162,9 +183,17 @@ enum GoogleCalendarService {
                 settings.googleSyncToken = nextSyncToken
             }
             do {
-                try context.save()
+                try saveContext(context)
             } catch {
-                settings.googleSyncToken = previousSyncToken
+                context.rollback()
+                // rollback() restores the store to the checkpoint, but a held
+                // model instance can keep serving the stale in-memory value
+                // (verified for UserSettings here). Reinstate the cursor
+                // explicitly, or the next incremental sync would trust a token
+                // for changes this failed import never applied.
+                if settings.googleSyncToken != previousSyncToken {
+                    settings.googleSyncToken = previousSyncToken
+                }
                 throw error
             }
 
@@ -264,6 +293,7 @@ enum GoogleCalendarService {
     /// Drop all imported Google busy events (import switched off).
     static func removeImportedEvents(context: ModelContext) {
         importGeneration &+= 1
+        queuedImportGeneration = nil
         foregroundSyncTask?.cancel()
         foregroundSyncTask = nil
         foregroundSyncTaskId = nil
@@ -297,9 +327,22 @@ enum GoogleCalendarService {
         let generation = exportGeneration
         guard settings.exportToGoogleCalendar, settings.googleAccountEmail != nil else { return }
         cancelExportCleanup()
-        guard !isExporting else { return }
+        guard !isExporting else {
+            queuedExportGeneration = generation
+            return
+        }
         isExporting = true
-        defer { isExporting = false }
+        defer {
+            isExporting = false
+            if let queuedGeneration = queuedExportGeneration {
+                queuedExportGeneration = nil
+                if queuedGeneration == exportGeneration {
+                    Task { @MainActor in
+                        await exportNow(context: context, settings: settings)
+                    }
+                }
+            }
+        }
 
         do {
             let accessToken = try await GoogleOAuth.validAccessToken(urlSession: urlSession)
@@ -379,6 +422,7 @@ enum GoogleCalendarService {
     /// blocking the toggle on network success.
     static func removeExportedEvents(context: ModelContext) {
         exportGeneration &+= 1
+        queuedExportGeneration = nil
         pendingExport?.cancel()
         pendingExport = nil
         foregroundSyncTask?.cancel()
@@ -453,6 +497,8 @@ enum GoogleCalendarService {
     static func disconnect(context: ModelContext) {
         importGeneration &+= 1
         exportGeneration &+= 1
+        queuedImportGeneration = nil
+        queuedExportGeneration = nil
         cancelExportCleanup()
         foregroundSyncTask?.cancel()
         foregroundSyncTask = nil

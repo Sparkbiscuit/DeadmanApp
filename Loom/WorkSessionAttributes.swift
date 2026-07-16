@@ -45,15 +45,21 @@ struct WorkSessionAttributes: ActivityAttributes {
 
 // MARK: - Shared work-session clock
 
-/// Durable pause bookkeeping shared by the app and its Live Activity intent.
+/// Durable recovery journal shared by the app and its Live Activity intent.
 /// The in-app timer still renders once per second, but it derives elapsed work
 /// from this wall-clock state so actions performed while the app is suspended
-/// are accounted for when it returns.
+/// are accounted for when it returns. Identifiers and ring dates stay model-
+/// layer-free so the widget target can read the same value.
 struct WorkSessionControlState: Codable, Hashable {
     let sessionID: UUID
     let startedAt: Date
     var accumulatedPausedSeconds: Int = 0
     var pauseBeganAt: Date?
+    var taskID: UUID? = nil
+    var scheduledBlockID: UUID? = nil
+    var blockEndsAt: Date? = nil
+    var ringStartsAt: Date? = nil
+    var ringEndsAt: Date? = nil
 
     var isPaused: Bool { pauseBeganAt != nil }
 
@@ -84,11 +90,10 @@ struct WorkSessionControlState: Codable, Hashable {
     }
 }
 
-/// One small App Group value is enough to bridge the system-run intent back to
-/// the timer view. It deliberately contains no task content or SwiftData
-/// models, which keeps intent execution fast and avoids opening the store from
-/// the Lock Screen. It is a control bridge, not a recovery journal: Loom's
-/// existing cold-launch cleanup ends orphaned activities and clears this value.
+/// One small App Group recovery journal bridges the system-run intent back to
+/// the timer view and restores an interrupted foreground process. It contains
+/// no task content or SwiftData models, which keeps intent execution fast and
+/// avoids opening the store from the Lock Screen.
 enum WorkSessionControlStore {
     private static let key = "activeWorkSessionControl.v1"
 
@@ -209,10 +214,6 @@ enum WorkSessionActivityController {
             ringStartsAt: ringStartsAt,
             ringEndsAt: ringEndsAt
         )
-        let content = ActivityContent(
-            state: WorkSessionAttributes.ContentState(startedAt: startedAt),
-            staleDate: nil
-        )
         // End-then-request inside one Task so a rapid restart can't leave two
         // activities alive.
         Task {
@@ -223,15 +224,37 @@ enum WorkSessionActivityController {
             // activity. Only request this one if its session is still the
             // active App Group control; otherwise a rapid start/stop could
             // resurrect an orphan after endAll() had already taken its snapshot.
-            guard WorkSessionControlStore.load(sessionID: sessionID) != nil else {
+            guard let latestControl = WorkSessionControlStore.load(sessionID: sessionID) else {
                 return
             }
+            let content = ActivityContent(
+                state: contentState(for: latestControl, at: Date()),
+                staleDate: nil
+            )
             _ = try? Activity.request(attributes: attributes, content: content)
         }
     }
 
+    private static func contentState(
+        for control: WorkSessionControlState,
+        at date: Date
+    ) -> WorkSessionAttributes.ContentState {
+        let elapsed = control.elapsedWorkedSeconds(at: date)
+        return WorkSessionAttributes.ContentState(
+            startedAt: date.addingTimeInterval(-Double(elapsed)),
+            isPaused: control.isPaused,
+            pausedElapsedSeconds: elapsed
+        )
+    }
+
     static func end() {
         endAll()
+    }
+
+    static func isActive(sessionID: UUID) -> Bool {
+        Activity<WorkSessionAttributes>.activities.contains {
+            $0.attributes.sessionID == sessionID
+        }
     }
 
     static func update(_ control: WorkSessionControlState, at date: Date = Date()) async {
@@ -255,8 +278,8 @@ enum WorkSessionActivityController {
         }
     }
 
-    /// Ends every Loom activity — also used at launch to clear leftovers from
-    /// a session that died with the app.
+    /// Ends every Loom activity and clears its journal after a durable stop or
+    /// when foreground recovery rejects abandoned state.
     static func endAll() {
         WorkSessionControlStore.clear()
         let activities = Activity<WorkSessionAttributes>.activities

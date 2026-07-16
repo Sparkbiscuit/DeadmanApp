@@ -329,7 +329,12 @@ private struct UpNextWidgetView: View {
                     .fill(color)
                     .frame(width: isActive ? 9 : 7, height: isActive ? 9 : 7)
                     .shadow(color: color.opacity(0.8), radius: 4)
-                    .offset(x: -17)
+                    // A fixed housing keeps both dot sizes on one centerline:
+                    // rows sit 18pt in, so -18.5 lands the housing's center on
+                    // the rail's centerline at x = 4 (3pt inset + half its 2pt
+                    // width).
+                    .frame(width: 9, height: 9)
+                    .offset(x: -18.5)
                     .accessibilityHidden(true)
             }
         }
