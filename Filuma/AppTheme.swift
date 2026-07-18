@@ -986,7 +986,11 @@ struct BreathingDot: View {
 // MARK: - Hearth toggle
 
 /// Capsule switch with an accent-gradient, glowing track when on.
+/// Honors `.labelsHidden()`, which built-in styles get for free but custom
+/// styles must read from the environment.
 struct HearthToggleStyle: ToggleStyle {
+    @Environment(\.labelsVisibility) private var labelsVisibility
+
     func makeBody(configuration: Configuration) -> some View {
         Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
@@ -994,8 +998,10 @@ struct HearthToggleStyle: ToggleStyle {
             }
         } label: {
             HStack {
-                configuration.label
-                Spacer(minLength: 8)
+                if labelsVisibility != .hidden {
+                    configuration.label
+                    Spacer(minLength: 8)
+                }
                 Capsule()
                     .fill(
                         configuration.isOn
