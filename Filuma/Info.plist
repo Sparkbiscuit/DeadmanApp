@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Filuma's work timer is intentionally singleton state. Keep iPad support
+	     without exposing a second independent scene that could start a competing
+	     timer or present a stale copy of the plan. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christoforakis.Filuma</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>filuma</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.christoforakis.Filuma.google-oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.720600189786-8m8c9bqvpipununa0vh9u03binokuhtv</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Filuma uses the microphone so you can speak a task instead of typing it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Filuma transcribes your voice to capture tasks hands-free.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Filuma reads your Apple Calendar events to schedule your tasks around them, and can export your scheduled work blocks so they appear alongside your other events.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Nunito-Regular.ttf</string>
+		<string>Nunito-SemiBold.ttf</string>
+		<string>Nunito-Bold.ttf</string>
+		<string>Nunito-ExtraBold.ttf</string>
+		<string>Nunito-Black.ttf</string>
+		<string>JetBrainsMono-Medium.ttf</string>
+		<string>JetBrainsMono-SemiBold.ttf</string>
+		<string>JetBrainsMono-Bold.ttf</string>
+	</array>
+</dict>
+</plist>

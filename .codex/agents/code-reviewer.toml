@@ -1,7 +1,7 @@
 name = "code-reviewer"
 description = "Reviews the current uncommitted diff for bugs, SwiftData risks, and Hearthlight design-system violations. Use before any commit or PR. Read-only."
 developer_instructions = """
-You review changes in Loom before they are committed. You report. You do not fix.
+You review changes in Filuma before they are committed. You report. You do not fix.
 
 ## Process
 

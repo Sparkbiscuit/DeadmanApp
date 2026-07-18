@@ -1,7 +1,7 @@
-# Handoff: Loom Design System + UI Kit
+# Handoff: Filuma Design System + UI Kit
 
 ## Overview
-A visual redesign and interaction system for **Loom** (working repo name "Deadman"), a deadline-first iOS/SwiftUI task manager. This package covers the full color/type/component system plus a click-through prototype of every core screen, including one new addition: a **Week view** for Schedule.
+A visual redesign and interaction system for **Filuma** (working repo name "Deadman"), a deadline-first iOS/SwiftUI task manager. This package covers the full color/type/component system plus a click-through prototype of every core screen, including one new addition: a **Week view** for Schedule.
 
 ## About the Design Files
 The two `.dc.html` files in this folder are **design references built in HTML** — not production code. They render inside a proprietary design tool (custom `<sc-if>`/`<sc-for>`/`<x-import>` tags + a `support.js` runtime) and **will not run standalone** in a normal browser or in Xcode. Treat them as an interactive spec: open them only if you have access to the design tool project; otherwise rely on this README plus the screenshots (see bottom) for exact values.
@@ -31,7 +31,7 @@ Two alternate brand hues are wired as a tweak in the prototype (not required, ju
 ### Color — Semantic / Context (mostly unchanged from `AppTheme.swift`)
 | Role | Hex |
 |---|---|
-| Urgent / destructive (`loomRed`) | `#E2434A` (pressed `#C93039`) |
+| Urgent / destructive (`filumaRed`) | `#E2434A` (pressed `#C93039`) |
 | School (`schoolColor`) | `#5A78E0` |
 | Work (`workColor`) | `#E0A020` *(shifted slightly warmer/lighter than current `#D98033` to stay distinct from the new brand orange)* |
 | Personal (`personalColor`) | `#3FA372` |
@@ -40,12 +40,12 @@ Two alternate brand hues are wired as a tweak in the prototype (not required, ju
 | Token | Dark | Light |
 |---|---|---|
 | Background | `#121214` | `#F4F4F6` |
-| Surface (`loomCard` / `loomCardLight`) | `#1C1C1F` | `#FFFFFF` |
+| Surface (`filumaCard` / `filumaCardLight`) | `#1C1C1F` | `#FFFFFF` |
 | Surface 2 (tertiary fill) | `#29292D` | `#EAEAEF` |
 | Surface 3 | `#333338` | `#DEDEE3` |
 | Border | `rgba(255,255,255,0.08)` | `rgba(0,0,0,0.07)` |
 | Text primary | `#F5F5F7` | `#1C1C1E` |
-| Text subtle (`loomSubtle`) | `#9A9AA2` | `#6E6E76` |
+| Text subtle (`filumaSubtle`) | `#9A9AA2` | `#6E6E76` |
 | Text faint | `#6E6E76` | `#9A9AA2` |
 
 ### Typography — **font change**
@@ -133,17 +133,17 @@ Unchanged structurally (checkmark badge in context color, "Task Complete!" + tit
 - Day/Week toggle in Schedule is a simple two-state segmented control; switching or tapping a week-column header does not require a network/data refetch, just a different projection of the same query results.
 
 ## State Management
-No new state shapes — this maps entirely onto the existing SwiftData models in `Models.swift` (`LoomTask`, `ScheduledBlock`, `WorkSession`, `BlockedTime`, `UserSettings`). The only new local UI state is:
+No new state shapes — this maps entirely onto the existing SwiftData models in `Models.swift` (`FilumaTask`, `ScheduledBlock`, `WorkSession`, `BlockedTime`, `UserSettings`). The only new local UI state is:
 - `scheduleView: .day | .week` in `ScheduleView`
 - Selected week-day index (can reuse the existing `selectedDate` state)
 
 ## Assets
-- `assets/loom-mark.png` — existing app icon artwork (from `Loom.icon/Assets/loomicon.png`), used as the wordmark lockup in the prototype's chrome. No new asset needed; it's already in `Assets.xcassets`/`Loom.icon`.
+- `assets/filuma-mark.png` — existing app icon artwork (from `Filuma.icon/Assets/filumaicon.png`), used as the wordmark lockup in the prototype's chrome. No new asset needed; it's already in `Assets.xcassets`/`Filuma.icon`.
 - Iconography in the prototype is simplified line/fill SVG standing in for SF Symbols (`book.fill`, `briefcase.fill`, `person.fill`, `clock.fill`, `mic`, `exclamationmark.triangle.fill`, `timer`, `checkmark.circle`, `calendar.badge.clock`, etc.) — use the actual SF Symbols in the real app, this was just a web substitution.
 
 ## Files
-- `Loom Design System.dc.html` — foundations + component reference (color, type, spacing, radii, buttons, chips, cards, alerts, empty/onboarding/celebration patterns). Light/dark toggle in the top bar.
-- `Loom UI Kit.dc.html` — full click-through prototype of all screens listed above, including the new Schedule Week view.
+- `Filuma Design System.dc.html` — foundations + component reference (color, type, spacing, radii, buttons, chips, cards, alerts, empty/onboarding/celebration patterns). Light/dark toggle in the top bar.
+- `Filuma UI Kit.dc.html` — full click-through prototype of all screens listed above, including the new Schedule Week view.
 - Both require the design tool's runtime to render (`support.js`, `ios-frame.jsx` bundled alongside for reference) — **not runnable by double-clicking**.
 - `screenshots/design-system-*.png` (9 images) — foundations doc: hero/brand colors, semantic colors + surface tokens (light & dark), typography, spacing/radii/elevation, buttons, chips/cards/alerts, empty/onboarding/celebration, and the in-context phone screens (light & dark).
 - `screenshots/ui-kit-*.png` (13 images) — the click-through flow in order: Tasks home → Capture sheet → Bulk Entry → Work Session (idle) → timer running → progress prompt → Celebration → Schedule Day → Schedule Week → Settings → Blocked Times → Settings in light mode.

@@ -1,4 +1,4 @@
-# Loom — TestFlight / App Store submission checklist
+# Filuma — TestFlight / App Store submission checklist
 
 State as of 2026-07-15 (v1.3.0, build 4). Checked items below were verified
 against the current working tree. Unchecked items require a human, App Store
@@ -11,7 +11,7 @@ Connect / Google Cloud access, an archive, or a physical-device pass.
 - [x] The app and widget privacy manifests are included in their respective
       Resources build phases.
 - [x] App and widget entitlements use the same App Group as `SharedStore`:
-      `group.com.christoforakis.Loom`.
+      `group.com.christoforakis.Filuma`.
 - [x] The app targets both iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`),
       with portrait and both landscape orientations enabled for iPad.
 - [x] The work-session Live Activity now has an interactive pause/resume
@@ -33,18 +33,30 @@ Connect / Google Cloud access, an archive, or a physical-device pass.
       the recommended-defaults escape.
 - [x] A fresh unsigned generic-device Release build and Xcode static-analysis
       pass both completed with no diagnostics on the final working tree.
-- [x] Urgency red now maintains at least 4.68:1 contrast against Loom's lightest
+- [x] Urgency red now maintains at least 4.68:1 contrast against Filuma's lightest
       dark card surface, clearing normal-text contrast guidance.
 - [x] `ITSAppUsesNonExemptEncryption = NO` is declared in the app plist.
 
 ## Blockers — do before submitting
 
-- [ ] **Choose a unique app name.** “Loom” is not available. Confirm the new
-      name in App Store Connect and with an appropriate trademark search, then
-      update user-facing app, widget, notification, export, onboarding, and
-      calendar copy consistently. Do not rename the bundle IDs, App Group, or
-      persistent-store identifiers as part of a cosmetic rebrand. Calendar
-      migration must continue recognizing existing calendars named “Loom.”
+- [ ] **App name: “Filuma” chosen 2026-07-18** (the original name, “Loom,” was
+      not available). The full rename shipped the same day — bundle IDs
+      (`com.christoforakis.Filuma` / `.FilumaWidgets`), App Group, keychain
+      service, `filuma://` URL scheme, notification category IDs, store
+      filename, and all user-facing copy. Remaining human steps:
+      - Reserve the name “Filuma” in App Store Connect and run a trademark
+        search to confirm availability.
+      - **Google Cloud Console**: the iOS OAuth client is still registered
+        under bundle ID `com.christoforakis.Loom` — update it (or create a new
+        iOS client) for `com.christoforakis.Filuma`. The reversed-client-ID
+        redirect scheme in `Info.plist` is unchanged.
+      - **Apple Developer portal**: register the new bundle IDs and App Group
+        `group.com.christoforakis.Filuma` (automatic signing will offer this on
+        the next signed build; confirm provisioning for both targets).
+      - Dev devices only: pre-rename installs used the old identifiers, so the
+        old “Loom” Apple calendar and Google events tagged `private.loom=1`
+        will not be recognized by the renamed app. No public users exist, so
+        no migration shim is needed — delete the old install and calendar.
 - [ ] **Publish live Support and Privacy Policy URLs.** Enter both working URLs
       in App Store Connect. Do not submit placeholder, private, or redirect-only
       pages. The privacy policy should cover on-device storage, speech input,
@@ -65,11 +77,11 @@ Connect / Google Cloud access, an archive, or a physical-device pass.
 - [ ] **App Privacy label** (App Store Connect → App Privacy): answer
       accurately for the submitted binary and published policy. The current
       code audit supports **"Data Not Collected"** — data is local SwiftData,
-      Google Calendar calls act on the user's account, and no Loom backend,
+      Google Calendar calls act on the user's account, and no Filuma backend,
       analytics, ads, tracking, or third-party SDKs were found — but verify the
       archive privacy report and App Store Connect definitions before attesting.
 - [ ] **Age rating questionnaire**: answer for the exact submitted product and
-      marketing copy. Do not assume 4+ if the listing frames Loom as ADHD or
+      marketing copy. Do not assume 4+ if the listing frames Filuma as ADHD or
       health/wellness support; use the rating App Store Connect derives from
       the truthful answers.
 - [ ] **Capture required screenshots**: current iPhone screenshots plus the

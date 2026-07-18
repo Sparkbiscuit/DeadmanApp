@@ -1,7 +1,7 @@
-# Loom
+# Filuma
 
-Loom is a time-aware task manager built around one idea: big tasks don't get done in
-one heroic sitting. You give Loom a task, a deadline, and an effort estimate; it
+Filuma is a time-aware task manager built around one idea: big tasks don't get done in
+one heroic sitting. You give Filuma a task, a deadline, and an effort estimate; it
 splits the work into manageable blocks and schedules them into the real free time
 you have before the deadline — around your sleep, your classes and meetings, and a
 daily focus limit if you set one.
@@ -52,7 +52,7 @@ daily focus limit if you set one.
 - **Just 10 minutes** — a micro-start next to the session button: commit to ten
   minutes, watch them count down, and get released at zero. Keep going or stop —
   both count.
-- **Capture from anywhere** — "Add a task to Loom" via Siri, Shortcuts,
+- **Capture from anywhere** — "Add a task to Filuma" via Siri, Shortcuts,
   Spotlight, or the Action button. The task lands fully scheduled without the
   app ever opening, and Siri tells you when its first block is.
 - **Can't right now** — one tap under the Right Now card pushes the plan 30
@@ -61,7 +61,7 @@ daily focus limit if you set one.
 - **Today widget** — a Lock Screen ring of blocks done vs planned (and your
   streak on quiet days), plus a Home Screen card with today's count, progress,
   and what's next. Tapping jumps straight into the next block's timer.
-- **Data export** — Settings → Export my data writes everything Loom knows to
+- **Data export** — Settings → Export my data writes everything Filuma knows to
   a plain, pretty-printed JSON file you can share, archive, or parse. Your
   data is yours.
 - **Auto-scheduling** — work is chunked into blocks (configurable min/max size) and
@@ -82,25 +82,25 @@ daily focus limit if you set one.
   effort fully scheduled.
 - **Schedule views** — a day timeline and a compact week grid, including recurring
   blocked times the scheduler works around. Long-press an upcoming block to lock it
-  in place through automatic replans, or allow Loom to move it again later.
+  in place through automatic replans, or allow Filuma to move it again later.
 - **Apple Calendar sync** — optional one-way export of your work blocks into a
-  dedicated "Loom" calendar, and optional import that treats events from the
+  dedicated "Filuma" calendar, and optional import that treats events from the
   calendars you choose as busy time the scheduler works around.
 - **Widgets** — an Up Next widget for the Home Screen and Lock Screen, plus a
   Live Activity while a work session timer is running.
 
 ## Project
 
-SwiftUI + SwiftData, iOS 18.0+. Open `Loom.xcodeproj` in Xcode and run the `Loom`
+SwiftUI + SwiftData, iOS 18.0+. Open `Filuma.xcodeproj` in Xcode and run the `Filuma`
 scheme. The visual system (colors, type, spacing, per-screen specs) lives in
 `design-handoff/`.
 
 ## Tests
 
-Unit tests live in `LoomTests` (scheduler geometry and focus limits, plan
+Unit tests live in `FilumaTests` (scheduler geometry and focus limits, plan
 reconciliation, work-log accounting, export compatibility, estimate advice,
-streaks, digests, and recurrence). `LoomUITests` uses an isolated in-memory
+streaks, digests, and recurrence). `FilumaUITests` uses an isolated in-memory
 store to cover first launch, core tab navigation, and the capture flow without
-touching personal data. The shared `Loom` scheme includes both test bundles, so
+touching personal data. The shared `Filuma` scheme includes both test bundles, so
 **Product → Test** (⌘U) runs everything; they also appear in Xcode's Test
 navigator (⌘6).

@@ -6,7 +6,7 @@ model: sonnet
 color: green
 ---
 
-You review changes in Loom before they are committed. You report. You do not fix.
+You review changes in Filuma before they are committed. You report. You do not fix.
 
 ## Process
 

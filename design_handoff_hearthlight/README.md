@@ -1,12 +1,12 @@
-# Handoff: Loom "Hearthlight" App Redesign
+# Handoff: Filuma "Hearthlight" App Redesign
 
 ## Overview
-The full visual language and screen-by-screen redesign for **Loom**, a deadline-first iOS task manager, built around a "held flame / hearth" metaphor: a warm ambient glow behind every screen, rising ember particles, a glowing ring that represents time-in-session, a glowing thread connecting "now" to "next," and a new **Weave** tab that visualizes two weeks of shown-up effort as a woven tapestry. This is the chosen direction that came out of an earlier exploration file (`Loom Magic Directions.dc.html`, not included here) — treat it as the current, final visual system for the app.
+The full visual language and screen-by-screen redesign for **Filuma**, a deadline-first iOS task manager, built around a "held flame / hearth" metaphor: a warm ambient glow behind every screen, rising ember particles, a glowing ring that represents time-in-session, a glowing thread connecting "now" to "next," and a new **Weave** tab that visualizes two weeks of shown-up effort as a woven tapestry. This is the chosen direction that came out of an earlier exploration file (`Filuma Magic Directions.dc.html`, not included here) — treat it as the current, final visual system for the app.
 
-**Relationship to any earlier handoff**: if a `design_handoff_loom_redesign` package also exists in this repo, it documents an earlier, flatter redesign pass (no Weave tab, no ember/glow language). This Hearthlight package supersedes its colors, backgrounds, and card treatments. That earlier package's screen-structure notes for **Capture sheet, Bulk Entry, Blocked Times, and Task Completion/Celebration** still apply as-is (Hearthlight doesn't touch those) — just re-skin them with the tokens below instead of the older orange-on-white ones.
+**Relationship to any earlier handoff**: if a `design_handoff_filuma_redesign` package also exists in this repo, it documents an earlier, flatter redesign pass (no Weave tab, no ember/glow language). This Hearthlight package supersedes its colors, backgrounds, and card treatments. That earlier package's screen-structure notes for **Capture sheet, Bulk Entry, Blocked Times, and Task Completion/Celebration** still apply as-is (Hearthlight doesn't touch those) — just re-skin them with the tokens below instead of the older orange-on-white ones.
 
 ## About the Design Files
-`Loom Hearthlight App.dc.html` is a **design reference built in HTML** — not production code. It renders inside a proprietary design tool (custom `<x-import>` tags + a `support.js` runtime) and **will not run standalone** in a browser or Xcode. `ios-frame.jsx` is only the phone-bezel chrome used to preview the screens — it is not part of the app UI. Use this README as the implementation spec.
+`Filuma Hearthlight App.dc.html` is a **design reference built in HTML** — not production code. It renders inside a proprietary design tool (custom `<x-import>` tags + a `support.js` runtime) and **will not run standalone** in a browser or Xcode. `ios-frame.jsx` is only the phone-bezel chrome used to preview the screens — it is not part of the app UI. Use this README as the implementation spec.
 
 **Target environment: SwiftUI (iOS)**, the same existing Xcode project this was derived from. Recreate every screen below using SwiftUI idioms already established in that codebase — do not introduce a new UI framework, and do not ship the HTML.
 
@@ -134,7 +134,7 @@ Tab bar order: **Tasks · Schedule · Weave · Settings**, plus a center-floatin
 
 ## State Management
 No new data model beyond what's already needed for Tasks/Schedule/Sessions:
-- Reuses existing `LoomTask`, `ScheduledBlock`, `WorkSession`, `BlockedTime`, `UserSettings`.
+- Reuses existing `FilumaTask`, `ScheduledBlock`, `WorkSession`, `BlockedTime`, `UserSettings`.
 - **New, for the Weave tab**: a per-day aggregation (trailing 14 days) of minutes logged per context, derived from `WorkSession` records — this feeds the tapestry bars. Also derive: current day-streak (consecutive days with ≥1 session), total hours + session count over the range, and the 1–2 "this week's threads" highlight lines (simple rule-based: most recent task completed ahead of its deadline; ratio of days-with-a-session over the last 7 vs. days planned).
 - The Work Session "10-minute dare met" nudge implies some lightweight in-session milestone state (e.g. "has this session crossed a 10-minute-since-last-check-in threshold") — not modeled in the existing schema; likely a transient view-state timer rather than persisted data.
 
@@ -142,6 +142,6 @@ No new data model beyond what's already needed for Tasks/Schedule/Sessions:
 **None required.** Every visual — embers, glows, rings, the tapestry grid, the light sweep — is built from CSS gradients/blur/box-shadow/mask, not images. Recreate with SwiftUI equivalents: `RadialGradient`/`AngularGradient` for the glows and progress rings, `.blur()` + `.shadow(color:radius:)` for glow halos, and a masked `LinearGradient` sweeping across a `TimelineView` for the once-per-visit light sweep on Weave. Icons throughout are simplified line-SVGs standing in for SF Symbols — swap in the real SF Symbol set (e.g. `flame.fill`, `list.bullet`, `calendar`, `gearshape`, `checkmark.circle`, `chart.bar`) in the actual build.
 
 ## Files
-- `Loom Hearthlight App.dc.html` — the full click-through prototype: Tasks, Schedule, Work Session, Weave, Settings, and all 4 widget families, with a live Accent/Ambient/Motion tweak panel.
+- `Filuma Hearthlight App.dc.html` — the full click-through prototype: Tasks, Schedule, Work Session, Weave, Settings, and all 4 widget families, with a live Accent/Ambient/Motion tweak panel.
 - `ios-frame.jsx` — phone-bezel chrome used only to preview the screens in the design tool; not app UI, no need to reference it for implementation.
 - Requires the design tool's `support.js` runtime to render — **not runnable by double-clicking**. Use this README as the spec instead of trying to open the file directly.
