@@ -219,15 +219,15 @@ enum BlockNotificationService {
         if !todayBlocks.isEmpty {
             let done = todayBlocks.filter(\.isComplete).count
             if done == todayBlocks.count && done > 0 {
-                parts.append(done == 1 ? "Today: your block, done." : "Today: all \(done) blocks done.")
+                parts.append(done == 1 ? "You finished today's block." : "You finished all \(done) blocks today.")
             } else {
-                parts.append("Today: \(done) of \(todayBlocks.count) blocks done.")
+                parts.append("You finished \(done) of \(todayBlocks.count) blocks today.")
             }
         }
         if let first = tomorrowFirst {
             parts.append("Tomorrow starts with \(first.title) at \(TimeFormatter.clock.string(from: first.start)).")
         } else if !todayBlocks.isEmpty {
-            parts.append("Nothing booked tomorrow — capture something small if that's wrong.")
+            parts.append("Nothing is scheduled for tomorrow yet — add a task if something's coming up.")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
@@ -307,7 +307,7 @@ enum BlockNotificationService {
                 ) {
                     requests.append(digestRequest(
                         id: "\(digestIdPrefix)evening-\(key)",
-                        title: "Today, wrapped",
+                        title: "Evening wrap-up",
                         body: body,
                         fireDate: fire
                     ))
@@ -338,7 +338,7 @@ enum BlockNotificationService {
     /// Re-ping in 10 minutes without touching the schedule.
     static func snooze(from original: UNNotificationRequest) {
         guard let content = original.content.mutableCopy() as? UNMutableNotificationContent else { return }
-        content.body = "Snoozed. Ready for a small start?"
+        content.body = "Snooze is up — ready to start?"
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10 * 60, repeats: false)
         let request = UNNotificationRequest(
             identifier: "snooze-\(UUID().uuidString)",
@@ -385,7 +385,7 @@ enum BlockNotificationService {
             // physical action so the block is startable from the banner.
             content.body = "\(length) block starting now. First step: \(step)"
         } else {
-            content.body = "\(length) block starting now. One small start counts."
+            content.body = "\(length) block starting now. Even a small start counts."
         }
         content.sound = .default
         content.categoryIdentifier = categoryId

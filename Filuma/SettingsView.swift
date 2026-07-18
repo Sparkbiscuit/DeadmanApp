@@ -289,7 +289,7 @@ struct SettingsView: View {
     private func nudgeSection(_ settings: UserSettings) -> some View {
         SettingsGroup(
             title: "Nudges",
-            footer: "Block nudges fire when each work block begins, so the plan interrupts the scroll instead of waiting politely inside the app. The morning preview (30 minutes after wake time) pre-loads the day's shape; the evening wrap-up closes it out and names tomorrow's first block."
+            footer: "Block nudges fire when each work block begins. The morning preview (30 minutes after wake time) lists the day's blocks; the evening wrap-up reviews what got done and shows where tomorrow starts."
         ) {
             SettingsRow(icon: "bell.badge.fill", tint: .brand300, label: "Block start nudges") {
                 Toggle("Block start nudges", isOn: Binding(
@@ -567,7 +567,7 @@ struct SettingsView: View {
         SettingsGroup(
             title: "Google Calendar",
             footer: settings.googleAccountEmail == nil
-                ? "Sign in once and Google Calendar joins the filuma: its events become busy time Filuma schedules around, and export mirrors your blocks into your primary Google calendar. Events never become tasks."
+                ? "Sign in once and Google Calendar joins the loom: its events become busy time Filuma schedules around, and export mirrors your blocks into your primary Google calendar. Events never become tasks."
                 : "Import treats Google events as busy time; export mirrors your blocks into your primary Google calendar, marked so they're never re-imported."
         ) {
             if let email = settings.googleAccountEmail {

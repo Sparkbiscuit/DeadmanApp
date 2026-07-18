@@ -114,7 +114,7 @@ struct TaskListView: View {
                 HearthTitle(text: "Your Tasks", size: 32)
             }
             Spacer()
-            // The flame pill counts what's alive on the filuma right now.
+            // The flame pill counts what's alive on the loom right now.
             let activeCount = tasks.filter { !$0.isComplete }.count
             if activeCount > 0 {
                 ActiveCountPill(count: activeCount)
@@ -743,7 +743,7 @@ private struct StatPill: View {
 
 // MARK: - Active count pill
 
-/// Flame-and-count capsule in the header: how many tasks are on the filuma.
+/// Flame-and-count capsule in the header: how many tasks are on the loom.
 private struct ActiveCountPill: View {
     let count: Int
 

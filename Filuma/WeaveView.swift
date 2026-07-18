@@ -189,7 +189,7 @@ struct WeaveView: View {
             } else {
                 EmptyStateView(
                     icon: "square.grid.3x3.fill",
-                    title: "The filuma is warped and ready",
+                    title: "The loom is warped and ready",
                     subtitle: "The first thread lands with your first work session. Nothing here is behind — it just hasn't started."
                 )
             }
