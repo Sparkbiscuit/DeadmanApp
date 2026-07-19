@@ -57,13 +57,15 @@ Connect / Google Cloud access, an archive, or a physical-device pass.
         old “Loom” Apple calendar and Google events tagged `private.loom=1`
         will not be recognized by the renamed app. No public users exist, so
         no migration shim is needed — delete the old install and calendar.
-- [ ] **Publish live Support and Privacy Policy URLs.** Enter both working URLs
-      in App Store Connect. Do not submit placeholder, private, or redirect-only
-      pages. The privacy policy should cover on-device storage, speech input,
-      Apple/Google Calendar access, retention/deletion, and revocation.
-- [ ] **Add the Privacy Policy link inside the app.** As of this audit,
-      Settings → About only exposes Version and data export; App Review
-      Guideline 5.1.1 also requires an easily accessible in-app policy link.
+- [ ] **Publish live Support and Privacy Policy URLs.** The site is built in
+      the `Sparkbiscuit/Sparkbiscuit.github.io` repo (2026-07-18): support/
+      landing at `https://sparkbiscuit.me` and the policy at
+      `https://sparkbiscuit.me/privacy/`, covering on-device storage, speech
+      input, Apple/Google Calendar access, retention/deletion, revocation, and
+      the Google Limited Use statement. Remaining: push the repo, confirm Pages
+      serves both URLs over HTTPS, then enter them in App Store Connect.
+- [x] **Add the Privacy Policy link inside the app.** Settings → About now
+      links to `https://sparkbiscuit.me/privacy/` (added 2026-07-18).
 - [ ] **Archive with Xcode 26 or later and the iOS 26 SDK or later.** This has
       been required for App Store uploads since April 28, 2026. Confirm the SDK
       in Organizer's archive/build metadata; the project file's compatibility

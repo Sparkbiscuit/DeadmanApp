@@ -229,9 +229,13 @@ struct SettingsView: View {
     ) -> some View {
         SettingsRow(icon: icon, tint: tint, label: label) {
             HStack(spacing: 10) {
+                // Word values ("Off", "None") read badly in mono ("0ff");
+                // only numeric values get the tabular treatment.
                 Text(display)
-                    .font(AppFont.mono(13))
+                    .font(display.contains(where: \.isNumber) ? AppFont.mono(13) : AppFont.caption(13))
                     .foregroundStyle(Color.filumaSubtle)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .accessibilityHidden(true)
                 Stepper("", value: value, in: range, step: step)
                     .labelsHidden()
@@ -714,6 +718,16 @@ struct SettingsView: View {
                     .font(AppFont.monoMedium(13))
                     .foregroundStyle(Color.filumaSubtle)
             }
+
+            Link(destination: URL(string: "https://sparkbiscuit.me/privacy")!) {
+                SettingsRow(icon: "hand.raised.fill", tint: .filumaSubtle, label: "Privacy Policy") {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.filumaFaint)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Privacy Policy, opens in browser")
 
             if let url = exportFileURL {
                 ShareLink(item: url) {
